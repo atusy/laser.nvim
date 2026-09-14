@@ -26,4 +26,35 @@ T["open shows the candidates in pum.vim and close hides them"] = function()
   expect.equality(ui.visible(), false)
 end
 
+T["a pum.vim confirm reaches the on_confirm callback with the candidate"] = function()
+  local confirmed = {}
+  local ui = require("laser.ui.pum").new({
+    on_confirm = function(candidate)
+      table.insert(confirmed, candidate)
+    end,
+  })
+  ui.open(5, { candidate("bar") }, "i")
+
+  -- What pum.vim does after pum#map#confirm(): sets the item and fires the event.
+  vim.g["pum#completed_item"] = candidate("bar")
+  vim.g["pum#completed_event"] = "confirm"
+  vim.api.nvim_exec_autocmds("User", { pattern = "PumCompleteDone", modeline = false })
+
+  expect.equality(confirmed, { candidate("bar") })
+end
+
+T["a plain close is not reported as a confirm"] = function()
+  local confirmed = 0
+  local ui = require("laser.ui.pum").new({
+    on_confirm = function()
+      confirmed = confirmed + 1
+    end,
+  })
+  ui.open(5, { candidate("bar") }, "i")
+  vim.g["pum#completed_item"] = candidate("bar")
+  vim.g["pum#completed_event"] = "complete_done"
+  vim.api.nvim_exec_autocmds("User", { pattern = "PumCompleteDone", modeline = false })
+  expect.equality(confirmed, 0)
+end
+
 return T
