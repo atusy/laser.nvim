@@ -21,6 +21,7 @@ local function cmd_fn(opts)
     local cancelled = {}
     local srv = {}
     srv.requests = {}
+    srv.cancelled_count = 0
 
     local function reply(id, callback, err, result)
       if cancelled[id] then
@@ -67,6 +68,7 @@ local function cmd_fn(opts)
     function srv.notify(method, params)
       if method == "$/cancelRequest" then
         cancelled[params.id] = true
+        srv.cancelled_count = srv.cancelled_count + 1
         M.last_cancelled = (M.last_cancelled or 0) + 1
       elseif method == "exit" then
         dispatchers.on_exit(0, 15)

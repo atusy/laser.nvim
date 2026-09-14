@@ -75,4 +75,50 @@ T["typing narrows a complete list locally without a new request"] = function()
   expect.equality(#fake.last.requests, requests_before)
 end
 
+T["typing a trigger character re-requests that client and replaces its share"] = function()
+  local buf = scratch("foo")
+  local calls = 0
+  fake.start({
+    name = "one",
+    trigger_chars = { "." },
+    items = function()
+      calls = calls + 1
+      if calls == 1 then
+        return { { label = "foo" } }
+      end
+      return { { label = "bar" }, { label = "baz" } }
+    end,
+  }, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "foo", 3), { triggerKind = 1 })
+  wait_opened(ui, 1)
+
+  engine:on_char(doc(buf, "foo.", 4), ".")
+  vim.wait(100, function()
+    return calls == 2 and #ui.opened >= 2
+  end)
+
+  local last = fake.last.requests[#fake.last.requests]
+  expect.equality(last.params.context, { triggerKind = 2, triggerCharacter = "." })
+  expect.equality(ui.last().labels, { "bar", "baz" })
+end
+
+T["closing cancels every request still in flight"] = function()
+  local buf = scratch("foo.ba")
+  fake.start({ name = "a", items = { { label = "bar" } }, delay_ms = 50 }, buf)
+  local a = fake.last
+  fake.start({ name = "b", items = { { label = "baz" } }, delay_ms = 50 }, buf)
+  local b = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
+
+  engine:close()
+  vim.wait(120)
+
+  expect.equality(#ui.opened, 0)
+  expect.equality({ a.cancelled_count, b.cancelled_count }, { 1, 1 })
+end
+
 return T

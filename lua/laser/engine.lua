@@ -21,14 +21,14 @@ local Session = require("laser.session")
 ---@field clients_config table<string, table>
 ---@field session laser.Session?
 ---@field doc laser.Doc?
----@field cancel fun()?
+---@field cancels fun()[] cancel functions of requests still in flight
 local Engine = {}
 Engine.__index = Engine
 
 ---@param opts { ui: laser.UI, clients: table<string, table> }
 ---@return laser.Engine
 function Engine.new(opts)
-  return setmetatable({ ui = opts.ui, clients_config = opts.clients or {} }, Engine)
+  return setmetatable({ ui = opts.ui, clients_config = opts.clients or {}, cancels = {} }, Engine)
 end
 
 ---@param client vim.lsp.Client
@@ -60,14 +60,26 @@ function Engine:render()
   self.ui.open(session.startcol + 1, items, doc.mode)
 end
 
+---@alias laser.ContextFor lsp.CompletionContext|fun(client: vim.lsp.Client): lsp.CompletionContext
+
+---@param ctx laser.ContextFor
+---@param client vim.lsp.Client
+---@return lsp.CompletionContext
+local function context_for(ctx, client)
+  if type(ctx) == "function" then
+    return ctx(client)
+  end
+  return ctx
+end
+
 ---@param clients vim.lsp.Client[]
----@param ctx lsp.CompletionContext
+---@param ctx laser.ContextFor
 function Engine:request(clients, ctx)
   local doc = assert(self.doc)
   local session = assert(self.session)
-  self.cancel = request.completion(clients, function(client)
+  local cancel = request.completion(clients, function(client)
     local params = position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
-    params.context = ctx
+    params.context = context_for(ctx, client)
     return params
   end, function(client, _, result)
     local current = assert(self.doc)
@@ -80,11 +92,12 @@ function Engine:request(clients, ctx)
     })
     self:render()
   end, doc.bufnr)
+  table.insert(self.cancels, cancel)
 end
 
 ---Begin a new completion session at the keyword start before the cursor.
 ---@param doc laser.Doc
----@param ctx lsp.CompletionContext
+---@param ctx laser.ContextFor
 function Engine:start(doc, ctx)
   self:close()
   local clients = self:clients_for(doc)
@@ -122,26 +135,33 @@ function Engine:on_char(doc, char)
     self:close()
     return
   end
+  local needed = session:on_char(char)
+  local TriggerKind = vim.lsp.protocol.CompletionTriggerKind
+  for _, ctx in pairs(needed) do
+    if ctx.triggerKind == TriggerKind.TriggerCharacter then
+      -- A trigger character starts a new word, so the menu start moves:
+      -- begin a fresh session. Owners of the character say so; the other
+      -- clients are simply invoked at the new position.
+      return self:start(doc, function(client)
+        return needed[client.id] or { triggerKind = TriggerKind.Invoked }
+      end)
+    end
+  end
+
   self.doc = doc
   self:render()
-
-  local needed = session:on_char(char)
-  if next(needed) == nil then
-    return
-  end
   for _, client in ipairs(self:clients_for(doc)) do
-    local ctx = needed[client.id]
-    if ctx then
-      self:request({ client }, ctx)
+    if needed[client.id] then
+      self:request({ client }, needed[client.id])
     end
   end
 end
 
 function Engine:close()
-  if self.cancel then
-    self.cancel()
-    self.cancel = nil
+  for _, cancel in ipairs(self.cancels) do
+    cancel()
   end
+  self.cancels = {}
   self.session = nil
   self.doc = nil
   self.ui.close()
