@@ -12,4 +12,10 @@ T["select returns every client when no names are configured"] = function()
   expect.equality(clients.select(all, {}), all)
 end
 
+T["select drops a client whose config sets enabled = false"] = function()
+  local clients = require("laser.clients")
+  local all = { client(1, "lua_ls"), client(2, "copilot") }
+  local got = clients.select(all, { copilot = { enabled = false } })
+  expect.equality(got, { client(1, "lua_ls") })
+end
 return T
