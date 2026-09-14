@@ -43,4 +43,12 @@ T["additionalTextEdits are applied and the inserted word stays"] = function()
   expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "import bar", "foo.bar" })
 end
 
+T["a snippet item replaces the inserted word with the expanded snippet"] = function()
+  local buf = buffer_after_insert("foo.bar", 7)
+  local item = { label = "bar", insertText = "bar($1)$0", insertTextFormat = 2 }
+  confirm.apply(candidate(item), { bufnr = buf, startcol = 4, client = client() })
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "foo.bar()" })
+  expect.equality(vim.api.nvim_win_get_cursor(0), { 1, 8 })
+end
+
 return T
