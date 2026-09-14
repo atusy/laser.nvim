@@ -35,4 +35,39 @@ T["a snippet item inserts its label, not the snippet body"] = function()
   expect.equality(got.word, "bar")
 end
 
+T["a textEdit starting at the menu start inserts newText"] = function()
+  local got = items.convert({
+    label = "bar()",
+    textEdit = {
+      newText = "bar",
+      range = { start = { line = 0, character = 4 }, ["end"] = { line = 0, character = 6 } },
+    },
+  }, ctx())
+  expect.equality(got.word, "bar")
+end
+
+T["a textEdit starting after the menu start keeps the text in between"] = function()
+  -- line "foo.ba", menu replaces from column 4 (".ba" boundary is "b" at 4)
+  -- but this server edits only from column 5.
+  local got = items.convert({
+    label = "bar()",
+    textEdit = {
+      newText = "ar",
+      range = { start = { line = 0, character = 5 }, ["end"] = { line = 0, character = 6 } },
+    },
+  }, ctx())
+  expect.equality(got.word, "bar")
+end
+
+T["a textEdit starting before the menu start drops the shared prefix"] = function()
+  local got = items.convert({
+    label = "foo.bar",
+    textEdit = {
+      newText = "foo.bar",
+      range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 6 } },
+    },
+  }, ctx())
+  expect.equality(got.word, "bar")
+end
+
 return T
