@@ -45,7 +45,11 @@ function M.new(opts)
         -- ("confirm", "confirm_word") mean the item was accepted.
         local event = vim.g["pum#completed_event"] or ""
         local item = vim.g["pum#completed_item"]
-        if vim.startswith(event, "confirm") and type(item) == "table" and vim.tbl_get(item, "user_data", "laser") then
+        if
+          vim.startswith(event, "confirm")
+          and type(item) == "table"
+          and vim.tbl_get(item, "user_data", "laser")
+        then
           opts.on_confirm(item)
         end
       end,

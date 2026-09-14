@@ -7,7 +7,11 @@ local T = MiniTest.new_set({ hooks = { post_case = fake.stop_all } })
 local request = require("laser.request")
 
 local function params_for(client)
-  return { textDocument = { uri = "file:///x" }, position = { line = 0, character = 0 }, _for = client.name }
+  return {
+    textDocument = { uri = "file:///x" },
+    position = { line = 0, character = 0 },
+    _for = client.name,
+  }
 end
 
 T["each client's answer is delivered as soon as it arrives"] = function()

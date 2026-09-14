@@ -17,13 +17,18 @@ function M.completion(clients, params, on_result, bufnr)
   local pending = {} ---@type table<integer, integer> client id -> request id
 
   for _, client in ipairs(clients) do
-    local ok, request_id = client:request("textDocument/completion", params(client), function(err, result)
-      pending[client.id] = nil
-      if cancelled or (err and err.code == RequestCancelled) then
-        return
-      end
-      on_result(client, err, result)
-    end, bufnr)
+    local ok, request_id = client:request(
+      "textDocument/completion",
+      params(client),
+      function(err, result)
+        pending[client.id] = nil
+        if cancelled or (err and err.code == RequestCancelled) then
+          return
+        end
+        on_result(client, err, result)
+      end,
+      bufnr
+    )
     if ok and request_id then
       pending[client.id] = request_id
     end

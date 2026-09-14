@@ -9,7 +9,11 @@ local T = MiniTest.new_set({
 })
 
 local function candidate(label)
-  return { word = label, abbr = label, user_data = { laser = { client_id = 1, item = { label = label } } } }
+  return {
+    word = label,
+    abbr = label,
+    user_data = { laser = { client_id = 1, item = { label = label } } },
+  }
 end
 
 T["open shows the candidates in pum.vim and close hides them"] = function()

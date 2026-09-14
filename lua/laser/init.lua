@@ -148,7 +148,10 @@ local function attach_cmdline()
       local doc = cmdline_doc(conf)
       -- CmdlineChanged carries no character; infer it from a one-byte growth.
       local char = ""
-      if #doc.line == #last_cmdline + 1 and vim.startswith(doc.line, last_cmdline:sub(1, doc.col - 1)) then
+      if
+        #doc.line == #last_cmdline + 1
+        and vim.startswith(doc.line, last_cmdline:sub(1, doc.col - 1))
+      then
         char = doc.line:sub(doc.col, doc.col)
       end
       last_cmdline = doc.line

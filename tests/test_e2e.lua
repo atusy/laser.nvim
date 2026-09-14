@@ -27,21 +27,28 @@ local function type_keys(keys)
 end
 
 local function wait_pum_items(n)
-  local ok = child.lua_get(string.format([[
+  local ok = child.lua_get(string.format(
+    [[
     vim.wait(1000, function()
       local visible = vim.fn["pum#visible"]()
       return (visible == true or visible == 1) and #vim.fn["pum#complete_info"]().items >= %d
     end)
-  ]], n))
+  ]],
+    n
+  ))
   assert(ok, "pum did not show " .. n .. " items")
 end
 
 local function pum_labels()
-  return child.lua_get([[vim.tbl_map(function(i) return i.abbr end, vim.fn["pum#complete_info"]().items)]])
+  return child.lua_get(
+    [[vim.tbl_map(function(i) return i.abbr end, vim.fn["pum#complete_info"]().items)]]
+  )
 end
 
 T["typing in Insert mode opens pum.vim with the attached client's items"] = function()
-  child.lua([[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" }, { label = "qux" } } })]])
+  child.lua(
+    [[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" }, { label = "qux" } } })]]
+  )
   type_keys("ib")
   wait_pum_items(2)
   expect.equality(pum_labels(), { "bar", "baz" })

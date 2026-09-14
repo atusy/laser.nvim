@@ -28,14 +28,20 @@ local function scratch(line)
 end
 
 local function wait_opened(ui, n)
-  assert(vim.wait(1000, function()
-    return #ui.opened >= n
-  end), "ui was not opened " .. n .. " times")
+  assert(
+    vim.wait(1000, function()
+      return #ui.opened >= n
+    end),
+    "ui was not opened " .. n .. " times"
+  )
 end
 
 T["starting a session shows the server's candidates from the keyword start"] = function()
   local buf = scratch("foo.ba")
-  fake.start({ name = "one", items = { { label = "bar" }, { label = "baz" }, { label = "qux" } } }, buf)
+  fake.start(
+    { name = "one", items = { { label = "bar" }, { label = "baz" }, { label = "qux" } } },
+    buf
+  )
   local ui = stub_ui.new()
   local engine = Engine.new({ ui = ui, clients = {} })
 

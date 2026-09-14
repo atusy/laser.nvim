@@ -100,11 +100,19 @@ function M.start(opts, bufnr)
     name = opts.name or "fake",
     cmd = cmd_fn(opts),
     root_dir = vim.uv.cwd(),
-  }, { bufnr = bufnr, reuse_client = function() return false end }))
+  }, {
+    bufnr = bufnr,
+    reuse_client = function()
+      return false
+    end,
+  }))
   local client = assert(vim.lsp.get_client_by_id(id))
-  assert(vim.wait(1000, function()
-    return client.initialized and vim.lsp.buf_is_attached(bufnr, id)
-  end), "fake server did not initialize")
+  assert(
+    vim.wait(1000, function()
+      return client.initialized and vim.lsp.buf_is_attached(bufnr, id)
+    end),
+    "fake server did not initialize"
+  )
   return client
 end
 

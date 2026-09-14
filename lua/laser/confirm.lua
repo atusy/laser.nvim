@@ -31,7 +31,8 @@ local function replace_start(item, line, opts)
   if not range then
     return opts.startcol
   end
-  local edit_start = vim.str_byteindex(line, opts.client.offset_encoding, range.start.character, false)
+  local edit_start =
+    vim.str_byteindex(line, opts.client.offset_encoding, range.start.character, false)
   return math.min(edit_start, opts.startcol)
 end
 
@@ -56,7 +57,13 @@ local function apply_additional_edits(edits, opts)
   if not edits or not next(edits) then
     return false
   end
-  vim.lsp.util.apply_text_edits(edits, opts.bufnr, opts.client.offset_encoding, nil, { keep_cursor = true })
+  vim.lsp.util.apply_text_edits(
+    edits,
+    opts.bufnr,
+    opts.client.offset_encoding,
+    nil,
+    { keep_cursor = true }
+  )
   return true
 end
 

@@ -71,7 +71,8 @@ T["the item's command is executed through the client"] = function()
       table.insert(executed, cmd.command)
     end,
   })
-  local item = { label = "bar", command = { title = "t", command = "editor.action.triggerSuggest" } }
+  local item =
+    { label = "bar", command = { title = "t", command = "editor.action.triggerSuggest" } }
   confirm.apply(candidate(item), { bufnr = buf, startcol = 4, client = c })
   expect.equality(executed, { "editor.action.triggerSuggest" })
 end

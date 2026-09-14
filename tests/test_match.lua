@@ -17,7 +17,11 @@ end
 
 T["an empty prefix keeps every candidate, ordered as the server asked"] = function()
   -- LSP: when sortText is omitted the label is used for sorting.
-  local got = match.apply({ cand("zeta"), cand("alpha", { sortText = "zzz" }), cand("mid") }, "", {})
+  local got = match.apply(
+    { cand("zeta"), cand("alpha", { sortText = "zzz" }), cand("mid") },
+    "",
+    {}
+  )
   expect.equality(labels(got), { "mid", "zeta", "alpha" })
 end
 

@@ -46,9 +46,12 @@ T["a document that lost its clients re-fires FileType so they can attach"] = fun
   local again = cmdline.ensure_buffer("laser-attach")
   expect.equality(again.bufnr, doc.bufnr)
   expect.equality(attached, 1)
-  expect.equality(vim.tbl_map(function(c)
-    return c.name
-  end, cmdline.get_clients(doc.bufnr, "laser-attach")), { "late" })
+  expect.equality(
+    vim.tbl_map(function(c)
+      return c.name
+    end, cmdline.get_clients(doc.bufnr, "laser-attach")),
+    { "late" }
+  )
   fake.stop_all()
 end
 
