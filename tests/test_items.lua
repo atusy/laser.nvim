@@ -70,4 +70,16 @@ T["a textEdit starting before the menu start drops the shared prefix"] = functio
   expect.equality(got.word, "bar")
 end
 
+T["kind, detail and documentation are shown as kind, menu and info"] = function()
+  local got = items.convert({
+    label = "bar",
+    kind = 2, -- Method
+    labelDetails = { description = "fn(x)" },
+    documentation = { kind = "markdown", value = "Does bar." },
+  }, ctx())
+  expect.equality(got.kind, "Method")
+  expect.equality(got.menu, "fn(x)")
+  expect.equality(got.info, "Does bar.")
+end
+
 return T
