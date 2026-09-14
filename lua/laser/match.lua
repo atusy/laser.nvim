@@ -24,12 +24,33 @@ function M.fuzzy(prefix, candidate)
   return scores[1]
 end
 
+---@param candidate table
+---@return string
+local function sort_text(candidate)
+  local item = candidate.user_data.laser.item
+  return item.sortText or item.label
+end
+
+---Higher score first, then the server's sortText, then label.
+---@type laser.Sorter
+function M.by_score(a, b)
+  if a.score ~= b.score then
+    return a.score > b.score
+  end
+  local sa, sb = sort_text(a), sort_text(b)
+  if sa ~= sb then
+    return sa < sb
+  end
+  return a.abbr < b.abbr
+end
+
 ---@param candidates table[]
 ---@param prefix string
 ---@param opts laser.MatchOpts
 ---@return table[]
 function M.apply(candidates, prefix, opts)
   local matcher = opts.matcher or M.fuzzy
+  local sorter = opts.sorter or M.by_score
   local matched = {}
   for _, candidate in ipairs(candidates) do
     local score = matcher(prefix, candidate)
@@ -38,6 +59,7 @@ function M.apply(candidates, prefix, opts)
       table.insert(matched, candidate)
     end
   end
+  table.sort(matched, sorter)
   return matched
 end
 

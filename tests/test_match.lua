@@ -15,14 +15,29 @@ local function labels(list)
   end, list)
 end
 
-T["an empty prefix keeps every candidate in its original order"] = function()
-  local got = match.apply({ cand("zeta"), cand("alpha") }, "", {})
-  expect.equality(labels(got), { "zeta", "alpha" })
+T["an empty prefix keeps every candidate, ordered as the server asked"] = function()
+  -- LSP: when sortText is omitted the label is used for sorting.
+  local got = match.apply({ cand("zeta"), cand("alpha", { sortText = "zzz" }), cand("mid") }, "", {})
+  expect.equality(labels(got), { "mid", "zeta", "alpha" })
 end
 
 T["the default matcher drops candidates that do not fuzzy-match the prefix"] = function()
   local got = match.apply({ cand("bar"), cand("qux"), cand("baz") }, "ba", {})
   expect.equality(labels(got), { "bar", "baz" })
+end
+
+T["the default sorter ranks by score, then sortText, then label"] = function()
+  local scores = { b = 1, a = 1, c = 1, d = 2 }
+  local matcher = function(_, candidate)
+    return scores[candidate.abbr]
+  end
+  local got = match.apply({
+    cand("b", { sortText = "9" }),
+    cand("a", { sortText = "9" }),
+    cand("c", { sortText = "0" }),
+    cand("d"),
+  }, "x", { matcher = matcher })
+  expect.equality(labels(got), { "d", "c", "a", "b" })
 end
 
 return T
