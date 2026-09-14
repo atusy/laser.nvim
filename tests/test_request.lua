@@ -23,4 +23,16 @@ T["each client's answer is delivered as soon as it arrives"] = function()
   expect.equality(arrived, { { "quick", "quick" }, { "slow", "slow" } })
 end
 
+T["cancelling suppresses answers that were still in flight"] = function()
+  local slow = fake.start({ name = "slow", items = { { label = "slow" } }, delay_ms = 50 })
+  local arrived = 0
+  local cancel = request.completion({ slow }, params_for, function()
+    arrived = arrived + 1
+  end)
+  cancel()
+  vim.wait(150)
+  expect.equality(arrived, 0)
+  expect.equality(fake.last_cancelled, 1)
+end
+
 return T

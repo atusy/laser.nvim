@@ -67,6 +67,7 @@ local function cmd_fn(opts)
     function srv.notify(method, params)
       if method == "$/cancelRequest" then
         cancelled[params.id] = true
+        M.last_cancelled = (M.last_cancelled or 0) + 1
       elseif method == "exit" then
         dispatchers.on_exit(0, 15)
       end
@@ -82,6 +83,7 @@ local function cmd_fn(opts)
     end
 
     M.last = srv
+    M.last_cancelled = 0
     return srv
   end
 end
