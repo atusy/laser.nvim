@@ -36,7 +36,24 @@ local function find_buffer(uri)
   return nil
 end
 
+---Clients attached to the document that can serve completion. Filtering by
+---method rather than by server_capabilities picks up capabilities that are
+---registered dynamically after initialize.
+---@param bufnr integer
+---@param language_id string
+---@return vim.lsp.Client[]
+function M.get_clients(bufnr, language_id)
+  return vim.tbl_filter(function(client)
+    local filetypes = client.config and client.config.filetypes
+    return filetypes == nil or vim.tbl_contains(filetypes, language_id)
+  end, vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/completion" }))
+end
+
 ---Find or recreate the scratch document for `language_id`.
+---
+---An existing document without completion clients re-runs attach so a client
+---the user enabled after the command line was first opened gets its FileType
+---chance instead of the document staying client-less for the session.
 ---@param language_id string
 ---@return { bufnr: integer, uri: string }
 function M.ensure_buffer(language_id)
@@ -45,6 +62,9 @@ function M.ensure_buffer(language_id)
   if buf then
     if not vim.api.nvim_buf_is_loaded(buf) then
       vim.fn.bufload(buf)
+    end
+    if #M.get_clients(buf, language_id) == 0 then
+      attach(buf, language_id)
     end
     return { bufnr = buf, uri = uri }
   end
