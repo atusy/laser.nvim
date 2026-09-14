@@ -76,6 +76,8 @@ function M.convert(item, ctx)
     kind = item.kind and vim.lsp.protocol.CompletionItemKind[item.kind] or nil,
     menu = item.labelDetails and item.labelDetails.description or nil,
     info = info(item.documentation),
+    dup = 1,
+    user_data = { laser = { client_id = ctx.client_id, item = item } },
   }
 end
 

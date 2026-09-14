@@ -82,4 +82,12 @@ T["kind, detail and documentation are shown as kind, menu and info"] = function(
   expect.equality(got.info, "Does bar.")
 end
 
+T["user_data carries the client id and the original item"] = function()
+  local item = { label = "bar", sortText = "0001", filterText = "bar" }
+  local got = items.convert(item, ctx({ client_id = 42 }))
+  expect.equality(got.user_data.laser.client_id, 42)
+  expect.equality(got.user_data.laser.item, item)
+  expect.equality(got.dup, 1)
+end
+
 return T
