@@ -49,6 +49,32 @@ local function expand_snippet(body, item, opts)
   vim.snippet.expand(body)
 end
 
+---@param edits lsp.TextEdit[]?
+---@param opts laser.ConfirmOpts
+---@return boolean applied
+local function apply_additional_edits(edits, opts)
+  if not edits or not next(edits) then
+    return false
+  end
+  vim.lsp.util.apply_text_edits(edits, opts.bufnr, opts.client.offset_encoding, nil, { keep_cursor = true })
+  return true
+end
+
+---@param item lsp.CompletionItem
+---@param opts laser.ConfirmOpts
+local function exec_command(item, opts)
+  if item.command then
+    opts.client:exec_cmd(item.command, { bufnr = opts.bufnr })
+  end
+end
+
+---@param client vim.lsp.Client
+---@return boolean
+local function can_resolve(client)
+  local provider = client.server_capabilities and client.server_capabilities.completionProvider
+  return type(provider) == "table" and provider.resolveProvider == true
+end
+
 ---@param candidate table complete-item produced by laser.items
 ---@param opts laser.ConfirmOpts
 function M.apply(candidate, opts)
@@ -57,10 +83,27 @@ function M.apply(candidate, opts)
   if body then
     expand_snippet(body, item, opts)
   end
-  local edits = item.additionalTextEdits
-  if edits and next(edits) then
-    vim.lsp.util.apply_text_edits(edits, opts.bufnr, opts.client.offset_encoding, nil, { keep_cursor = true })
+  local had_edits = apply_additional_edits(item.additionalTextEdits, opts)
+
+  -- Nothing to gain if the item carried its edits, or it cannot be resolved.
+  if had_edits or not can_resolve(opts.client) then
+    exec_command(item, opts)
+    return
   end
+
+  opts.client:request("completionItem/resolve", item, function(err, resolved)
+    if not vim.api.nvim_buf_is_valid(opts.bufnr) then
+      return
+    end
+    if err then
+      vim.notify_once(err.message, vim.log.levels.WARN)
+    elseif resolved then
+      apply_additional_edits(resolved.additionalTextEdits, opts)
+      -- A resolved command replaces the one the item came with.
+      item.command = resolved.command or item.command
+    end
+    exec_command(item, opts)
+  end, opts.bufnr)
 end
 
 return M
