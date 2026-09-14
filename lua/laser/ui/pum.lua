@@ -25,6 +25,15 @@ function M.new(opts)
     return vim.fn["pum#visible"]() == 1 or vim.fn["pum#visible"]() == true
   end
 
+  ---True when the text change being handled was made by pum.vim itself
+  ---(inserting the selected word), so the engine must not re-render and
+  ---reset the selection.
+  ---@return boolean
+  function ui.skip_text_change()
+    local skip = vim.fn["pum#skip_complete"]()
+    return skip == 1 or skip == true
+  end
+
   if opts.on_confirm then
     vim.api.nvim_create_autocmd("User", {
       group = augroup,

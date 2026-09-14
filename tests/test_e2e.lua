@@ -85,4 +85,16 @@ T["the command line completes through the scratch document"] = function()
   expect.equality(child.api.nvim_get_mode().mode, "c")
 end
 
+T["moving the selection does not reopen the menu"] = function()
+  child.lua([[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" } } })]])
+  type_keys("ib")
+  wait_pum_items(2)
+
+  type_keys("<C-n>")
+  child.lua([[vim.wait(100)]])
+
+  expect.equality(child.api.nvim_get_current_line(), "bar")
+  expect.equality(child.lua_get([[vim.fn["pum#complete_info"]().selected]]), 0)
+end
+
 return T
