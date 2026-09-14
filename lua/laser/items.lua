@@ -12,7 +12,7 @@ local M = {}
 ---@return table complete-item
 function M.convert(item, ctx)
   local _ = ctx
-  return { word = item.label, abbr = item.label }
+  return { word = item.insertText or item.label, abbr = item.label }
 end
 
 return M

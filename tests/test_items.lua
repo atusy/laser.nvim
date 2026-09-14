@@ -20,4 +20,10 @@ T["a label-only item completes its label"] = function()
   expect.equality(got.abbr, "bar")
 end
 
+T["insertText wins over label for the inserted word"] = function()
+  local got = items.convert({ label = "bar()", insertText = "bar" }, ctx())
+  expect.equality(got.word, "bar")
+  expect.equality(got.abbr, "bar()")
+end
+
 return T
