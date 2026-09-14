@@ -107,6 +107,36 @@ function Engine:start(doc, ctx)
   self:request(clients, ctx)
 end
 
+---The user typed `char`; `doc` is the document after the insertion. Existing
+---candidates are re-matched right away; clients that need a fresh request
+---(incomplete list, or their trigger character) are asked in the background
+---and replace their share when they answer.
+---@param doc laser.Doc
+---@param char string
+function Engine:on_char(doc, char)
+  local session = self.session
+  if not session then
+    return
+  end
+  if doc.col < session.startcol then
+    self:close()
+    return
+  end
+  self.doc = doc
+  self:render()
+
+  local needed = session:on_char(char)
+  if next(needed) == nil then
+    return
+  end
+  for _, client in ipairs(self:clients_for(doc)) do
+    local ctx = needed[client.id]
+    if ctx then
+      self:request({ client }, ctx)
+    end
+  end
+end
+
 function Engine:close()
   if self.cancel then
     self.cancel()
