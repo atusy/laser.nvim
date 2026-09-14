@@ -47,10 +47,23 @@ function Session:set_result(client_id, result, ctx)
   self.results[client_id] = { candidates = candidates, incomplete = incomplete }
 end
 
+---@param client laser.SessionClient
+---@return number
+local function priority(client)
+  return (client.opts or {}).priority or 0
+end
+
+---Higher priority first; equal priorities fall back to client id for stability.
 ---@return integer[]
 function Session:ordered_client_ids()
   local ids = vim.tbl_keys(self.results)
-  table.sort(ids)
+  table.sort(ids, function(a, b)
+    local pa, pb = priority(self.clients[a]), priority(self.clients[b])
+    if pa ~= pb then
+      return pa > pb
+    end
+    return a < b
+  end)
   return ids
 end
 

@@ -24,4 +24,14 @@ T["candidates merge results of every client that answered"] = function()
   expect.equality(labels(s:candidates("")), { "bar", "baz" })
 end
 
+T["a client with higher priority lists its candidates first"] = function()
+  local s = Session.new({
+    startcol = 4,
+    clients = { [1] = { name = "lua_ls" }, [2] = { name = "copilot", opts = { priority = 10 } } },
+  })
+  s:set_result(1, { { label = "bar" } }, ctx(1))
+  s:set_result(2, { { label = "baz" } }, ctx(2))
+  expect.equality(labels(s:candidates("")), { "baz", "bar" })
+end
+
 return T
