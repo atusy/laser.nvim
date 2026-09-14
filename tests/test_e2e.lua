@@ -11,6 +11,7 @@ local T = MiniTest.new_set({
       child.lua([[
         FAKE = require("tests.helpers.fake_server")
         require("laser").setup({})
+        vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#insert_relative"](1) end)
       ]])
     end,
     post_case = child.stop,
@@ -48,6 +49,40 @@ T["typing in Insert mode opens pum.vim with the attached client's items"] = func
   type_keys("az")
   child.lua([[vim.wait(200, function() return #vim.fn["pum#complete_info"]().items == 1 end)]])
   expect.equality(pum_labels(), { "baz" })
+end
+
+T["confirming a snippet item expands it in the buffer"] = function()
+  child.lua([[FAKE.start({
+    name = "one",
+    items = { { label = "bar", insertText = "bar($1)$0", insertTextFormat = 2 } },
+  })]])
+  child.lua([[vim.keymap.set("i", "<C-y>", function() vim.fn["pum#map#confirm"]() end)]])
+  type_keys("ib")
+  wait_pum_items(1)
+
+  type_keys("<C-n>")
+  child.lua([[vim.wait(50)]])
+  type_keys("<C-y>")
+  child.lua([[vim.wait(200, function() return vim.api.nvim_get_current_line() == "bar()" end)]])
+
+  expect.equality(child.api.nvim_get_current_line(), "bar()")
+  expect.equality(child.api.nvim_win_get_cursor(0), { 1, 4 })
+end
+
+T["the command line completes through the scratch document"] = function()
+  child.lua([[
+    require("laser").setup({ cmdline = { [":"] = { language_id = "laser-cmd" } } })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        FAKE.start({ name = "cmd", items = { { label = "echo" }, { label = "edit" } } }, ev.buf)
+      end,
+    })
+  ]])
+  type_keys(":e")
+  wait_pum_items(2)
+  expect.equality(pum_labels(), { "echo", "edit" })
+  expect.equality(child.api.nvim_get_mode().mode, "c")
 end
 
 return T
