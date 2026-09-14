@@ -1,6 +1,17 @@
 local MiniTest = require("mini.test")
 local expect = MiniTest.expect
-local T = MiniTest.new_set()
+-- Headless tests cannot sit in Insert mode; 'virtualedit=onemore' lets the
+-- cursor rest after the last character the way it does after pum.vim inserts.
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      vim.o.virtualedit = "onemore"
+    end,
+    post_case = function()
+      vim.o.virtualedit = ""
+    end,
+  },
+})
 
 local confirm = require("laser.confirm")
 
@@ -15,7 +26,8 @@ local function client(overrides)
   }, overrides or {})
 end
 
----Buffer whose line already contains the inserted word, cursor after it.
+---Buffer whose line already contains the inserted word, cursor after it,
+---as it is when pum.vim reports a confirm.
 local function buffer_after_insert(line, col)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_current_buf(buf)
@@ -49,6 +61,46 @@ T["a snippet item replaces the inserted word with the expanded snippet"] = funct
   confirm.apply(candidate(item), { bufnr = buf, startcol = 4, client = client() })
   expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "foo.bar()" })
   expect.equality(vim.api.nvim_win_get_cursor(0), { 1, 8 })
+end
+
+T["the item's command is executed through the client"] = function()
+  local buf = buffer_after_insert("foo.bar", 7)
+  local executed = {}
+  local c = client({
+    exec_cmd = function(_, cmd)
+      table.insert(executed, cmd.command)
+    end,
+  })
+  local item = { label = "bar", command = { title = "t", command = "editor.action.triggerSuggest" } }
+  confirm.apply(candidate(item), { bufnr = buf, startcol = 4, client = c })
+  expect.equality(executed, { "editor.action.triggerSuggest" })
+end
+
+T["an unresolved item is resolved first so late edits and commands apply"] = function()
+  local buf = buffer_after_insert("foo.bar", 7)
+  local executed = {}
+  local c = client({
+    server_capabilities = { completionProvider = { resolveProvider = true } },
+    exec_cmd = function(_, cmd)
+      table.insert(executed, cmd.command)
+    end,
+    request = function(_, method, params, handler)
+      expect.equality(method, "completionItem/resolve")
+      local resolved = vim.deepcopy(params)
+      resolved.additionalTextEdits = {
+        {
+          newText = "import bar\n",
+          range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 0 } },
+        },
+      }
+      resolved.command = { title = "t", command = "resolved.cmd" }
+      handler(nil, resolved)
+      return true, 1
+    end,
+  })
+  confirm.apply(candidate({ label = "bar" }), { bufnr = buf, startcol = 4, client = c })
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "import bar", "foo.bar" })
+  expect.equality(executed, { "resolved.cmd" })
 end
 
 return T
