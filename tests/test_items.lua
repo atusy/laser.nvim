@@ -26,4 +26,13 @@ T["insertText wins over label for the inserted word"] = function()
   expect.equality(got.abbr, "bar()")
 end
 
+T["a snippet item inserts its label, not the snippet body"] = function()
+  local got = items.convert({
+    label = "bar",
+    insertText = "bar($1)$0",
+    insertTextFormat = 2,
+  }, ctx())
+  expect.equality(got.word, "bar")
+end
+
 return T
