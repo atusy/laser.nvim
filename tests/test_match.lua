@@ -20,4 +20,9 @@ T["an empty prefix keeps every candidate in its original order"] = function()
   expect.equality(labels(got), { "zeta", "alpha" })
 end
 
+T["the default matcher drops candidates that do not fuzzy-match the prefix"] = function()
+  local got = match.apply({ cand("bar"), cand("qux"), cand("baz") }, "ba", {})
+  expect.equality(labels(got), { "bar", "baz" })
+end
+
 return T
