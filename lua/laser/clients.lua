@@ -1,11 +1,18 @@
 local M = {}
 
 ---Per-client options are keyed by client name. "*" holds the defaults.
+---A client that is named explicitly is enabled unless it says otherwise,
+---so `{ ["*"] = { enabled = false }, lua_ls = {} }` acts as an allow-list.
 ---@param name string
 ---@param config table<string, table>
 ---@return table
 function M.resolve(name, config)
-  return vim.tbl_extend("force", config["*"] or {}, config[name] or {})
+  local own = config[name]
+  local resolved = vim.tbl_extend("force", config["*"] or {}, own or {})
+  if own and own.enabled == nil then
+    resolved.enabled = true
+  end
+  return resolved
 end
 
 ---@param clients vim.lsp.Client[]
