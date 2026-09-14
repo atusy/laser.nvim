@@ -67,6 +67,25 @@ function Session:ordered_client_ids()
   return ids
 end
 
+local TriggerKind = vim.lsp.protocol.CompletionTriggerKind
+
+---Decide, per client, whether a typed character needs a fresh request.
+---Clients that answered a complete list and do not own the character as a
+---trigger keep serving from the existing candidates.
+---@param char string
+---@return table<integer, lsp.CompletionContext> client id -> context for the new request
+function Session:on_char(char)
+  local requests = {}
+  for client_id, client in pairs(self.clients) do
+    if vim.list_contains(client.trigger_chars or {}, char) then
+      requests[client_id] = { triggerKind = TriggerKind.TriggerCharacter, triggerCharacter = char }
+    elseif self.results[client_id] and self.results[client_id].incomplete then
+      requests[client_id] = { triggerKind = TriggerKind.TriggerForIncompleteCompletions }
+    end
+  end
+  return requests
+end
+
 ---@param prefix string
 ---@return table[]
 function Session:candidates(prefix)
