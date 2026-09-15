@@ -21,14 +21,14 @@ local Session = require("laser.session")
 ---@field clients_config table<string, table>
 ---@field session laser.Session?
 ---@field doc laser.Doc?
----@field cancels fun()[] cancel functions of requests still in flight
+---@field pending table<integer, { cancel?: fun() }> requests still in flight, keyed by client id
 local Engine = {}
 Engine.__index = Engine
 
 ---@param opts { ui: laser.UI, clients: table<string, table> }
 ---@return laser.Engine
 function Engine.new(opts)
-  return setmetatable({ ui = opts.ui, clients_config = opts.clients or {}, cancels = {} }, Engine)
+  return setmetatable({ ui = opts.ui, clients_config = opts.clients or {}, pending = {} }, Engine)
 end
 
 ---@param client vim.lsp.Client
@@ -77,22 +77,38 @@ end
 function Engine:request(clients, ctx)
   local doc = assert(self.doc)
   local session = assert(self.session)
-  local cancel = request.completion(clients, function(client)
-    local params = position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
-    params.context = context_for(ctx, client)
-    return params
-  end, function(client, _, result)
-    local current = assert(self.doc)
-    session:set_result(client.id, result, {
-      line = current.line,
-      startcol = session.startcol,
-      cursor_col = current.col,
-      encoding = client.offset_encoding,
-      client_id = client.id,
-    })
-    self:render()
-  end, doc.bufnr)
-  table.insert(self.cancels, cancel)
+  for _, client in ipairs(clients) do
+    local previous = self.pending[client.id]
+    if previous and previous.cancel then
+      previous.cancel()
+    end
+    -- Install the token before sending: in-process clients may reply synchronously.
+    local token = {}
+    self.pending[client.id] = token
+    token.cancel = request.completion({ client }, function()
+      local params =
+        position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
+      params.context = context_for(ctx, client)
+      return params
+    end, function(_, err, result)
+      if self.session ~= session or self.pending[client.id] ~= token then
+        return
+      end
+      self.pending[client.id] = nil
+      if err then
+        return
+      end
+      local current = assert(self.doc)
+      session:set_result(client.id, result, {
+        line = current.line,
+        startcol = session.startcol,
+        cursor_col = current.col,
+        encoding = client.offset_encoding,
+        client_id = client.id,
+      })
+      self:render()
+    end, doc.bufnr)
+  end
 end
 
 ---Begin a new completion session at the keyword start before the cursor.
@@ -158,10 +174,12 @@ function Engine:on_char(doc, char)
 end
 
 function Engine:close()
-  for _, cancel in ipairs(self.cancels) do
-    cancel()
+  for _, token in pairs(self.pending) do
+    if token.cancel then
+      token.cancel()
+    end
   end
-  self.cancels = {}
+  self.pending = {}
   self.session = nil
   self.doc = nil
   self.ui.close()

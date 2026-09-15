@@ -127,4 +127,35 @@ T["closing cancels every request still in flight"] = function()
   expect.equality({ a.cancelled_count, b.cancelled_count }, { 1, 1 })
 end
 
+T["a newer request supersedes an older request for the same client"] = function()
+  local buf = scratch("ba")
+  local opts = {
+    name = "one",
+    items = function(params)
+      return {
+        isIncomplete = true,
+        items = { { label = "candidate" .. params.position.character } },
+      }
+    end,
+  }
+  fake.start(opts, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = { ["*"] = {
+    matcher = function()
+      return 1
+    end,
+  } } })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 1)
+
+  opts.delay_ms = 100
+  engine:on_char(doc(buf, "bar", 3), "r")
+  opts.delay_ms = 10
+  engine:on_char(doc(buf, "barr", 4), "r")
+  vim.wait(200)
+
+  expect.equality(ui.last().labels, { "candidate4" })
+  expect.equality(fake.last.cancelled_count, 1)
+end
+
 return T
