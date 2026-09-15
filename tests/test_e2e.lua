@@ -298,4 +298,28 @@ T["command-line textEdit sets the menu position and accepted text"] = function()
   expect.equality(child.fn.getcmdline(), "foo.bar")
 end
 
+T["partial updates preserve the inserted selection and cancellation input"] = function()
+  child.lua([[
+    vim.fn['pum#set_option']({ max_height = 2, auto_select = false })
+    FAKE.start({ name = 'stream', manual = true })
+    SERVER = FAKE.last
+    vim.keymap.set('i', '<C-e>', function() vim.fn['pum#map#cancel']() end)
+  ]])
+  type_keys("ib")
+  child.lua([[
+    TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
+    SERVER.progress(TOKEN, { { label = 'bb' }, { label = 'bc' }, { label = 'bz' } })
+  ]])
+  wait_pum_items(3)
+  type_keys("<C-n>")
+  expect.equality(child.api.nvim_get_current_line(), "bb")
+  child.lua([[SERVER.progress(TOKEN, { { label = 'ba' } })]])
+  wait_pum_items(4)
+  expect.equality(pum_labels(), { "bb", "bc", "ba", "bz" })
+  expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected]]), 0)
+  expect.equality(child.api.nvim_get_current_line(), "bb")
+  type_keys("<C-e>")
+  expect.equality(child.api.nvim_get_current_line(), "b")
+end
+
 return T
