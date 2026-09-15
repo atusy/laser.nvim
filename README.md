@@ -105,6 +105,49 @@ that start later retain the intervening text, including when confirming snippets
 The original keyword boundary remains the session's reuse boundary, so a menu
 position supplied by the server does not cause unnecessary requests while typing.
 
+## Streaming completion
+
+Laser sends `partialResultToken` and accepts completion batches through
+`$/progress`. Each request accumulates its own candidates. An initial
+`CompletionList` supplies `isIncomplete` and `itemDefaults` for subsequent
+batches; a final `null` keeps the candidates already received. Refreshing a
+client starts a new list. Cancelled and superseded requests cannot add items.
+Partial notifications queued in the same event-loop turn share one render.
+
+The pum adapter uses the same update policy for partial batches and late
+responses from other clients:
+
+- Before navigation, the entire list is filtered and sorted again. Automatic
+  highlighting alone does not count as navigation.
+- Once navigation starts, the prefix through the last visible item is frozen.
+  Scrolling farther expands that prefix; returning upward or to the unselected
+  position does not shrink it. Only the remaining candidates are filtered and
+  sorted, including newly arrived candidates from higher-priority clients.
+- Selection, inserted text, scroll position, menu dimensions and column widths
+  stay stable. Candidates requiring an earlier completion boundary are retained
+  for the next full update.
+- Actual input or deletion releases the prefix. Closing the menu cancels its
+  pending requests. An interrupted partial list is marked incomplete so further
+  input can request it again.
+
+Reversed menus preserve the prefix in completion order. Horizontal menus
+conservatively retain the entire previously displayed list before new items.
+The in-place pum integration uses internal pum APIs, isolated in
+`lua/laser/ui/pum.lua` and `autoload/laser/pum.vim`, because `pum#open()` resets
+selection and insertion state.
+
+### Custom UI adapters
+
+Existing `open(startcol, items, mode)`, `close()` and `visible()` adapters keep
+working and receive full snapshots. Stable selection is opt-in through:
+
+- `frozen_count()`: return the prefix length to retain, in the order of the
+  items passed to `open`/`update`. Track the greatest seen extent until reset.
+- `update(startcol, items, mode)`: replace the tail while retaining selection,
+  viewport and insertion state. If omitted, the menu stays unchanged while
+  `frozen_count()` is positive.
+- `reset()`: release the navigation state after input or client invalidation.
+
 ## Request timeout
 
 Set `clients[name].timeout_ms` (or `clients["*"].timeout_ms`) to bound a

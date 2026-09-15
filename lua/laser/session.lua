@@ -11,7 +11,8 @@ local refresh = require("laser.refresh")
 ---@field startcol integer common menu boundary
 ---@field keyword_start integer fallback and session validity boundary
 ---@field clients table<integer, laser.SessionClient>
----@field results table<integer, { candidates: table[], incomplete: boolean }>
+---@field results table<integer, { candidates: table[], incomplete: boolean, defaults?: table }>
+---@field next_id integer stable candidate identity within the session
 local Session = {}
 Session.__index = Session
 
@@ -42,6 +43,7 @@ end
 ---@param client_id integer
 ---@param result lsp.CompletionList|lsp.CompletionItem[]|nil
 ---@param ctx laser.ConvertContext
+---@param append? boolean append to this request's accepted batches
 function Session:set_result(client_id, result, ctx, append)
   local lsp_items, incomplete = unpack_result(result)
   local previous = append and self.results[client_id]
@@ -128,6 +130,7 @@ end
 
 ---@param prefix string
 ---@param doc? laser.Doc
+---@param projection? { exclude: table<integer, boolean>, startcol: integer }
 ---@return table[]
 ---@return integer? startcol
 function Session:candidates(prefix, doc, projection)
