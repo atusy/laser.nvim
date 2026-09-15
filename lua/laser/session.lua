@@ -130,7 +130,7 @@ end
 ---@param doc? laser.Doc
 ---@return table[]
 ---@return integer? startcol
-function Session:candidates(prefix, doc)
+function Session:candidates(prefix, doc, projection)
   local merged = {}
   for _, client_id in ipairs(self:ordered_client_ids()) do
     local opts = self.clients[client_id].opts or {}
@@ -139,13 +139,20 @@ function Session:candidates(prefix, doc)
           return doc.line:sub(candidate.user_data.laser.startcol + 1, doc.col)
         end
       or prefix
-    local matched = match.apply(self.results[client_id].candidates, input, opts)
+    local candidates = self.results[client_id].candidates
+    if projection then
+      candidates = vim.tbl_filter(function(candidate)
+        local data = candidate.user_data.laser
+        return not projection.exclude[data.id] and data.startcol >= projection.startcol
+      end, candidates)
+    end
+    local matched = match.apply(candidates, input, opts)
     vim.list_extend(merged, matched)
   end
-  if not doc or #merged == 0 then
+  if not doc or (#merged == 0 and not projection) then
     return merged
   end
-  local startcol = doc.col
+  local startcol = projection and projection.startcol or doc.col
   for _, candidate in ipairs(merged) do
     startcol = math.min(startcol, candidate.user_data.laser.startcol)
   end

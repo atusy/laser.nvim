@@ -16,6 +16,9 @@ local Session = require("laser.session")
 ---@field open fun(startcol: integer, items: table[], mode: "i"|"c") startcol is 1-based like complete()
 ---@field close fun()
 ---@field visible fun(): boolean
+---@field frozen_count? fun(): integer prefix length to preserve, in input item order
+---@field update? fun(startcol: integer, items: table[], mode: "i"|"c") preserve selection and inserted text
+---@field reset? fun() release the frozen prefix after actual user input
 
 ---@class laser.Engine
 ---@field ui laser.UI
@@ -53,13 +56,36 @@ function Engine:render()
     return
   end
   local prefix = doc.line:sub(session.startcol + 1, doc.col)
-  local items, startcol = session:candidates(prefix, doc)
+  local count = self.ui.frozen_count and self.ui.frozen_count() or 0
+  local frozen = vim.list_slice(self.displayed or {}, 1, count)
+  local projection
+  if #frozen > 0 then
+    local exclude = {}
+    for _, item in ipairs(frozen) do
+      exclude[item.user_data.laser.id] = true
+    end
+    projection = { exclude = exclude, startcol = session.startcol }
+  end
+  local items, startcol = session:candidates(prefix, doc, projection)
+  if #frozen > 0 then
+    vim.list_extend(frozen, items)
+    items = frozen
+  end
   if #items == 0 then
     self.ui.close()
     return
   end
   session.startcol = startcol
-  self.ui.open(startcol + 1, items, doc.mode)
+  if #frozen > 0 then
+    -- Older adapters can freeze the entire menu until the next input.
+    if not self.ui.update then
+      return
+    end
+    self.ui.update(startcol + 1, items, doc.mode)
+  else
+    self.ui.open(startcol + 1, items, doc.mode)
+  end
+  self.displayed = items
 end
 
 ---@alias laser.ContextFor lsp.CompletionContext|fun(client: vim.lsp.Client): lsp.CompletionContext
@@ -173,6 +199,10 @@ end
 ---Forget only this client's results and suppress its outstanding response.
 ---@param client_id integer
 function Engine:drop_client(client_id)
+  self.displayed = nil
+  if self.ui.reset then
+    self.ui.reset()
+  end
   local token = self.pending[client_id]
   self.pending[client_id] = nil
   if token and token.cancel then
@@ -192,6 +222,12 @@ end
 ---@param char string
 function Engine:on_char(doc, char)
   local session, old = self.session, self.doc
+  if not vim.deep_equal(doc, old) then
+    self.displayed = nil
+    if self.ui.reset then
+      self.ui.reset()
+    end
+  end
   if
     not session
     or not old
@@ -260,6 +296,7 @@ function Engine:close()
   self.pending = {}
   self.session = nil
   self.doc = nil
+  self.displayed = nil
   self.ui.close()
 end
 

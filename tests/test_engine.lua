@@ -449,4 +449,37 @@ T["streamed candidates survive null completion and retain list defaults"] = func
   expect.equality(result.candidates[2].user_data.laser.item.data, "shared")
 end
 
+T["selection freezes the seen prefix across clients and typing releases it"] = function()
+  local buf = scratch("b")
+  fake.start(
+    { name = "quick", items = { { label = "bb" }, { label = "bc" }, { label = "bz" } } },
+    buf
+  )
+  fake.start({ name = "slow", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local locked = 0
+  ui.frozen_count = function()
+    return locked
+  end
+  ui.update = ui.open
+  ui.reset = function()
+    locked = 0
+  end
+  local engine = Engine.new({ ui = ui, clients = { slow = { priority = 10 } } })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  locked = 2
+  local token = server.requests[#server.requests].params.partialResultToken
+  server.progress(token, { { label = "ba" } })
+  wait_opened(ui, 2)
+  expect.equality(ui.last().labels, { "bb", "bc", "ba", "bz" })
+  locked = 3
+  server.progress(token, { { label = "b0" } })
+  wait_opened(ui, 3)
+  expect.equality(ui.last().labels, { "bb", "bc", "ba", "b0", "bz" })
+  engine:on_char(doc(buf, "", 0), "")
+  expect.equality(ui.last().labels, { "b0", "ba", "bb", "bc", "bz" })
+end
+
 return T
