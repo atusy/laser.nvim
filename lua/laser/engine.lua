@@ -51,6 +51,7 @@ end
 
 ---Re-run matcher/sorter over the current candidates and show them.
 function Engine:render()
+  self.render_ticket = nil
   local session, doc = self.session, self.doc
   if not session or not doc then
     return
@@ -86,6 +87,20 @@ function Engine:render()
     self.ui.open(startcol + 1, items, doc.mode)
   end
   self.displayed = items
+end
+
+-- Coalesce progress notifications already queued in this event-loop turn.
+function Engine:queue_render()
+  if self.render_ticket then
+    return
+  end
+  local ticket = {}
+  self.render_ticket = ticket
+  vim.schedule(function()
+    if self.render_ticket == ticket then
+      self:render()
+    end
+  end)
 end
 
 ---@alias laser.ContextFor lsp.CompletionContext|fun(client: vim.lsp.Client): lsp.CompletionContext
@@ -156,7 +171,11 @@ function Engine:request(clients, ctx)
         client_id = client.id,
       }, token.received)
       token.received = true
-      self:render()
+      if partial then
+        self:queue_render()
+      else
+        self:render()
+      end
     end, doc.bufnr)
     local timeout = (session.clients[client.id].opts or {}).timeout_ms
     if timeout and timeout > 0 and self.pending[client.id] == token then
@@ -288,6 +307,7 @@ function Engine:on_char(doc, char)
 end
 
 function Engine:cancel_pending()
+  self.render_ticket = nil
   for client_id, token in pairs(self.pending) do
     if token.cancel then
       token.cancel()

@@ -482,4 +482,21 @@ T["selection freezes the seen prefix across clients and typing releases it"] = f
   expect.equality(ui.last().labels, { "b0", "ba", "bb", "bc", "bz" })
 end
 
+T["partial bursts from multiple clients share one render"] = function()
+  local buf = scratch("b")
+  fake.start({ name = "one", manual = true }, buf)
+  local one = fake.last
+  fake.start({ name = "two", manual = true }, buf)
+  local two = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  one.progress(one.requests[#one.requests].params.partialResultToken, { { label = "bb" } })
+  two.progress(two.requests[#two.requests].params.partialResultToken, { { label = "bc" } })
+  one.progress(one.requests[#one.requests].params.partialResultToken, { { label = "ba" } })
+  vim.wait(50)
+  expect.equality(#ui.opened, 1)
+  expect.equality(ui.last().labels, { "ba", "bb", "bc" })
+end
+
 return T
