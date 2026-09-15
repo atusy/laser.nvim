@@ -394,4 +394,32 @@ T["a timed-out client does not prevent another client's answer"] = function()
   expect.equality(engine.session.results[quick.id].incomplete, false)
 end
 
+T["textEdit chooses the menu boundary and survives further typing"] = function()
+  local buf = scratch("foo.ba")
+  local calls = 0
+  fake.start({
+    items = function()
+      calls = calls + 1
+      return {
+        {
+          label = "foo.bar",
+          textEdit = {
+            newText = "foo.bar",
+            range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 6 } },
+          },
+        },
+      }
+    end,
+  }, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  expect.equality(ui.last().startcol, 1)
+  engine:on_char(doc(buf, "foo.bar", 7), "r")
+  vim.wait(50)
+  expect.equality(calls, 1)
+  expect.equality(ui.last().labels, { "foo.bar" })
+end
+
 return T

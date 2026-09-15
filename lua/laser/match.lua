@@ -45,7 +45,7 @@ function M.by_score(a, b)
 end
 
 ---@param candidates table[]
----@param prefix string
+---@param prefix string|fun(candidate: table): string
 ---@param opts laser.MatchOpts
 ---@return table[]
 function M.apply(candidates, prefix, opts)
@@ -53,7 +53,8 @@ function M.apply(candidates, prefix, opts)
   local sorter = opts.sorter or M.by_score
   local matched = {}
   for _, candidate in ipairs(candidates) do
-    local score = matcher(prefix, candidate)
+    local input = type(prefix) == "function" and prefix(candidate) or prefix
+    local score = matcher(input, candidate)
     if score then
       candidate.score = score
       table.insert(matched, candidate)

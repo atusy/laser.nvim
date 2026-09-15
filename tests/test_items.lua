@@ -90,4 +90,54 @@ T["user_data carries the client id and the original item"] = function()
   expect.equality(got.dup, 1)
 end
 
+T["item defaults supply insert/replace ranges and text without mutating the response"] = function()
+  local item = { label = "bar", textEditText = "bar($1)", data = { own = true } }
+  local range = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 4 } }
+  local got = items.with_defaults(item, {
+    editRange = { insert = range, replace = range },
+    insertTextFormat = 2,
+    data = { default = true },
+  })
+  expect.equality(got.textEdit, { newText = "bar($1)", insert = range, replace = range })
+  expect.equality(got.insertTextFormat, 2)
+  expect.equality(got.data, { own = true })
+  expect.equality(item.textEdit, nil)
+  expect.equality(
+    items.start_col(got, ctx({ line = "é.ba", line_nr = 0, cursor_col = 5, encoding = "utf-16" })),
+    3
+  )
+end
+
+T["an explicit textEdit takes precedence over list defaults"] = function()
+  local item = {
+    label = "bar",
+    textEdit = {
+      newText = "bar",
+      range = {
+        start = { line = 0, character = 4 },
+        ["end"] = { line = 0, character = 6 },
+      },
+    },
+  }
+  local got = items.with_defaults(
+    item,
+    { editRange = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 6 } } }
+  )
+  expect.equality(got.textEdit, item.textEdit)
+  expect.equality(items.start_col(got, ctx({ line_nr = 0 })), 4)
+end
+
+T["missing or inapplicable ranges fall back to the keyword boundary"] = function()
+  expect.equality(items.start_col({ label = "bar" }, ctx({ line_nr = 0 })), 4)
+  for _, start in ipairs({ { line = 1, character = 0 }, { line = 0, character = 8 } }) do
+    expect.equality(
+      items.start_col(
+        { label = "bar", textEdit = { range = { start = start } } },
+        ctx({ line_nr = 0 })
+      ),
+      4
+    )
+  end
+end
+
 return T

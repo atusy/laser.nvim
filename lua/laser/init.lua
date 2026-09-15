@@ -68,7 +68,11 @@ local function on_confirm(candidate)
   local session, doc = engine.session, engine.doc
   local client = vim.lsp.get_client_by_id(candidate.user_data.laser.client_id)
   if session and doc and doc.mode == "i" and client then
-    confirm.apply(candidate, { bufnr = doc.bufnr, startcol = session.startcol, client = client })
+    confirm.apply(candidate, {
+      bufnr = doc.bufnr,
+      startcol = candidate.user_data.laser.startcol or session.startcol,
+      client = client,
+    })
   end
   M.close()
 end

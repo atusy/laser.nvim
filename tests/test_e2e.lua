@@ -248,4 +248,54 @@ T["command-line refresh receives the scratch document and current input"] = func
   expect.equality(child.lua_get("vim.bo[CTX.bufnr].filetype"), "laser-cmd")
 end
 
+T["mixed edit starts preserve the prefix when confirming a snippet"] = function()
+  child.lua([[
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "é.b" })
+    OPTIONS = { clients = { wide = { priority = 10 } } }
+    FAKE.start({ name = "wide", items = { { label = "é.bar", textEdit = {
+      newText = "é.bar", range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 4 } },
+    } } } })
+    FAKE.start({ name = "narrow", items = {
+      items = { { label = "bar", textEditText = "bar($1)$0" } },
+      itemDefaults = { insertTextFormat = 2, editRange = {
+        insert = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 4 } },
+        replace = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 4 } },
+      } },
+    } })
+    vim.keymap.set("i", "<C-y>", function() vim.fn["pum#map#confirm"]() end)
+  ]])
+  type_keys("Aa")
+  wait_pum_items(2)
+  expect.equality(child.lua_get([[require("laser")._engine().session.startcol]]), 0)
+  type_keys("<C-n><C-n>")
+  type_keys("<C-y>")
+  child.lua([[vim.wait(100)]])
+  expect.equality(child.api.nvim_get_current_line(), "é.bar()")
+  expect.equality(child.api.nvim_win_get_cursor(0), { 1, 7 })
+end
+
+T["command-line textEdit sets the menu position and accepted text"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev) FAKE.start({ items = function(params)
+        return { { label = "foo.bar", textEdit = {
+          newText = "foo.bar", range = { start = { line = 0, character = 0 }, ["end"] = params.position },
+        } } }
+      end }, ev.buf) end,
+    })
+    vim.keymap.set("c", "<C-n>", function() vim.fn["pum#map#insert_relative"](1) end)
+    vim.keymap.set("c", "<C-y>", function() vim.fn["pum#map#confirm"]() end)
+  ]])
+  type_keys(":foo.ba")
+  wait_pum_items(1)
+  expect.equality(child.lua_get([[require("laser")._engine().session.startcol]]), 0)
+  type_keys("<C-n><C-y>")
+  expect.equality(child.fn.getcmdline(), "foo.bar")
+end
+
 return T

@@ -43,6 +43,7 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
           -- matcher = function(prefix, candidate) return score_or_nil end,
           -- sorter = function(a, b) return a_before_b end,
           priority = 0,
+          timeout_ms = 1000, -- omitted or 0: no request timeout
         },
         copilot = { enabled = false },
       },
@@ -90,6 +91,19 @@ configuration map are replaced by per-call options and autocmd conditions.
 Candidates handed to a matcher or sorter are `complete-items` (see `:h complete-items`)
 with `user_data.laser = { client_id = ..., item = <lsp.CompletionItem> }`; the matcher's
 score is stored in `candidate.score` for the sorter.
+
+## Completion position
+
+Laser uses each item's `textEdit.range.start` or `textEdit.insert.start` as its
+completion boundary, converting the client's character offsets to byte offsets.
+`CompletionList.itemDefaults.editRange` is also supported. Items without a usable
+range fall back to the keyword boundary; no position callback is required.
+
+Each candidate is matched against the input starting at its own boundary. The
+menu starts at the earliest boundary among the displayed candidates. Candidates
+that start later retain the intervening text, including when confirming snippets.
+The original keyword boundary remains the session's reuse boundary, so a menu
+position supplied by the server does not cause unnecessary requests while typing.
 
 ## Request timeout
 

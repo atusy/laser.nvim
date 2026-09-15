@@ -8,7 +8,8 @@ local refresh = require("laser.refresh")
 ---@field trigger_chars? string[]
 
 ---@class laser.Session
----@field startcol integer
+---@field startcol integer common menu boundary
+---@field keyword_start integer fallback and session validity boundary
 ---@field clients table<integer, laser.SessionClient>
 ---@field results table<integer, { candidates: table[], incomplete: boolean }>
 local Session = {}
@@ -19,6 +20,7 @@ Session.__index = Session
 function Session.new(opts)
   return setmetatable({
     startcol = opts.startcol,
+    keyword_start = opts.startcol,
     clients = opts.clients,
     results = {},
   }, Session)
@@ -43,7 +45,12 @@ function Session:set_result(client_id, result, ctx)
   local lsp_items, incomplete = unpack_result(result)
   local candidates = {}
   for _, item in ipairs(lsp_items) do
-    table.insert(candidates, items.convert(item, ctx))
+    item = items.with_defaults(item, result.itemDefaults)
+    local startcol = items.start_col(item, ctx)
+    local item_ctx = vim.tbl_extend("force", ctx, { startcol = startcol })
+    local candidate = items.convert(item, item_ctx)
+    candidate.user_data.laser.startcol = startcol
+    table.insert(candidates, candidate)
   end
   self.results[client_id] = { candidates = candidates, incomplete = incomplete }
 end
@@ -111,15 +118,38 @@ function Session:on_char(char, doc, pending)
 end
 
 ---@param prefix string
+---@param doc? laser.Doc
 ---@return table[]
-function Session:candidates(prefix)
+---@return integer? startcol
+function Session:candidates(prefix, doc)
   local merged = {}
   for _, client_id in ipairs(self:ordered_client_ids()) do
     local opts = self.clients[client_id].opts or {}
-    local matched = match.apply(self.results[client_id].candidates, prefix, opts)
+    local input = doc
+        and function(candidate)
+          return doc.line:sub(candidate.user_data.laser.startcol + 1, doc.col)
+        end
+      or prefix
+    local matched = match.apply(self.results[client_id].candidates, input, opts)
     vim.list_extend(merged, matched)
   end
-  return merged
+  if not doc or #merged == 0 then
+    return merged
+  end
+  local startcol = doc.col
+  for _, candidate in ipairs(merged) do
+    startcol = math.min(startcol, candidate.user_data.laser.startcol)
+  end
+  -- Pad a display copy; cached words remain relative to each item's edit start.
+  for i, candidate in ipairs(merged) do
+    local own_start = candidate.user_data.laser.startcol
+    if own_start > startcol then
+      merged[i] = vim.tbl_extend("force", candidate, {
+        word = doc.line:sub(startcol + 1, own_start) .. candidate.word,
+      })
+    end
+  end
+  return merged, startcol
 end
 
 return Session

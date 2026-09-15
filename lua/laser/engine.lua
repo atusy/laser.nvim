@@ -53,12 +53,13 @@ function Engine:render()
     return
   end
   local prefix = doc.line:sub(session.startcol + 1, doc.col)
-  local items = session:candidates(prefix)
+  local items, startcol = session:candidates(prefix, doc)
   if #items == 0 then
     self.ui.close()
     return
   end
-  self.ui.open(session.startcol + 1, items, doc.mode)
+  session.startcol = startcol
+  self.ui.open(startcol + 1, items, doc.mode)
 end
 
 ---@alias laser.ContextFor lsp.CompletionContext|fun(client: vim.lsp.Client): lsp.CompletionContext
@@ -120,7 +121,8 @@ function Engine:request(clients, ctx)
       local current = assert(self.doc)
       session:set_result(client.id, result, {
         line = current.line,
-        startcol = session.startcol,
+        line_nr = current.line_nr,
+        startcol = session.keyword_start,
         cursor_col = current.col,
         encoding = client.offset_encoding,
         client_id = client.id,
@@ -193,8 +195,8 @@ function Engine:on_char(doc, char)
     or old.bufnr ~= doc.bufnr
     or old.mode ~= doc.mode
     or old.line_nr ~= doc.line_nr
-    or position.keyword_start(doc.line, doc.col) ~= session.startcol
-    or doc.line:sub(1, session.startcol) ~= old.line:sub(1, session.startcol)
+    or position.keyword_start(doc.line, doc.col) ~= session.keyword_start
+    or doc.line:sub(1, session.keyword_start) ~= old.line:sub(1, session.keyword_start)
     or doc.line:sub(doc.col + 1) ~= old.line:sub(old.col + 1)
   then
     -- Refresh predicates only govern reusable results. A new completion range

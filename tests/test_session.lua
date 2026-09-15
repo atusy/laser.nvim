@@ -64,4 +64,39 @@ T["typing a trigger character re-requests the clients that declare it"] = functi
   expect.equality(s:on_char(".", doc, {}), { [1] = { triggerKind = 2, triggerCharacter = "." } })
 end
 
+T["different item starts are matched independently and padded to a shared menu"] = function()
+  local s =
+    Session.new({ startcol = 3, clients = { [1] = { name = "wide" }, [2] = { name = "narrow" } } })
+  local doc = { bufnr = 1, line = "é.ba", col = 5, line_nr = 0, mode = "i" }
+  local convert = {
+    line = doc.line,
+    line_nr = 0,
+    startcol = 3,
+    cursor_col = 5,
+    encoding = "utf-16",
+    client_id = 1,
+  }
+  s:set_result(1, {
+    items = { { label = "é.bar" } },
+    itemDefaults = {
+      editRange = {
+        start = { line = 0, character = 0 },
+        ["end"] = { line = 0, character = 4 },
+      },
+    },
+  }, convert)
+  convert.client_id = 2
+  s:set_result(2, { { label = "bar" } }, convert)
+  local got, startcol = s:candidates("ba", doc)
+  expect.equality(startcol, 0)
+  expect.equality(labels(got), { "é.bar", "bar" })
+  expect.equality({ got[1].word, got[2].word }, { "é.bar", "é.bar" })
+  expect.equality(got[2].user_data.laser.startcol, 3)
+  expect.equality(s.results[2].candidates[1].word, "bar")
+  s.results[1] = nil
+  got, startcol = s:candidates("ba", doc)
+  expect.equality(startcol, 3)
+  expect.equality(got[1].word, "bar")
+end
+
 return T
