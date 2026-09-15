@@ -499,4 +499,61 @@ T["partial bursts from multiple clients share one render"] = function()
   expect.equality(ui.last().labels, { "ba", "bb", "bc" })
 end
 
+T["a timed out partial list is retried on further input"] = function()
+  local buf = scratch("b")
+  local client = fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = { one = { timeout_ms = 50 } } })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  local token = server.requests[#server.requests].params.partialResultToken
+  server.progress(token, { { label = "bar" } })
+  wait_opened(ui, 1)
+  assert(vim.wait(500, function()
+    return engine.pending[client.id] == nil
+  end))
+  expect.equality(ui.last().labels, { "bar" })
+  local before = #server.requests
+  engine:on_char(doc(buf, "ba", 2), "a")
+  expect.equality(#server.requests, before + 1)
+  server.progress(token, { { label = "bad" } })
+  vim.wait(20)
+  expect.equality(ui.last().labels, { "bar" })
+end
+
+T["earlier edit boundaries wait until typing releases the frozen menu"] = function()
+  local buf = scratch("foo.b")
+  fake.start({ manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local frozen = 0
+  ui.frozen_count = function()
+    return frozen
+  end
+  ui.reset = function()
+    frozen = 0
+  end
+  ui.update = ui.open
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "foo.b", 5), { triggerKind = 1 })
+  local token = server.requests[#server.requests].params.partialResultToken
+  server.progress(token, { { label = "bar" } })
+  wait_opened(ui, 1)
+  frozen = 1
+  server.progress(token, {
+    {
+      label = "foo.baz",
+      textEdit = {
+        newText = "foo.baz",
+        range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 5 } },
+      },
+    },
+  })
+  wait_opened(ui, 2)
+  expect.equality(ui.last(), { startcol = 5, mode = "i", labels = { "bar" } })
+  engine:on_char(doc(buf, "foo.ba", 6), "a")
+  expect.equality(ui.last().startcol, 1)
+  expect.equality(#ui.last().labels, 2)
+end
+
 return T

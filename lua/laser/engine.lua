@@ -26,6 +26,8 @@ local Session = require("laser.session")
 ---@field session laser.Session?
 ---@field doc laser.Doc?
 ---@field pending table<integer, { cancel?: fun() }> requests still in flight, keyed by client id
+---@field displayed? table[] last snapshot sent to the UI
+---@field render_ticket? table identity of a queued render
 local Engine = {}
 Engine.__index = Engine
 
@@ -139,8 +141,15 @@ function Engine:request(clients, ctx)
       end
     end
     local cancel_request
+    local function mark_interrupted()
+      local result = session.results[client.id]
+      if token.received and result then
+        result.incomplete = true
+      end
+    end
     token.cancel = function()
       stop_timer()
+      mark_interrupted()
       if cancel_request then
         cancel_request()
       end
@@ -159,6 +168,7 @@ function Engine:request(clients, ctx)
         stop_timer()
       end
       if err then
+        mark_interrupted()
         return
       end
       local current = assert(self.doc)
