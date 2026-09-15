@@ -140,11 +140,14 @@ T["a newer request supersedes an older request for the same client"] = function(
   }
   fake.start(opts, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = { ["*"] = {
-    matcher = function()
-      return 1
-    end,
-  } } })
+  local engine = Engine.new({
+    ui = ui,
+    clients = { ["*"] = {
+      matcher = function()
+        return 1
+      end,
+    } },
+  })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   wait_opened(ui, 1)
 
@@ -156,6 +159,191 @@ T["a newer request supersedes an older request for the same client"] = function(
 
   expect.equality(ui.last().labels, { "candidate4" })
   expect.equality(fake.last.cancelled_count, 1)
+end
+
+T["refresh can suppress incomplete results for one client"] = function()
+  local buf = scratch("ba")
+  local calls = 0
+  fake.start({
+    name = "one",
+    items = function()
+      calls = calls + 1
+      return { isIncomplete = true, items = { { label = "bar" } } }
+    end,
+  }, buf)
+  local seen
+  local ui = stub_ui.new()
+  local engine = Engine.new({
+    ui = ui,
+    clients = {
+      one = {
+        refresh = function(ctx)
+          seen = ctx
+          return false
+        end,
+      },
+    },
+  })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  engine:on_char(doc(buf, "bar", 3), "r")
+  vim.wait(50)
+  expect.equality(calls, 1)
+  expect.equality(seen.is_incomplete, true)
+  expect.equality(seen.pending, false)
+  expect.equality(seen.before_cursor, "bar")
+end
+
+T["a new keyword starts fresh even when refresh rejects a trigger"] = function()
+  local buf = scratch("foo")
+  local calls = 0
+  fake.start({
+    name = "one",
+    trigger_chars = { "." },
+    items = function()
+      calls = calls + 1
+      return { { label = "bar" } }
+    end,
+  }, buf)
+  local engine = Engine.new({
+    ui = stub_ui.new(),
+    clients = { one = {
+      refresh = function()
+        return false
+      end,
+    } },
+  })
+  engine:start(doc(buf, "foo", 3), { triggerKind = 1 })
+  assert(vim.wait(1000, function()
+    return engine.session.results[next(engine.session.clients)] ~= nil
+  end))
+  engine:on_char(doc(buf, "foo.", 4), ".")
+  vim.wait(50)
+  expect.equality(calls, 2)
+  expect.equality(engine.session.startcol, 4)
+end
+
+T["a refresh predicate can supersede the first pending response"] = function()
+  local buf = scratch("ba")
+  fake.start({ name = "one", delay_ms = 50, items = { { label = "bar" } } }, buf)
+  local seen = {}
+  local engine = Engine.new({
+    ui = stub_ui.new(),
+    clients = {
+      one = {
+        refresh = function(ctx)
+          table.insert(seen, ctx)
+          return true
+        end,
+      },
+    },
+  })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  expect.equality(#seen, 0)
+  engine:on_char(doc(buf, "bar", 3), "r")
+  expect.equality(seen[1].is_incomplete, nil)
+  expect.equality(seen[1].pending, true)
+  expect.equality(fake.last.cancelled_count, 1)
+  assert(vim.wait(1000, function()
+    return next(engine.pending) == nil
+  end))
+  engine:on_char(doc(buf, "bar", 3), "")
+  expect.equality(seen[2].is_incomplete, false)
+  expect.equality(seen[2].pending, false)
+  expect.equality(seen[1].pending, true)
+  engine:close()
+end
+
+T["a trigger inside the same keyword refreshes only its client"] = function()
+  local buf = scratch("ba")
+  local calls = { 0, 0 }
+  for i, name in ipairs({ "one", "two" }) do
+    fake.start({
+      name = name,
+      trigger_chars = { "r" },
+      items = function()
+        calls[i] = calls[i] + 1
+        return { { label = "bar" } }
+      end,
+    }, buf)
+  end
+  local ui = stub_ui.new()
+  local engine = Engine.new({
+    ui = ui,
+    clients = { two = {
+      refresh = function()
+        return false
+      end,
+    } },
+  })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 2)
+  engine:on_char(doc(buf, "bar", 3), "r")
+  vim.wait(50)
+  expect.equality(calls, { 2, 1 })
+end
+
+T["a server cancellation clears pending while preserving accepted results"] = function()
+  local buf = scratch("ba")
+  local client = fake.start({ name = "one", items = { { label = "bar" } } }, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({
+    ui = ui,
+    clients = { one = {
+      refresh = function()
+        return true
+      end,
+    } },
+  })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  local original = fake.last.request
+  fake.last.request = function(method, params, callback)
+    if method == "textDocument/completion" then
+      vim.schedule(function()
+        callback({ code = -32800, message = "cancelled" }, nil)
+      end)
+      return true, 999
+    end
+    return original(method, params, callback)
+  end
+  engine:on_char(doc(buf, "bar", 3), "r")
+  vim.wait(50)
+  expect.equality(engine.pending[client.id], nil)
+  expect.equality(ui.last().labels, { "bar" })
+end
+
+T["changing one client's options preserves the other client's results"] = function()
+  local buf = scratch("ba")
+  local calls = { 0, 0 }
+  for i, name in ipairs({ "one", "two" }) do
+    fake.start({
+      name = name,
+      items = function()
+        calls[i] = calls[i] + 1
+        return { { label = "bar" } }
+      end,
+    }, buf)
+  end
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 2)
+  engine.clients_config = { one = { priority = 1 } }
+  engine:on_char(doc(buf, "bar", 3), "r")
+  vim.wait(50)
+  expect.equality(calls, { 2, 1 })
+end
+
+T["a request that cannot be sent does not remain pending"] = function()
+  local buf = scratch("ba")
+  local client = fake.start({ name = "one", items = { { label = "bar" } } }, buf)
+  local engine = Engine.new({ ui = stub_ui.new(), clients = {} })
+  client.request = function()
+    return false
+  end
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  expect.equality(engine.pending[client.id], nil)
 end
 
 return T

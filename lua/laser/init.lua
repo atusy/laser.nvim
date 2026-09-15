@@ -1,12 +1,21 @@
 local cmdline = require("laser.cmdline")
 local confirm = require("laser.confirm")
 local Engine = require("laser.engine")
-local position = require("laser.position")
 
-local M = {}
+local refresh = require("laser.refresh")
+
+local M = {
+  hasTriggerCharacter = refresh.hasTriggerCharacter,
+  hasPattern = refresh.hasPattern,
+}
+
+---@class laser.ClientOpts: laser.MatchOpts
+---@field enabled? boolean
+---@field priority? number
+---@field refresh? laser.Refresh predicate for refreshing reusable results
 
 ---@class laser.CompleteOpts
----@field clients? table<string, table> per-client options; "*" holds defaults
+---@field clients? table<string, laser.ClientOpts> per-client options; "*" holds defaults
 ---@field ui? "pum"|laser.UI
 ---@field language_id? string filetype of the scratch document in command-line mode
 
@@ -14,7 +23,6 @@ local M = {}
 local engine
 local adapters = {}
 local initialized = false
-local TriggerKind = vim.lsp.protocol.CompletionTriggerKind
 
 function M.close()
   if engine then
@@ -36,6 +44,15 @@ local function initialize()
     callback = function(args)
       if engine and engine.doc and engine.doc.bufnr == args.buf then
         M.close()
+      end
+    end,
+  })
+  vim.api.nvim_create_autocmd("LspDetach", {
+    group = group,
+    callback = function(args)
+      if engine and engine.doc and engine.doc.bufnr == args.buf then
+        engine:drop_client(args.data.client_id)
+        engine:render()
       end
     end,
   })
@@ -117,7 +134,8 @@ local function inserted_char(old, doc)
 end
 
 ---Start or update completion at the current cursor. Options belong to this
----call; changing clients or UI starts a new session. No setup is required.
+---call; changing client options invalidates that client, changing UI resets
+---the session. No setup is required.
 ---@param opts? laser.CompleteOpts
 function M.complete(opts)
   opts = opts or {}
@@ -132,54 +150,12 @@ function M.complete(opts)
     return
   end
   local clients = opts.clients or {}
-  if not engine or engine.ui ~= ui or not vim.deep_equal(engine.clients_config, clients) then
+  if not engine or engine.ui ~= ui then
     M.close()
-    engine = Engine.new({ ui = ui, clients = vim.deepcopy(clients) })
+    engine = Engine.new({ ui = ui, clients = {} })
   end
-  local old = engine.doc
-  local char = inserted_char(old, doc)
-  if
-    engine.session
-    and old
-    and old.bufnr == doc.bufnr
-    and old.mode == doc.mode
-    and old.line_nr == doc.line_nr
-  then
-    -- Trigger characters may move the keyword start; let the engine route them
-    -- with the appropriate per-client LSP context before checking the boundary.
-    for _, client in ipairs(engine:clients_for(doc)) do
-      local chars = vim.tbl_get(
-        client,
-        "server_capabilities",
-        "completionProvider",
-        "triggerCharacters"
-      ) or {}
-      if char ~= "" and vim.list_contains(chars, char) then
-        engine:on_char(doc, char)
-        return
-      end
-    end
-    if
-      position.keyword_start(doc.line, doc.col) == engine.session.startcol
-      and doc.line:sub(1, engine.session.startcol) == old.line:sub(1, engine.session.startcol)
-      and doc.line:sub(doc.col + 1) == old.line:sub(old.col + 1)
-    then
-      engine:on_char(doc, char)
-      return
-    end
-  end
-  engine:start(doc, function(client)
-    local chars = vim.tbl_get(
-      client,
-      "server_capabilities",
-      "completionProvider",
-      "triggerCharacters"
-    ) or {}
-    if char ~= "" and vim.list_contains(chars, char) then
-      return { triggerKind = TriggerKind.TriggerCharacter, triggerCharacter = char }
-    end
-    return { triggerKind = TriggerKind.Invoked }
-  end)
+  engine.clients_config = vim.deepcopy(clients)
+  engine:on_char(doc, inserted_char(engine.doc, doc))
 end
 
 ---@return laser.Engine?

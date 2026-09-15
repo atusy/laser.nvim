@@ -11,7 +11,7 @@ local T = MiniTest.new_set({
       child.lua([[
         FAKE = require("tests.helpers.fake_server")
         vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
-          callback = function() require("laser").complete() end,
+          callback = function() require("laser").complete(OPTIONS) end,
         })
         vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#insert_relative"](1) end)
       ]])
@@ -178,6 +178,74 @@ T["leaving the command line closes its session"] = function()
   wait_pum_items(1)
   type_keys("<Esc>")
   expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
+end
+
+T["the public pattern helper controls refresh from an autocmd"] = function()
+  child.lua([[
+    CALLS = 0
+    SEEN = {}
+    OPTIONS = { clients = { ["*"] = { refresh = function(ctx)
+      table.insert(SEEN, ctx)
+      return require("laser").hasPattern(ctx, "ba$")
+    end } } }
+    FAKE.start({ items = function()
+      CALLS = CALLS + 1
+      return { { label = "bar" }, { label = "baz" } }
+    end })
+  ]])
+  type_keys("ib")
+  wait_pum_items(2)
+  local initial = child.lua_get("CALLS")
+  type_keys("a")
+  wait_pum_items(2)
+  expect.equality(child.lua_get("CALLS"), initial + 1)
+  expect.equality(child.lua_get("SEEN[#SEEN].before_cursor"), "ba")
+  expect.equality(child.lua_get("SEEN[#SEEN].is_incomplete"), false)
+end
+
+T["detaching a client removes its candidates without discarding the other client"] = function()
+  child.lua([[
+    ONE = FAKE.start({ name = "one", items = { { label = "bar" } } })
+    TWO = FAKE.start({ name = "two", items = { { label = "baz" } } })
+  ]])
+  type_keys("ib")
+  wait_pum_items(2)
+  child.lua([[vim.lsp.buf_detach_client(0, ONE.id)]])
+  child.lua([[vim.wait(100)]])
+  expect.equality(pum_labels(), { "baz" })
+  expect.equality(
+    child.lua_get([[require("laser")._engine().session.results[ONE.id] == nil]]),
+    true
+  )
+end
+
+T["command-line refresh receives the scratch document and current input"] = function()
+  child.lua([[
+    local laser = require("laser")
+    local function refresh(ctx)
+      CTX = ctx
+      return laser.hasPattern(ctx, "ec$")
+    end
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function()
+        laser.complete({ language_id = "laser-cmd", clients = { ["*"] = { refresh = refresh } } })
+      end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev) FAKE.start({ items = { { label = "echo" } } }, ev.buf) end,
+    })
+  ]])
+  type_keys(":e")
+  wait_pum_items(1)
+  local count = #completion_requests()
+  type_keys("c")
+  wait_pum_items(1)
+  expect.equality(#completion_requests(), count + 1)
+  expect.equality(child.lua_get("CTX.mode"), "c")
+  expect.equality(child.lua_get("CTX.before_cursor"), "ec")
+  expect.equality(child.lua_get("vim.bo[CTX.bufnr].filetype"), "laser-cmd")
 end
 
 return T

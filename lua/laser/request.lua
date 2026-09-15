@@ -1,7 +1,5 @@
 local M = {}
 
-local RequestCancelled = -32800
-
 ---@alias laser.OnResult fun(client: vim.lsp.Client, err: lsp.ResponseError?, result: any)
 
 ---Send textDocument/completion to every client and report each answer as it
@@ -22,7 +20,7 @@ function M.completion(clients, params, on_result, bufnr)
       params(client),
       function(err, result)
         pending[client.id] = nil
-        if cancelled or (err and err.code == RequestCancelled) then
+        if cancelled then
           return
         end
         on_result(client, err, result)
@@ -31,6 +29,11 @@ function M.completion(clients, params, on_result, bufnr)
     )
     if ok and request_id then
       pending[client.id] = request_id
+    elseif not ok then
+      on_result(client, {
+        code = -32603,
+        message = "Could not send completion request",
+      }, nil)
     end
   end
 

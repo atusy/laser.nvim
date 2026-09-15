@@ -1,9 +1,10 @@
 local items = require("laser.items")
 local match = require("laser.match")
+local refresh = require("laser.refresh")
 
 ---@class laser.SessionClient
 ---@field name string
----@field opts? table resolved per-client options (matcher, sorter, priority)
+---@field opts? table resolved per-client options (matcher, sorter, priority, refresh)
 ---@field trigger_chars? string[]
 
 ---@class laser.Session
@@ -67,20 +68,43 @@ function Session:ordered_client_ids()
   return ids
 end
 
-local TriggerKind = vim.lsp.protocol.CompletionTriggerKind
-
----Decide, per client, whether a typed character needs a fresh request.
----Clients that answered a complete list and do not own the character as a
----trigger keep serving from the existing candidates.
+---Build a new snapshot for each predicate invocation. No internal result or
+---trigger-character table is exposed to the callback.
+---@param client_id integer
+---@param doc laser.Doc
 ---@param char string
----@return table<integer, lsp.CompletionContext> client id -> context for the new request
-function Session:on_char(char)
+---@param pending boolean
+---@return laser.RefreshContext
+function Session:refresh_context(client_id, doc, char, pending)
+  local client = self.clients[client_id]
+  local result = self.results[client_id]
+  return {
+    client_id = client_id,
+    client_name = client.name,
+    bufnr = doc.bufnr,
+    mode = doc.mode,
+    before_cursor = doc.line:sub(1, doc.col),
+    inserted_char = char,
+    trigger_characters = vim.list_slice(client.trigger_chars or {}),
+    is_incomplete = result and result.incomplete,
+    pending = pending,
+  }
+end
+
+---Decide independently for each client whether to replace its cached results.
+---@param char string
+---@param doc laser.Doc
+---@param pending table<integer, any>
+---@return table<integer, lsp.CompletionContext>
+function Session:on_char(char, doc, pending)
   local requests = {}
   for client_id, client in pairs(self.clients) do
-    if vim.list_contains(client.trigger_chars or {}, char) then
-      requests[client_id] = { triggerKind = TriggerKind.TriggerCharacter, triggerCharacter = char }
-    elseif self.results[client_id] and self.results[client_id].incomplete then
-      requests[client_id] = { triggerKind = TriggerKind.TriggerForIncompleteCompletions }
+    local ctx = self:refresh_context(client_id, doc, char, pending[client_id] ~= nil)
+    -- Compute protocol metadata before calling user code, which may mutate ctx.
+    local lsp_context = refresh.lsp_context(ctx)
+    local predicate = (client.opts or {}).refresh or refresh.default
+    if predicate(ctx) then
+      requests[client_id] = lsp_context
     end
   end
   return requests

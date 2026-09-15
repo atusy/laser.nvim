@@ -3,6 +3,7 @@ local expect = MiniTest.expect
 local T = MiniTest.new_set()
 
 local Session = require("laser.session")
+local doc = { bufnr = 1, mode = "i", line = "foo.bar", col = 7 }
 
 local function ctx(client_id)
   return { line = "foo.ba", startcol = 4, cursor_col = 6, encoding = "utf-8", client_id = client_id }
@@ -37,7 +38,7 @@ end
 T["typing into a complete list re-requests nothing"] = function()
   local s = Session.new({ startcol = 4, clients = { [1] = { name = "lua_ls" } } })
   s:set_result(1, { { label = "bar" } }, ctx(1))
-  expect.equality(s:on_char("r"), {})
+  expect.equality(s:on_char("r", doc, {}), {})
 end
 
 T["typing into an incomplete list re-requests that client"] = function()
@@ -47,7 +48,7 @@ T["typing into an incomplete list re-requests that client"] = function()
   })
   s:set_result(1, { items = { { label = "bar" } }, isIncomplete = true }, ctx(1))
   s:set_result(2, { { label = "baz" } }, ctx(2))
-  expect.equality(s:on_char("r"), { [1] = { triggerKind = 3 } })
+  expect.equality(s:on_char("r", doc, {}), { [1] = { triggerKind = 3 } })
 end
 
 T["typing a trigger character re-requests the clients that declare it"] = function()
@@ -60,7 +61,7 @@ T["typing a trigger character re-requests the clients that declare it"] = functi
   })
   s:set_result(1, { { label = "bar" } }, ctx(1))
   s:set_result(2, { { label = "baz" } }, ctx(2))
-  expect.equality(s:on_char("."), { [1] = { triggerKind = 2, triggerCharacter = "." } })
+  expect.equality(s:on_char(".", doc, {}), { [1] = { triggerKind = 2, triggerCharacter = "." } })
 end
 
 return T

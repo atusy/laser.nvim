@@ -1,6 +1,7 @@
 local clients_mod = require("laser.clients")
 local position = require("laser.position")
 local request = require("laser.request")
+local refresh = require("laser.refresh")
 local Session = require("laser.session")
 
 ---@class laser.Doc Snapshot of the text being completed.
@@ -136,37 +137,81 @@ function Engine:start(doc, ctx)
   self:request(clients, ctx)
 end
 
+---Forget only this client's results and suppress its outstanding response.
+---@param client_id integer
+function Engine:drop_client(client_id)
+  local token = self.pending[client_id]
+  self.pending[client_id] = nil
+  if token and token.cancel then
+    token.cancel()
+  end
+  if self.session then
+    self.session.results[client_id] = nil
+    self.session.clients[client_id] = nil
+  end
+end
+
 ---The user typed `char`; `doc` is the document after the insertion. Existing
 ---candidates are re-matched right away; clients that need a fresh request
----(incomplete list, or their trigger character) are asked in the background
+---according to their refresh predicate are asked in the background
 ---and replace their share when they answer.
 ---@param doc laser.Doc
 ---@param char string
 function Engine:on_char(doc, char)
-  local session = self.session
-  if not session then
-    return
+  local session, old = self.session, self.doc
+  if
+    not session
+    or not old
+    or old.bufnr ~= doc.bufnr
+    or old.mode ~= doc.mode
+    or old.line_nr ~= doc.line_nr
+    or position.keyword_start(doc.line, doc.col) ~= session.startcol
+    or doc.line:sub(1, session.startcol) ~= old.line:sub(1, session.startcol)
+    or doc.line:sub(doc.col + 1) ~= old.line:sub(old.col + 1)
+  then
+    -- Refresh predicates only govern reusable results. A new completion range
+    -- needs fresh results regardless of the predicate's return value.
+    return self:start(doc, function(client)
+      local kind = vim.lsp.protocol.CompletionTriggerKind
+      if char ~= "" and vim.list_contains(trigger_chars(client), char) then
+        return { triggerKind = kind.TriggerCharacter, triggerCharacter = char }
+      end
+      return { triggerKind = kind.Invoked }
+    end)
   end
-  if doc.col < session.startcol then
-    self:close()
-    return
+  local clients = self:clients_for(doc)
+  if #clients == 0 then
+    return self:close()
   end
-  local needed = session:on_char(char)
-  local TriggerKind = vim.lsp.protocol.CompletionTriggerKind
-  for _, ctx in pairs(needed) do
-    if ctx.triggerKind == TriggerKind.TriggerCharacter then
-      -- A trigger character starts a new word, so the menu start moves:
-      -- begin a fresh session. Owners of the character say so; the other
-      -- clients are simply invoked at the new position.
-      return self:start(doc, function(client)
-        return needed[client.id] or { triggerKind = TriggerKind.Invoked }
-      end)
+  local active, added = {}, {}
+  for _, client in ipairs(clients) do
+    local opts = clients_mod.resolve(client.name, self.clients_config)
+    active[client.id] = true
+    local cached = session.clients[client.id]
+    if cached and not vim.deep_equal(cached.opts, opts) then
+      self:drop_client(client.id)
+      cached = nil
     end
+    if cached then
+      cached.trigger_chars = trigger_chars(client)
+    else
+      added[client.id] = { name = client.name, opts = opts, trigger_chars = trigger_chars(client) }
+    end
+  end
+  for client_id in pairs(session.clients) do
+    if not active[client_id] then
+      self:drop_client(client_id)
+    end
+  end
+  local needed = session:on_char(char, doc, self.pending)
+  for client_id, client in pairs(added) do
+    session.clients[client_id] = client
+    needed[client_id] = refresh.lsp_context(session:refresh_context(client_id, doc, char, false))
   end
 
   self.doc = doc
   self:render()
-  for _, client in ipairs(self:clients_for(doc)) do
+  for _, client in ipairs(clients) do
     if needed[client.id] then
       self:request({ client }, needed[client.id])
     end
