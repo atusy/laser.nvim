@@ -83,7 +83,16 @@ local function make_ui(ui)
   end
   ui = ui or "pum"
   if not adapters[ui] then
-    adapters[ui] = require("laser.ui." .. ui).new({ on_confirm = on_confirm })
+    adapters[ui] = require("laser.ui." .. ui).new({
+      on_confirm = on_confirm,
+      -- PumCompleteDone follows PumClose asynchronously. Preserve the session
+      -- until confirmation can apply its edits, but stop any more responses now.
+      on_close = function()
+        if engine then
+          engine:cancel_pending()
+        end
+      end,
+    })
   end
   return adapters[ui]
 end

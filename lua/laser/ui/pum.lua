@@ -4,7 +4,7 @@ local active_ui
 
 local augroup = vim.api.nvim_create_augroup("laser.ui.pum", { clear = true })
 
----@param opts? { on_confirm?: fun(candidate: table) }
+---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun() }
 ---@return laser.UI
 function M.new(opts)
   opts = opts or {}
@@ -47,6 +47,19 @@ function M.new(opts)
       vim.schedule(function()
         ui.frozen_count()
       end)
+    end,
+  })
+
+  vim.api.nvim_create_autocmd("User", {
+    group = augroup,
+    pattern = "PumClose",
+    callback = function()
+      if active_ui == ui and not opening then
+        ui.reset()
+        if opts.on_close then
+          opts.on_close()
+        end
+      end
     end,
   })
 
@@ -124,7 +137,9 @@ function M.new(opts)
 
   function ui.close()
     ui.reset()
+    opening = true
     vim.fn["pum#close"]()
+    opening = false
   end
 
   ---@return boolean

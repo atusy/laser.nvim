@@ -320,6 +320,8 @@ T["partial updates preserve the inserted selection and cancellation input"] = fu
   expect.equality(child.api.nvim_get_current_line(), "bb")
   type_keys("<C-e>")
   expect.equality(child.api.nvim_get_current_line(), "b")
+  child.lua([[SERVER.progress(TOKEN, { { label = 'b0' } }); vim.wait(50)]])
+  expect.equality(child.lua_get([[require('laser')._engine().ui.visible()]]), false)
 end
 
 return T

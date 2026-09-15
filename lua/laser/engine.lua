@@ -287,13 +287,21 @@ function Engine:on_char(doc, char)
   end
 end
 
-function Engine:close()
-  for _, token in pairs(self.pending) do
+function Engine:cancel_pending()
+  for client_id, token in pairs(self.pending) do
     if token.cancel then
       token.cancel()
     end
+    local result = self.session and self.session.results[client_id]
+    if result then
+      result.incomplete = true
+    end
   end
   self.pending = {}
+end
+
+function Engine:close()
+  self:cancel_pending()
   self.session = nil
   self.doc = nil
   self.displayed = nil
