@@ -11,6 +11,7 @@ local RequestCancelled = -32800
 ---@field delay_ms? integer
 ---@field trigger_chars? string[]
 ---@field filetypes? string[]
+---@field manual? boolean respond explicitly via fake.last.respond
 
 ---@param opts laser.test.FakeServerOpts
 ---@return fun(dispatchers: vim.lsp.rpc.Dispatchers): vim.lsp.rpc.PublicClient
@@ -22,6 +23,9 @@ local function cmd_fn(opts)
     local srv = {}
     srv.requests = {}
     srv.cancelled_count = 0
+    function srv.progress(token, value)
+      dispatchers.notification("$/progress", { token = token, value = value })
+    end
 
     local function reply(id, callback, err, result)
       if cancelled[id] then
@@ -47,6 +51,12 @@ local function cmd_fn(opts)
       elseif method == "shutdown" then
         callback(nil, nil)
       elseif method == "textDocument/completion" then
+        srv.respond = function(result, err)
+          callback(err, result)
+        end
+        if opts.manual then
+          return true, id
+        end
         local result = type(opts.items) == "function" and opts.items(params) or opts.items or {}
         if (opts.delay_ms or 0) > 0 then
           vim.defer_fn(function()

@@ -39,4 +39,25 @@ T["cancelling suppresses answers that were still in flight"] = function()
   expect.equality(fake.last_cancelled, 1)
 end
 
+T["partial batches arrive before the final response"] = function()
+  local client = fake.start({ manual = true })
+  local server = fake.last
+  local arrived = {}
+  request.completion({ client }, params_for, function(_, err, result, partial)
+    assert(not err)
+    arrived[#arrived + 1] = { result = result, partial = partial == true }
+  end)
+  local token = server.requests[#server.requests].params.partialResultToken
+  expect.equality(type(token), "string")
+  server.progress(token, { { label = "first" } })
+  server.respond(nil)
+  vim.wait(100, function()
+    return #arrived == 2
+  end)
+  expect.equality(arrived, {
+    { result = { { label = "first" } }, partial = true },
+    { partial = false },
+  })
+end
+
 return T
