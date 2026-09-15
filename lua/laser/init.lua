@@ -12,6 +12,7 @@ local M = {
 ---@class laser.ClientOpts: laser.MatchOpts
 ---@field enabled? boolean
 ---@field priority? number
+---@field timeout_ms? integer request timeout in milliseconds; nil or 0 disables it
 ---@field refresh? laser.Refresh predicate for refreshing reusable results
 
 ---@class laser.CompleteOpts

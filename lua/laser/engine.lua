@@ -86,7 +86,24 @@ function Engine:request(clients, ctx)
     -- Install the token before sending: in-process clients may reply synchronously.
     local token = {}
     self.pending[client.id] = token
-    token.cancel = request.completion({ client }, function()
+    local timer
+    local function stop_timer()
+      if timer then
+        timer:stop()
+        if not timer:is_closing() then
+          timer:close()
+        end
+        timer = nil
+      end
+    end
+    local cancel_request
+    token.cancel = function()
+      stop_timer()
+      if cancel_request then
+        cancel_request()
+      end
+    end
+    cancel_request = request.completion({ client }, function()
       local params =
         position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
       params.context = context_for(ctx, client)
@@ -96,6 +113,7 @@ function Engine:request(clients, ctx)
         return
       end
       self.pending[client.id] = nil
+      stop_timer()
       if err then
         return
       end
@@ -109,6 +127,16 @@ function Engine:request(clients, ctx)
       })
       self:render()
     end, doc.bufnr)
+    local timeout = (session.clients[client.id].opts or {}).timeout_ms
+    if timeout and timeout > 0 and self.pending[client.id] == token then
+      timer = vim.defer_fn(function()
+        timer = nil
+        if self.pending[client.id] == token then
+          self.pending[client.id] = nil
+          token.cancel()
+        end
+      end, timeout)
+    end
   end
 end
 

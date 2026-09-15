@@ -346,4 +346,52 @@ T["a request that cannot be sent does not remain pending"] = function()
   expect.equality(engine.pending[client.id], nil)
 end
 
+T["timeout cancels only the slow client and preserves its previous result"] = function()
+  local buf = scratch("ba")
+  local opts = { name = "slow", items = { { label = "bar" } } }
+  local client = fake.start(opts, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = { slow = { timeout_ms = 20 } } })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  opts.items = { { label = "baz" } }
+  opts.delay_ms = 100
+  engine:request({ client }, { triggerKind = 1 })
+  vim.wait(150)
+  expect.equality(ui.last().labels, { "bar" })
+  expect.equality(engine.pending[client.id], nil)
+  expect.equality(fake.last.cancelled_count, 1)
+end
+
+T["a superseded request's timeout cannot cancel its replacement"] = function()
+  local buf = scratch("ba")
+  local opts = { name = "one", delay_ms = 150, items = { { label = "bar" } } }
+  local client = fake.start(opts, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = { one = { timeout_ms = 80 } } })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  vim.wait(40)
+  opts.delay_ms = 60
+  engine:request({ client }, { triggerKind = 1 })
+  wait_opened(ui, 1)
+  expect.equality(ui.last().labels, { "bar" })
+  expect.equality(fake.last.cancelled_count, 1)
+  expect.equality(engine.pending[client.id], nil)
+end
+
+T["a timed-out client does not prevent another client's answer"] = function()
+  local buf = scratch("ba")
+  local slow = fake.start({ name = "slow", delay_ms = 120, items = { { label = "bar" } } }, buf)
+  local quick = fake.start({ name = "quick", delay_ms = 40, items = { { label = "baz" } } }, buf)
+  local ui = stub_ui.new()
+  local engine =
+    Engine.new({ ui = ui, clients = { slow = { timeout_ms = 20 }, quick = { timeout_ms = 0 } } })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  vim.wait(140)
+  expect.equality(ui.last().labels, { "baz" })
+  expect.equality(engine.session.results[slow.id], nil)
+  expect.equality(engine.session.results[quick.id].incomplete, false)
+end
+
 return T

@@ -91,6 +91,14 @@ Candidates handed to a matcher or sorter are `complete-items` (see `:h complete-
 with `user_data.laser = { client_id = ..., item = <lsp.CompletionItem> }`; the matcher's
 score is stored in `candidate.score` for the sorter.
 
+## Request timeout
+
+Set `clients[name].timeout_ms` (or `clients["*"].timeout_ms`) to bound a
+completion request in milliseconds. Omitted or zero means no timeout.
+When the deadline expires, only that client's request is cancelled; its previous
+candidates remain available and late responses are ignored. Timers are stopped
+on response, superseding requests, detachment, and session closure.
+
 ## Refresh predicates
 
 Set `clients[name].refresh` or a default in `clients["*"].refresh`. The predicate
