@@ -10,17 +10,24 @@ function M.new(opts)
   opts = opts or {}
   local ui = {}
   local browsing, frozen, opening = false, 0, false
+  local initial_cursor = 0
   local columns, non_abbr, options
 
   function ui.reset()
     browsing, frozen = false, 0
+    initial_cursor = vim.fn["pum#_get"]().cursor
   end
 
   function ui.frozen_count()
-    if not browsing or not ui.visible() then
+    if not ui.visible() then
       return 0
     end
     local pum = vim.fn["pum#_get"]()
+    -- Mouse selection does not emit PumCompleteChanged.
+    browsing = browsing or (pum.cursor > 0 and pum.cursor ~= initial_cursor)
+    if not browsing then
+      return 0
+    end
     local last
     if pum.horizontal_menu then
       -- Horizontal layout has no stable vertical viewport; retain its whole list.
@@ -97,6 +104,7 @@ function M.new(opts)
     opening = true
     vim.fn["pum#open"](startcol, items, mode)
     opening = false
+    initial_cursor = vim.fn["pum#_get"]().cursor
     options = vim.fn["pum#_options"]()
     measure(items)
   end

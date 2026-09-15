@@ -384,4 +384,75 @@ T["reversed menus preserve selection when candidates are prepended visually"] = 
   expect.equality(pum_labels(), { "bz", "ba", "bc", "bb" })
 end
 
+T["command-line partial updates keep the inserted selection"] = function()
+  child.lua([[
+    vim.fn['pum#set_option']({ max_height = 1, auto_select = false })
+    vim.api.nvim_create_autocmd({ 'CmdlineEnter', 'CmdlineChanged' }, {
+      pattern = ':', callback = function() require('laser').complete({ language_id = 'stream-cmd' }) end,
+    })
+    vim.api.nvim_create_autocmd('FileType', {
+      pattern = 'stream-cmd', callback = function(ev)
+        FAKE.start({ manual = true }, ev.buf)
+        SERVER = FAKE.last
+      end,
+    })
+    vim.keymap.set('c', '<C-n>', function() vim.fn['pum#map#insert_relative'](1) end)
+  ]])
+  type_keys(":e")
+  child.lua([[
+    TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
+    SERVER.progress(TOKEN, { {label='echo'}, {label='edit'} })
+  ]])
+  wait_pum_items(2)
+  type_keys("<C-n>")
+  child.lua([[SERVER.progress(TOKEN, { {label='earlier'} })]])
+  wait_pum_items(3)
+  expect.equality(child.fn.getcmdline(), "echo")
+  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "echo")
+end
+
+T["automatic highlighting does not freeze an untouched menu"] = function()
+  child.lua([[
+    vim.fn['pum#set_option']({ auto_select = true })
+    FAKE.start({ manual = true })
+    SERVER = FAKE.last
+  ]])
+  type_keys("ib")
+  child.lua([[
+    TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
+    SERVER.progress(TOKEN, { {label='bb'} })
+  ]])
+  wait_pum_items(1)
+  child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
+  wait_pum_items(2)
+  expect.equality(pum_labels(), { "ba", "bb" })
+  expect.equality(child.api.nvim_get_current_line(), "b")
+end
+
+T["mouse selection is retained when a partial batch arrives"] = function()
+  child.o.mouse = "a"
+  child.lua([[
+    vim.fn['pum#set_option']({ auto_select = false, max_height = 2 })
+    vim.keymap.set('i', '<LeftMouse>', function() vim.fn['pum#map#select_mouse']() end)
+    FAKE.start({ manual = true })
+    SERVER = FAKE.last
+  ]])
+  type_keys("ib")
+  child.lua([[
+    TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
+    SERVER.progress(TOKEN, { {label='bb'}, {label='bc'}, {label='bz'} })
+  ]])
+  wait_pum_items(3)
+  child.cmd("redraw")
+  local pos = child.lua_get([[vim.fn['pum#get_pos']()]])
+  child.api.nvim_input_mouse("left", "press", "", 0, pos.row, pos.col)
+  child.lua([[vim.wait(20)]])
+  expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected >= 0]]), true)
+  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
+  child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
+  wait_pum_items(4)
+  expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected >= 0]]), true)
+  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
+end
+
 return T
