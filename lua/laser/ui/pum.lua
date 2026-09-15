@@ -109,20 +109,58 @@ function M.new(opts)
     local count = ui.frozen_count()
     local view = not pum.horizontal_menu and vim.api.nvim_win_call(pum.id, vim.fn.winsaveview)
     local padding = options.padding and ((mode == "c" or startcol ~= 1) and 2 or 1) or 0
+    local abbr_width = math.max(1, pum.width - non_abbr - padding)
     local lines = {}
     for i, item in ipairs(items) do
-      lines[i] = vim.fn["pum#_format_item"](
-        item,
-        options,
-        mode,
-        startcol,
-        columns,
-        math.max(1, pum.width - non_abbr - padding)
+      lines[i] = vim.fn["pum#_format_item"](item, options, mode, startcol, columns, abbr_width)
+    end
+    local reversed = pum.reversed == true or pum.reversed == 1
+    if view then
+      vim.api.nvim_buf_clear_namespace(
+        pum.buf,
+        pum.namespace,
+        reversed and 0 or count,
+        reversed and (pum.len - count) or -1
       )
     end
     vim.fn["laser#pum#update"](items, lines, count)
     if view then
-      if pum.reversed == true or pum.reversed == 1 then
+      -- Reapply tail decorations after replacement. Prefix extmarks are retained.
+      local no_padding = vim.tbl_extend("force", options, { padding = false })
+      for i = count + 1, #items do
+        local row = reversed and (#items - i) or (i - 1)
+        local col = padding == 2 and 1 or 0
+        local function highlight(group, start, length, priority)
+          local last = math.min(#lines[i], start + length)
+          if group and group ~= "" and last > start and vim.fn.hlexists(group) == 1 then
+            vim.api.nvim_buf_set_extmark(
+              pum.buf,
+              pum.namespace,
+              row,
+              start,
+              { end_col = last, hl_group = group, priority = priority }
+            )
+          end
+        end
+        for _, column in ipairs(columns) do
+          local width = #vim.fn["pum#_format_item"](
+            items[i],
+            no_padding,
+            mode,
+            startcol,
+            { column },
+            abbr_width
+          )
+          highlight(options.highlight_columns[column[1]], col, width, 1)
+          for _, hl in ipairs(items[i].highlights or {}) do
+            if hl.type == column[1] then
+              highlight(hl.hl_group, col + hl.col - 1, hl.width, 2)
+            end
+          end
+          col = col + width
+        end
+      end
+      if reversed then
         local offset = #items - pum.len
         view.topline, view.lnum = view.topline + offset, view.lnum + offset
       end

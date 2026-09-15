@@ -61,4 +61,31 @@ T["a plain close is not reported as a confirm"] = function()
   expect.equality(confirmed, 0)
 end
 
+T["in-place updates apply column highlights to new tail items"] = function()
+  local ui = require("laser.ui.pum").new()
+  vim.fn["pum#set_option"]({
+    max_height = 1,
+    auto_select = false,
+    highlight_columns = { kind = "Type" },
+  })
+  local first, second, third = candidate("bar"), candidate("baz"), candidate("bat")
+  first.kind, second.kind, third.kind = "Text", "Text", "Text"
+  ui.open(1, { first, second }, "i")
+  vim.fn["pum#map#select_relative"](1)
+  ui.update(1, { first, second, third }, "i")
+  local pum = vim.fn["pum#_get"]()
+  local marks = vim.api.nvim_buf_get_extmarks(
+    pum.buf,
+    pum.namespace,
+    { 2, 0 },
+    { 2, -1 },
+    { details = true }
+  )
+  local groups = vim.tbl_map(function(mark)
+    return mark[4].hl_group
+  end, marks)
+  expect.equality(vim.list_contains(groups, "Type"), true)
+  vim.fn["pum#set_option"]({ max_height = 0, highlight_columns = {} })
+end
+
 return T
