@@ -422,4 +422,31 @@ T["textEdit chooses the menu boundary and survives further typing"] = function()
   expect.equality(ui.last().labels, { "foo.bar" })
 end
 
+T["streamed candidates survive null completion and retain list defaults"] = function()
+  local buf = scratch("ba")
+  local client = fake.start({ manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  local token = server.requests[#server.requests].params.partialResultToken
+  server.progress(
+    token,
+    { isIncomplete = true, itemDefaults = { data = "shared" }, items = { { label = "baz" } } }
+  )
+  wait_opened(ui, 1)
+  expect.equality(engine.pending[client.id] ~= nil, true)
+  server.progress(token, { { label = "bar" } })
+  wait_opened(ui, 2)
+  expect.equality(ui.last().labels, { "bar", "baz" })
+  server.respond(nil)
+  assert(vim.wait(100, function()
+    return engine.pending[client.id] == nil
+  end))
+  expect.equality(ui.last().labels, { "bar", "baz" })
+  local result = engine.session.results[client.id]
+  expect.equality(result.incomplete, true)
+  expect.equality(result.candidates[2].user_data.laser.item.data, "shared")
+end
+
 return T

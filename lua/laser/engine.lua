@@ -109,12 +109,14 @@ function Engine:request(clients, ctx)
         position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
       params.context = context_for(ctx, client)
       return params
-    end, function(_, err, result)
+    end, function(_, err, result, partial)
       if self.session ~= session or self.pending[client.id] ~= token then
         return
       end
-      self.pending[client.id] = nil
-      stop_timer()
+      if not partial or err then
+        self.pending[client.id] = nil
+        stop_timer()
+      end
       if err then
         return
       end
@@ -126,7 +128,8 @@ function Engine:request(clients, ctx)
         cursor_col = current.col,
         encoding = client.offset_encoding,
         client_id = client.id,
-      })
+      }, token.received)
+      token.received = true
       self:render()
     end, doc.bufnr)
     local timeout = (session.clients[client.id].opts or {}).timeout_ms

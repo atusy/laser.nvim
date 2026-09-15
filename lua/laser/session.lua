@@ -23,6 +23,7 @@ function Session.new(opts)
     keyword_start = opts.startcol,
     clients = opts.clients,
     results = {},
+    next_id = 0,
   }, Session)
 end
 
@@ -41,18 +42,26 @@ end
 ---@param client_id integer
 ---@param result lsp.CompletionList|lsp.CompletionItem[]|nil
 ---@param ctx laser.ConvertContext
-function Session:set_result(client_id, result, ctx)
+function Session:set_result(client_id, result, ctx, append)
   local lsp_items, incomplete = unpack_result(result)
-  local candidates = {}
+  local previous = append and self.results[client_id]
+  local candidates = previous and previous.candidates or {}
+  local defaults = result and result.itemDefaults or previous and previous.defaults
+  if previous and not (result and result.items) then
+    incomplete = previous.incomplete
+  end
   for _, item in ipairs(lsp_items) do
-    item = items.with_defaults(item, result.itemDefaults)
+    item = items.with_defaults(item, defaults)
     local startcol = items.start_col(item, ctx)
     local item_ctx = vim.tbl_extend("force", ctx, { startcol = startcol })
     local candidate = items.convert(item, item_ctx)
     candidate.user_data.laser.startcol = startcol
+    self.next_id = self.next_id + 1
+    candidate.user_data.laser.id = self.next_id
     table.insert(candidates, candidate)
   end
-  self.results[client_id] = { candidates = candidates, incomplete = incomplete }
+  self.results[client_id] =
+    { candidates = candidates, incomplete = incomplete, defaults = defaults }
 end
 
 ---@param client laser.SessionClient
