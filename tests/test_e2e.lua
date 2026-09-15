@@ -10,7 +10,9 @@ local T = MiniTest.new_set({
       child.bo.readonly = false
       child.lua([[
         FAKE = require("tests.helpers.fake_server")
-        require("laser").setup({})
+        vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
+          callback = function() require("laser").complete() end,
+        })
         vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#insert_relative"](1) end)
       ]])
     end,
@@ -78,7 +80,10 @@ end
 
 T["the command line completes through the scratch document"] = function()
   child.lua([[
-    require("laser").setup({ cmdline = { [":"] = { language_id = "laser-cmd" } } })
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
     vim.api.nvim_create_autocmd("FileType", {
       pattern = "laser-cmd",
       callback = function(ev)
@@ -102,6 +107,77 @@ T["moving the selection does not reopen the menu"] = function()
 
   expect.equality(child.api.nvim_get_current_line(), "bar")
   expect.equality(child.lua_get([[vim.fn["pum#complete_info"]().selected]]), 0)
+end
+
+local function completion_requests()
+  return child.lua_get([[vim.tbl_filter(function(r)
+    return r.method == "textDocument/completion"
+  end, FAKE.last.requests)]])
+end
+
+T["typing reuses a complete list"] = function()
+  child.lua([[FAKE.start({ items = { { label = "bar" }, { label = "baz" } } })]])
+  type_keys("ib")
+  wait_pum_items(2)
+  local count = #completion_requests()
+  type_keys("a")
+  wait_pum_items(2)
+  expect.equality(#completion_requests(), count)
+end
+
+T["trigger characters request a new list with trigger context"] = function()
+  child.lua([[FAKE.start({ trigger_chars = { "." }, items = { { label = "bar" } } })]])
+  type_keys("ib")
+  wait_pum_items(1)
+  type_keys(".")
+  wait_pum_items(1)
+  local requests = completion_requests()
+  expect.equality(requests[#requests].params.context, {
+    triggerKind = 2,
+    triggerCharacter = ".",
+  })
+end
+
+T["per-call client options replace the previous selection"] = function()
+  child.lua([[
+    FAKE.start({ items = { { label = "bar" } } })
+    vim.keymap.set("i", "<F5>", function()
+      require("laser").complete({ clients = { ["*"] = { enabled = false } } })
+    end)
+    vim.keymap.set("i", "<F6>", function() require("laser").complete() end)
+  ]])
+  type_keys("ib")
+  wait_pum_items(1)
+  type_keys("<F5>")
+  expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
+  type_keys("<F6>")
+  wait_pum_items(1)
+end
+
+T["leaving Insert mode cancels delayed completion"] = function()
+  child.lua([[FAKE.start({ delay_ms = 200, items = { { label = "bar" } } })]])
+  type_keys("ib")
+  type_keys("<Esc>")
+  child.lua([[vim.wait(300)]])
+  expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
+  expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
+end
+
+T["leaving the command line closes its session"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev) FAKE.start({ items = { { label = "echo" } } }, ev.buf) end,
+    })
+  ]])
+  type_keys(":e")
+  wait_pum_items(1)
+  type_keys("<Esc>")
+  expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
 end
 
 return T

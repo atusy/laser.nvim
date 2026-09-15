@@ -29,23 +29,33 @@ LSP-only completion for Neovim. Experimental.
 ## Setup
 
 ```lua
-require("laser").setup({
-  -- Per-client options keyed by client name. "*" holds the defaults.
-  -- A client that is named explicitly is enabled unless it says otherwise, so
-  -- { ["*"] = { enabled = false }, lua_ls = {} } acts as an allow-list.
-  clients = {
-    ["*"] = {
-      -- matcher = function(prefix, candidate) return score_or_nil end,
-      -- sorter = function(a, b) return a_before_b end,
-      priority = 0,
-    },
-    copilot = { enabled = false },
-  },
-  autotrigger = true,
-  ui = "pum", -- or a table implementing open/close/visible
-  cmdline = {
-    [":"] = { language_id = "vim" },
-  },
+local group = vim.api.nvim_create_augroup("my-completion", { clear = true })
+
+vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
+  group = group,
+  callback = function(args)
+    require("laser").complete({
+      -- Per-call options keyed by client name. "*" holds the defaults.
+      -- { ["*"] = { enabled = false }, lua_ls = {} } acts as an allow-list.
+      clients = {
+        ["*"] = {
+          -- matcher = function(prefix, candidate) return score_or_nil end,
+          -- sorter = function(a, b) return a_before_b end,
+          priority = 0,
+        },
+        copilot = { enabled = false },
+      },
+      ui = "pum", -- or a table implementing open/close/visible
+    })
+  end,
+})
+
+vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+  group = group,
+  pattern = ":",
+  callback = function()
+    require("laser").complete({ language_id = "vim" })
+  end,
 })
 
 -- pum.vim mappings, as in its README.
@@ -55,8 +65,25 @@ vim.keymap.set({ "i", "c" }, "<C-y>", function() vim.fn["pum#map#confirm"]() end
 vim.keymap.set({ "i", "c" }, "<C-e>", function() vim.fn["pum#map#cancel"]() end)
 ```
 
-Call `setup()` before clients attach; buffers are wired on `LspAttach`.
-`require("laser").trigger()` opens the menu on demand.
+No `setup()` is needed. Call `require("laser").complete(opts)` from an autocmd
+or an Insert-mode mapping. It works with clients that are already attached.
+Use the callback to choose options or skip completion based on `args.buf`,
+filetype, or your own conditions. Calling `complete()` starts completion even
+without a newly typed keyword character.
+
+Options apply to each call; omitted options use defaults, not the previous call's
+values. Equivalent client options reuse the current session. Changing client
+options or the UI starts a new session. Reuse the same custom UI table and
+matcher/sorter functions across calls to retain the session.
+
+In command-line mode, pass `language_id` to choose the scratch document's filetype.
+Laser handles trigger characters, ignores pum's selection edits, and closes and
+cancels pending requests on mode exit or buffer departure. To close explicitly,
+call `require("laser").close()`.
+
+Migration: replace `setup()` and `trigger()` with the autocmds above and
+`complete(opts)` respectively. `config`, `autotrigger`, and the command-line
+configuration map are replaced by per-call options and autocmd conditions.
 
 Candidates handed to a matcher or sorter are `complete-items` (see `:h complete-items`)
 with `user_data.laser = { client_id = ..., item = <lsp.CompletionItem> }`; the matcher's

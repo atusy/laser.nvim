@@ -1,224 +1,188 @@
 local cmdline = require("laser.cmdline")
 local confirm = require("laser.confirm")
 local Engine = require("laser.engine")
+local position = require("laser.position")
 
 local M = {}
 
----@class laser.CmdlineConfig
----@field language_id string 'filetype' of the scratch document that mirrors the command line
+---@class laser.CompleteOpts
+---@field clients? table<string, table> per-client options; "*" holds defaults
+---@field ui? "pum"|laser.UI
+---@field language_id? string filetype of the scratch document in command-line mode
 
----@class laser.Config
----@field clients table<string, table> per-client options keyed by client name; "*" holds defaults
----@field autotrigger boolean open the menu while typing
----@field ui "pum"|laser.UI
----@field cmdline table<string, laser.CmdlineConfig> keyed by command-line type (":" ...)
-
----@type laser.Config
-M.config = {
-  clients = {},
-  autotrigger = true,
-  ui = "pum",
-  cmdline = {},
-}
-
-local augroup = vim.api.nvim_create_augroup("laser", { clear = true })
+---@type laser.Engine?
+local engine
+local adapters = {}
+local initialized = false
 local TriggerKind = vim.lsp.protocol.CompletionTriggerKind
 
----@type laser.Engine
-local engine
-
----@param char string
----@return boolean
-local function is_keyword(char)
-  return char ~= "" and vim.fn.match(char, [[\k]]) == 0
-end
-
----@param doc laser.Doc
----@param char string
----@return boolean
-local function is_trigger(doc, char)
-  for _, client in ipairs(engine:clients_for(doc)) do
-    local provider = vim.tbl_get(client, "server_capabilities", "completionProvider")
-    if type(provider) == "table" and vim.list_contains(provider.triggerCharacters or {}, char) then
-      return true
-    end
-  end
-  return false
-end
-
----Route a text change to the engine: narrow an open session, or open one
----when a keyword or trigger character was typed.
----@param doc laser.Doc
----@param char string
-local function on_change(doc, char)
-  if engine.session then
-    engine:on_char(doc, char)
-  elseif M.config.autotrigger and (is_keyword(char) or is_trigger(doc, char)) then
-    engine:start(doc, { triggerKind = TriggerKind.Invoked })
+function M.close()
+  if engine then
+    engine:close()
   end
 end
 
--- Insert mode ---------------------------------------------------------------
-
----@return laser.Doc
-local function insert_doc()
-  local bufnr = vim.api.nvim_get_current_buf()
-  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-  return {
-    bufnr = bufnr,
-    uri = vim.uri_from_bufnr(bufnr),
-    line_nr = row - 1,
-    line = vim.api.nvim_get_current_line(),
-    col = col,
-    mode = "i",
-  }
-end
-
-local pending_char = ""
-
-local function attach_insert(bufnr)
-  vim.api.nvim_create_autocmd("InsertCharPre", {
-    group = augroup,
-    buffer = bufnr,
-    callback = function()
-      pending_char = vim.v.char
-    end,
-  })
-  vim.api.nvim_create_autocmd("TextChangedI", {
-    group = augroup,
-    buffer = bufnr,
-    callback = function()
-      local char = pending_char
-      pending_char = ""
-      if engine.ui.skip_text_change and engine.ui.skip_text_change() then
-        return
-      end
-      on_change(insert_doc(), char)
-    end,
-  })
-  vim.api.nvim_create_autocmd("InsertLeave", {
-    group = augroup,
-    buffer = bufnr,
-    callback = function()
-      engine:close()
-    end,
-  })
-end
-
--- Command line --------------------------------------------------------------
-
-local last_cmdline = ""
-
----@param conf laser.CmdlineConfig
----@return laser.Doc
-local function cmdline_doc(conf)
-  local doc = cmdline.ensure_buffer(conf.language_id)
-  local text = vim.fn.getcmdline()
-  cmdline.set_text(doc.bufnr, text)
-  return {
-    bufnr = doc.bufnr,
-    uri = doc.uri,
-    line_nr = 0,
-    line = text,
-    col = vim.fn.getcmdpos() - 1,
-    mode = "c",
-  }
-end
-
-local function attach_cmdline()
-  local types = vim.tbl_keys(M.config.cmdline)
-  if #types == 0 then
+local function initialize()
+  if initialized then
     return
   end
-  vim.api.nvim_create_autocmd("CmdlineEnter", {
-    group = augroup,
-    pattern = types,
-    callback = function()
-      last_cmdline = ""
-    end,
+  local group = vim.api.nvim_create_augroup("laser", { clear = true })
+  vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave", "BufLeave" }, {
+    group = group,
+    callback = M.close,
   })
-  vim.api.nvim_create_autocmd("CmdlineChanged", {
-    group = augroup,
-    pattern = types,
-    callback = function()
-      local conf = M.config.cmdline[vim.fn.getcmdtype()]
-      if not conf then
-        return
+  vim.api.nvim_create_autocmd("BufWipeout", {
+    group = group,
+    callback = function(args)
+      if engine and engine.doc and engine.doc.bufnr == args.buf then
+        M.close()
       end
-      local doc = cmdline_doc(conf)
-      -- CmdlineChanged carries no character; infer it from a one-byte growth.
-      local char = ""
-      if
-        #doc.line == #last_cmdline + 1
-        and vim.startswith(doc.line, last_cmdline:sub(1, doc.col - 1))
-      then
-        char = doc.line:sub(doc.col, doc.col)
-      end
-      last_cmdline = doc.line
-      on_change(doc, char)
     end,
   })
-  vim.api.nvim_create_autocmd("CmdlineLeave", {
-    group = augroup,
-    pattern = types,
-    callback = function()
-      engine:close()
-    end,
-  })
+  initialized = true
 end
-
--- Confirm -------------------------------------------------------------------
 
 ---@param candidate table
 local function on_confirm(candidate)
+  if not engine then
+    return
+  end
   local session, doc = engine.session, engine.doc
   local client = vim.lsp.get_client_by_id(candidate.user_data.laser.client_id)
   if session and doc and doc.mode == "i" and client then
     confirm.apply(candidate, { bufnr = doc.bufnr, startcol = session.startcol, client = client })
   end
-  engine:close()
+  M.close()
 end
 
----@return laser.UI
-local function make_ui()
-  if type(M.config.ui) == "table" then
-    return M.config.ui
+local function make_ui(ui)
+  if type(ui) == "table" then
+    return ui
   end
-  return require("laser.ui." .. M.config.ui).new({ on_confirm = on_confirm })
+  ui = ui or "pum"
+  if not adapters[ui] then
+    adapters[ui] = require("laser.ui." .. ui).new({ on_confirm = on_confirm })
+  end
+  return adapters[ui]
 end
 
--- Public --------------------------------------------------------------------
+---@param opts laser.CompleteOpts
+---@return laser.Doc?
+local function document(opts)
+  local mode = vim.api.nvim_get_mode().mode:sub(1, 1)
+  if mode == "c" then
+    if not opts.language_id then
+      return
+    end
+    local doc = cmdline.ensure_buffer(opts.language_id)
+    local text = vim.fn.getcmdline()
+    cmdline.set_text(doc.bufnr, text)
+    return {
+      bufnr = doc.bufnr,
+      uri = doc.uri,
+      line_nr = 0,
+      line = text,
+      col = vim.fn.getcmdpos() - 1,
+      mode = "c",
+    }
+  elseif mode == "i" then
+    local buf = vim.api.nvim_get_current_buf()
+    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+    return {
+      bufnr = buf,
+      uri = vim.uri_from_bufnr(buf),
+      line_nr = row - 1,
+      line = vim.api.nvim_get_current_line(),
+      col = col,
+      mode = "i",
+    }
+  end
+end
 
----@param config? laser.Config
-function M.setup(config)
-  M.config = vim.tbl_deep_extend("force", M.config, config or {})
-  vim.api.nvim_clear_autocmds({ group = augroup })
-  engine = Engine.new({ ui = make_ui(), clients = M.config.clients })
+---Return the inserted character only for a single-character insertion at the
+---previous cursor. Deletions, replacements and cursor moves are not triggers.
+local function inserted_char(old, doc)
+  if not old or old.bufnr ~= doc.bufnr or old.line_nr ~= doc.line_nr or old.mode ~= doc.mode then
+    return ""
+  end
+  if
+    doc.col <= old.col
+    or doc.line:sub(1, old.col) ~= old.line:sub(1, old.col)
+    or doc.line:sub(doc.col + 1) ~= old.line:sub(old.col + 1)
+  then
+    return ""
+  end
+  local char = doc.line:sub(old.col + 1, doc.col)
+  return vim.fn.strchars(char) == 1 and char or ""
+end
 
-  local attached = {}
-  vim.api.nvim_create_autocmd("LspAttach", {
-    group = augroup,
-    callback = function(ev)
-      if attached[ev.buf] or vim.bo[ev.buf].buftype ~= "" then
+---Start or update completion at the current cursor. Options belong to this
+---call; changing clients or UI starts a new session. No setup is required.
+---@param opts? laser.CompleteOpts
+function M.complete(opts)
+  opts = opts or {}
+  initialize()
+  local ui = make_ui(opts.ui)
+  if ui.skip_text_change and ui.skip_text_change() then
+    return
+  end
+  local doc = document(opts)
+  if not doc then
+    M.close()
+    return
+  end
+  local clients = opts.clients or {}
+  if not engine or engine.ui ~= ui or not vim.deep_equal(engine.clients_config, clients) then
+    M.close()
+    engine = Engine.new({ ui = ui, clients = vim.deepcopy(clients) })
+  end
+  local old = engine.doc
+  local char = inserted_char(old, doc)
+  if
+    engine.session
+    and old
+    and old.bufnr == doc.bufnr
+    and old.mode == doc.mode
+    and old.line_nr == doc.line_nr
+  then
+    -- Trigger characters may move the keyword start; let the engine route them
+    -- with the appropriate per-client LSP context before checking the boundary.
+    for _, client in ipairs(engine:clients_for(doc)) do
+      local chars = vim.tbl_get(
+        client,
+        "server_capabilities",
+        "completionProvider",
+        "triggerCharacters"
+      ) or {}
+      if char ~= "" and vim.list_contains(chars, char) then
+        engine:on_char(doc, char)
         return
       end
-      attached[ev.buf] = true
-      attach_insert(ev.buf)
-    end,
-  })
-  attach_cmdline()
+    end
+    if
+      position.keyword_start(doc.line, doc.col) == engine.session.startcol
+      and doc.line:sub(1, engine.session.startcol) == old.line:sub(1, engine.session.startcol)
+      and doc.line:sub(doc.col + 1) == old.line:sub(old.col + 1)
+    then
+      engine:on_char(doc, char)
+      return
+    end
+  end
+  engine:start(doc, function(client)
+    local chars = vim.tbl_get(
+      client,
+      "server_capabilities",
+      "completionProvider",
+      "triggerCharacters"
+    ) or {}
+    if char ~= "" and vim.list_contains(chars, char) then
+      return { triggerKind = TriggerKind.TriggerCharacter, triggerCharacter = char }
+    end
+    return { triggerKind = TriggerKind.Invoked }
+  end)
 end
 
----Open the menu now, regardless of 'autotrigger'.
-function M.trigger()
-  engine:start(insert_doc(), { triggerKind = TriggerKind.Invoked })
-end
-
-function M.close()
-  engine:close()
-end
-
----@return laser.Engine
+---@return laser.Engine?
 function M._engine()
   return engine
 end
