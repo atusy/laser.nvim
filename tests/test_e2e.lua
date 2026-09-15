@@ -324,4 +324,64 @@ T["partial updates preserve the inserted selection and cancellation input"] = fu
   expect.equality(child.lua_get([[require('laser')._engine().ui.visible()]]), false)
 end
 
+T["scrolling expands the frozen prefix and returning does not shrink it"] = function()
+  child.lua([[
+    vim.fn['pum#set_option']({ max_height = 3, auto_select = false })
+    FAKE.start({ manual = true })
+    SERVER = FAKE.last
+    vim.keymap.set('i', '<C-p>', function() vim.fn['pum#map#insert_relative'](-1) end)
+  ]])
+  type_keys("ib")
+  child.lua([[
+    TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
+    local items = {}
+    for i = 1, 9 do items[i] = { label = 'b' .. i } end
+    SERVER.progress(TOKEN, items)
+  ]])
+  wait_pum_items(9)
+  for _ = 1, 5 do
+    type_keys("<C-n>")
+  end
+  local before = child.lua_get([[{
+    frozen = require('laser')._engine().ui.frozen_count(),
+    top = vim.fn.line('w0', vim.fn['pum#_get']().id),
+  }]])
+  expect.equality(before.frozen >= 5 and before.frozen < 9, true)
+  child.lua([[SERVER.progress(TOKEN, { { label = 'b0' } })]])
+  wait_pum_items(10)
+  expect.equality(child.lua_get([[vim.fn.line('w0', vim.fn['pum#_get']().id)]]), before.top)
+  expect.equality(child.api.nvim_get_current_line(), "b5")
+  expect.equality(pum_labels()[before.frozen + 1], "b0")
+  for _ = 1, 5 do
+    type_keys("<C-p>")
+  end
+  child.lua([[SERVER.progress(TOKEN, { { label = 'b00' } })]])
+  wait_pum_items(11)
+  expect.equality(pum_labels()[1], "b1")
+  expect.equality(pum_labels()[before.frozen + 1], "b0")
+end
+
+T["reversed menus preserve selection when candidates are prepended visually"] = function()
+  child.lua([[
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { '', '', '', '', '', '', '', '', '', '' })
+    vim.api.nvim_win_set_cursor(0, { 10, 0 })
+    vim.fn['pum#set_option']({ max_height = 2, auto_select = false, direction = 'above', reversed = true })
+    vim.keymap.set('i', '<C-n>', function() vim.fn['pum#map#insert_relative'](1, 'loop') end)
+    FAKE.start({ manual = true })
+    SERVER = FAKE.last
+  ]])
+  type_keys("ib")
+  child.lua([[
+    TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
+    SERVER.progress(TOKEN, { {label='bb'}, {label='bc'}, {label='bz'} })
+  ]])
+  wait_pum_items(3)
+  type_keys("<C-n>")
+  child.lua([[SERVER.progress(TOKEN, { { label = 'ba' } })]])
+  wait_pum_items(4)
+  expect.equality(child.api.nvim_get_current_line(), "bb")
+  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
+  expect.equality(pum_labels(), { "bz", "ba", "bc", "bb" })
+end
+
 return T

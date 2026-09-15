@@ -60,4 +60,34 @@ T["partial batches arrive before the final response"] = function()
   })
 end
 
+T["concurrent requests route progress independently and preserve unrelated handlers"] = function()
+  local client = fake.start({ manual = true })
+  local server = fake.last
+  local unrelated, first, second = {}, {}, {}
+  client.handlers["$/progress"] = function(_, result)
+    unrelated[#unrelated + 1] = result.value
+  end
+  local cancel = request.completion({ client }, params_for, function(_, _, result)
+    first[#first + 1] = result
+  end)
+  local token1 = server.requests[#server.requests].params.partialResultToken
+  request.completion({ client }, params_for, function(_, _, result)
+    second[#second + 1] = result
+  end)
+  local token2 = server.requests[#server.requests].params.partialResultToken
+  expect.equality(token1 == token2, false)
+  cancel()
+  server.progress(token1, { { label = "late" } })
+  server.progress(token2, { { label = "live" } })
+  server.progress("other", { kind = "report", message = "indexing" })
+  vim.wait(50)
+  expect.equality(first, {})
+  expect.equality(second, { { { label = "live" } } })
+  expect.equality(unrelated, { { kind = "report", message = "indexing" } })
+  server.respond({ { label = "final" } })
+  server.progress(token2, { { label = "too late" } })
+  vim.wait(50)
+  expect.equality(#second, 2)
+end
+
 return T
