@@ -180,6 +180,16 @@ function Engine:request(clients, ctx)
         self:queue_render()
       else
         self:render()
+        -- Input may have advanced while an empty initial request was pending.
+        -- Retry only a newer snapshot, so an empty answer cannot loop by itself.
+        if self.session == session and not vim.deep_equal(doc, self.doc) then
+          local latest = session:refresh_context(client.id, assert(self.doc), "", false)
+          local predicate = (session.clients[client.id].opts or {}).refresh or refresh.default
+          local context = refresh.lsp_context(latest)
+          if not refresh.has_candidate(latest) and predicate(latest) then
+            self:request({ client }, context)
+          end
+        end
       end
     end, doc.bufnr)
     local timeout = (session.clients[client.id].opts or {}).timeout_ms

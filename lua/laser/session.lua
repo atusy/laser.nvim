@@ -107,6 +107,7 @@ function Session:refresh_context(client_id, doc, char, pending)
     trigger_characters = vim.list_slice(client.trigger_chars or {}),
     is_incomplete = result and result.incomplete,
     pending = pending,
+    has_candidate = #self:client_candidates(client_id, "", doc) > 0,
     timed_out = client.timed_out == true,
   }
 end
@@ -130,6 +131,30 @@ function Session:on_char(char, doc, pending)
   return requests
 end
 
+---Filter one client's cached items without consulting other clients or the UI.
+---@param client_id integer
+---@param prefix string
+---@param doc? laser.Doc
+---@param projection? { exclude: table<integer, boolean>, startcol: integer }
+---@return table[]
+function Session:client_candidates(client_id, prefix, doc, projection)
+  local opts = self.clients[client_id].opts or {}
+  local input = doc
+      and function(candidate)
+        return doc.line:sub(candidate.user_data.laser.startcol + 1, doc.col)
+      end
+    or prefix
+  local result = self.results[client_id]
+  local candidates = result and result.candidates or {}
+  if projection then
+    candidates = vim.tbl_filter(function(candidate)
+      local data = candidate.user_data.laser
+      return not projection.exclude[data.id] and data.startcol >= projection.startcol
+    end, candidates)
+  end
+  return filter.apply(candidates, input, opts)
+end
+
 ---@param prefix string
 ---@param doc? laser.Doc
 ---@param projection? { exclude: table<integer, boolean>, startcol: integer }
@@ -138,20 +163,7 @@ end
 function Session:candidates(prefix, doc, projection)
   local merged = {}
   for _, client_id in ipairs(self:ordered_client_ids()) do
-    local opts = self.clients[client_id].opts or {}
-    local input = doc
-        and function(candidate)
-          return doc.line:sub(candidate.user_data.laser.startcol + 1, doc.col)
-        end
-      or prefix
-    local candidates = self.results[client_id].candidates
-    if projection then
-      candidates = vim.tbl_filter(function(candidate)
-        local data = candidate.user_data.laser
-        return not projection.exclude[data.id] and data.startcol >= projection.startcol
-      end, candidates)
-    end
-    local matched = filter.apply(candidates, input, opts)
+    local matched = self:client_candidates(client_id, prefix, doc, projection)
     vim.list_extend(merged, matched)
   end
   if not doc or (#merged == 0 and not projection) then

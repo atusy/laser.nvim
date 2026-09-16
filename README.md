@@ -11,7 +11,8 @@ LSP-only completion for Neovim. Experimental.
   client in any order through `filters`. Defaults:
   fuzzy matching via `matchfuzzypos()` and ordering by score, `sortText`, label.
 - **Typing reuses the candidates you already have.** By default, a client is asked again when
-  it said its list was incomplete, or when you typed one of its trigger characters.
+  it said its list was incomplete, when you typed one of its trigger characters,
+  or when no candidates match and no request is pending.
   A per-client `refresh(ctx)` predicate can replace that policy.
   The answer replaces that client's share of the menu when it arrives.
 - **Clients answer independently.** The first answer opens the menu; later ones are
@@ -254,7 +255,8 @@ runs once per reusable client on each `complete()` call (except UI selection
 edits), including while a request is pending. A truthy return value requests a
 new result for that client; false or nil keeps its candidates for local filtering.
 Omitting `refresh` retries after a timeout, refreshes incomplete results, or
-requests on trigger characters.
+requests on trigger characters, or fetches again when that client has no matching
+candidates and no request is pending.
 
 ```lua
 local laser = require("laser")
@@ -264,6 +266,7 @@ local function refresh(ctx)
   return ctx.timed_out
     or ctx.is_incomplete
     or laser.hasTriggerCharacter(ctx)
+    or (not ctx.pending and not laser.has_candidate(ctx))
     or laser.hasPattern(ctx, "[.:]$")
 end
 
@@ -296,13 +299,26 @@ scalar fields, rather than exposing the mutable LSP client object.
 | `inserted_char` | Single inserted character, or `""` for other changes |
 | `trigger_characters` | A copy of this client's current trigger characters |
 | `is_incomplete` | Last accepted response's `isIncomplete`; nil before any response, false for a complete or empty response |
+| `has_candidate` | Whether this client has any candidates after filtering for the current input |
 | `pending` | Whether this client has a request in flight |
 | `timed_out` | Whether this client's last request timed out; false initially and cleared when the next request starts |
 
 `laser.hasTriggerCharacter(ctx)` checks `inserted_char` against
 `trigger_characters`. `laser.hasPattern(ctx, pattern)` matches a Lua pattern
 against `before_cursor`; use `$` to anchor it at the cursor. Pattern matches can
-also occur after deletions. Both helpers use only the supplied context.
+also occur after deletions. `laser.has_candidate(ctx)` reads `has_candidate`:
+only this client's candidates count, using its filters and each item's edit start,
+independently of UI selection or other clients. All helpers use only the supplied
+context. Filters may run for both the refresh decision and display; keep them
+free of side effects.
+
+If input advances during a request and its successful final response has no
+matching candidates, laser also evaluates the predicate for the latest input
+with `inserted_char = ""` and `pending = false`. This lets the default policy retry
+without cancelling every pending request. An empty response for unchanged input
+does not retry itself. Returning false from a custom predicate suppresses this
+retry too. If any candidate still matches, this policy does not fetch missing
+alternatives.
 
 ### Result lifetime
 

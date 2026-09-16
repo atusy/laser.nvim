@@ -41,13 +41,34 @@ T["typing into a complete list re-requests nothing"] = function()
   expect.equality(s:on_char("r", doc, {}), {})
 end
 
+T["only clients without filtered candidates refresh"] = function()
+  local s = Session.new({
+    startcol = 4,
+    clients = {
+      [1] = { name = "missing" },
+      [2] = { name = "matching" },
+      [3] = { name = "unfiltered", opts = { filters = {} } },
+    },
+  })
+  s:set_result(1, { { label = "baz" } }, ctx(1))
+  s:set_result(2, { { label = "bar" } }, ctx(2))
+  s:set_result(3, { { label = "qux" } }, ctx(3))
+  expect.equality(s:on_char("r", doc, {}), { [1] = { triggerKind = 1 } })
+  expect.equality(s:on_char("r", doc, { [1] = {} }), {})
+  local snapshot = s:refresh_context(1, doc, "r", false)
+  expect.equality(require("laser").has_candidate(snapshot), false)
+  s:set_result(1, { { label = "bar" } }, ctx(1))
+  expect.equality(require("laser").has_candidate(snapshot), false)
+  expect.equality(require("laser").has_candidate(s:refresh_context(1, doc, "r", false)), true)
+end
+
 T["typing into an incomplete list re-requests that client"] = function()
   local s = Session.new({
     startcol = 4,
     clients = { [1] = { name = "lua_ls" }, [2] = { name = "copilot" } },
   })
   s:set_result(1, { items = { { label = "bar" } }, isIncomplete = true }, ctx(1))
-  s:set_result(2, { { label = "baz" } }, ctx(2))
+  s:set_result(2, { { label = "bar" } }, ctx(2))
   expect.equality(s:on_char("r", doc, {}), { [1] = { triggerKind = 3 } })
 end
 
@@ -60,7 +81,7 @@ T["typing a trigger character re-requests the clients that declare it"] = functi
     },
   })
   s:set_result(1, { { label = "bar" } }, ctx(1))
-  s:set_result(2, { { label = "baz" } }, ctx(2))
+  s:set_result(2, { { label = "bar" } }, ctx(2))
   expect.equality(s:on_char(".", doc, {}), { [1] = { triggerKind = 2, triggerCharacter = "." } })
 end
 
@@ -87,6 +108,8 @@ T["different item starts are matched independently and padded to a shared menu"]
   }, convert)
   convert.client_id = 2
   s:set_result(2, { { label = "bar" } }, convert)
+  expect.equality(s:refresh_context(1, doc, "a", false).has_candidate, true)
+  expect.equality(s:refresh_context(2, doc, "a", false).has_candidate, true)
   local got, startcol = s:candidates("ba", doc)
   expect.equality(startcol, 0)
   expect.equality(labels(got), { "é.bar", "bar" })

@@ -81,6 +81,75 @@ T["typing narrows a complete list locally without a new request"] = function()
   expect.equality(#fake.last.requests, requests_before)
 end
 
+T["an empty response for older input retries the latest input once"] = function()
+  local buf = scratch("")
+  local client = fake.start({ name = "one", manual = true }, buf)
+  local srv = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = {} })
+  engine:start(doc(buf, "", 0), { triggerKind = 1 })
+  local first = engine.pending[client.id]
+  local before = #srv.requests
+  engine:on_char(doc(buf, "i", 1), "i")
+  engine:on_char(doc(buf, "if", 2), "f")
+  expect.equality(engine.pending[client.id], first)
+  expect.equality(#srv.requests, before)
+
+  srv.respond(nil)
+  expect.equality(#srv.requests, before + 1)
+  expect.equality(srv.requests[#srv.requests].params.position.character, 2)
+  expect.equality(srv.requests[#srv.requests].params.context, { triggerKind = 1 })
+  srv.respond({
+    { label = "if", insertText = "if ${1:condition} then\n\t$0\nend", insertTextFormat = 2 },
+  })
+  expect.equality(ui.last().labels, { "if" })
+  expect.equality(#srv.requests, before + 1)
+  expect.equality(srv.cancelled_count, 0)
+end
+
+T["empty current responses wait for the next input instead of looping"] = function()
+  local buf = scratch("")
+  fake.start({ name = "one", manual = true }, buf)
+  local srv = fake.last
+  local engine = Engine.new({ ui = stub_ui.new(), clients = {} })
+  engine:start(doc(buf, "", 0), { triggerKind = 1 })
+  local before = #srv.requests
+  srv.respond({})
+  expect.equality(#srv.requests, before)
+  engine:on_char(doc(buf, "i", 1), "i")
+  expect.equality(#srv.requests, before + 1)
+  srv.respond({})
+  expect.equality(#srv.requests, before + 1)
+  engine:on_char(doc(buf, "if", 2), "f")
+  expect.equality(#srv.requests, before + 2)
+end
+
+T["a custom predicate can reject retries after an older empty response"] = function()
+  local buf = scratch("")
+  fake.start({ name = "one", manual = true }, buf)
+  local srv = fake.last
+  local seen
+  local engine = Engine.new({
+    ui = stub_ui.new(),
+    clients = {
+      one = {
+        refresh = function(ctx)
+          seen = ctx
+          return false
+        end,
+      },
+    },
+  })
+  engine:start(doc(buf, "", 0), { triggerKind = 1 })
+  local before = #srv.requests
+  engine:on_char(doc(buf, "if", 2), "f")
+  srv.respond({})
+  expect.equality(#srv.requests, before)
+  expect.equality(seen.before_cursor, "if")
+  expect.equality(seen.pending, false)
+  expect.equality(seen.has_candidate, false)
+end
+
 T["typing a trigger character re-requests that client and replaces its share"] = function()
   local buf = scratch("foo")
   local calls = 0

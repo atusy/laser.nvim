@@ -28,6 +28,7 @@ T["contexts preserve nil and false and do not expose mutable session tables"] = 
     inserted_char = ".",
     trigger_characters = { "." },
     pending = true,
+    has_candidate = false,
     timed_out = false,
   })
   s:set_result(7, {}, {})
@@ -35,6 +36,7 @@ T["contexts preserve nil and false and do not expose mutable session tables"] = 
   expect.equality(second.is_incomplete, false)
   expect.equality(first.is_incomplete, nil)
   expect.equality(first.pending, true)
+  expect.equality(laser.has_candidate(first), false)
   first.trigger_characters[1] = ":"
   expect.equality(s.clients[7].trigger_chars, { "." })
   expect.equality(second.trigger_characters, { "." })

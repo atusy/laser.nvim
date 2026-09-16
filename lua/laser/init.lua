@@ -7,6 +7,7 @@ local refresh = require("laser.refresh")
 local M = {
   hasTriggerCharacter = refresh.hasTriggerCharacter,
   hasPattern = refresh.hasPattern,
+  has_candidate = refresh.has_candidate,
 }
 
 ---@class laser.ClientOpts: laser.FilterOpts
