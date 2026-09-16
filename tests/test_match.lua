@@ -44,4 +44,40 @@ T["the default sorter ranks by score, then sortText, then label"] = function()
   expect.equality(labels(got), { "d", "c", "a", "b" })
 end
 
+T["filters run in order and expose match info to later stages"] = function()
+  local got = match.apply({ cand("b"), cand("a") }, "x", {
+    filters = {
+      {
+        kind = "converter",
+        callback = function(candidate)
+          candidate.abbr = candidate.abbr .. "!"
+          return candidate
+        end,
+      },
+      {
+        kind = "matcher",
+        callback = function(input, candidate)
+          expect.equality(input, "x")
+          return true, { score = candidate.abbr == "b!" and 2 or 1 }
+        end,
+      },
+      {
+        kind = "sorter",
+        callback = function(a, b)
+          return a.user_data.laser.match_info.score > b.user_data.laser.match_info.score
+        end,
+      },
+      {
+        kind = "converter",
+        callback = function(candidate)
+          candidate.menu = tostring(candidate.user_data.laser.match_info.score)
+          return candidate
+        end,
+      },
+    },
+  })
+  expect.equality(labels(got), { "b!", "a!" })
+  expect.equality({ got[1].menu, got[2].menu }, { "2", "1" })
+end
+
 return T
