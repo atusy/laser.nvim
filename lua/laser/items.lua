@@ -101,15 +101,6 @@ local function word(item, ctx)
   return text
 end
 
----@param doc string|lsp.MarkupContent|nil
----@return string?
-local function info(doc)
-  if type(doc) == "table" then
-    return doc.value
-  end
-  return doc
-end
-
 ---@param item lsp.CompletionItem
 ---@param ctx laser.ConvertContext
 ---@return table complete-item
@@ -119,7 +110,7 @@ function M.convert(item, ctx)
     abbr = item.label,
     kind = item.kind and vim.lsp.protocol.CompletionItemKind[item.kind] or nil,
     menu = item.labelDetails and item.labelDetails.description or nil,
-    info = info(item.documentation),
+    info = require("laser.preview").info(item),
     dup = 1,
     user_data = { laser = { client_id = ctx.client_id, item = item } },
   }

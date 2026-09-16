@@ -100,6 +100,26 @@ Migration: replace `setup()` and `trigger()` with the autocmds above and
 `complete(opts)` respectively. `config`, `autotrigger`, and the command-line
 configuration map are replaced by per-call options and autocmd conditions.
 
+## Candidate preview
+
+Enable the default UI's documentation preview through pum.vim:
+
+```lua
+vim.fn["pum#set_option"]({
+  preview = true,
+  preview_border = "single",
+  preview_width = 60,
+  preview_height = 20,
+})
+```
+
+Selecting a candidate displays its `detail` and `documentation`. Laser requests
+`completionItem/resolve` when supported and refreshes the preview with the result.
+Switching candidates or closing the menu cancels the pending request and ignores
+late responses. This also works with the command-line scratch document. Preview
+content uses pum.vim's text renderer; Markdown markup is displayed as text.
+Use `pum#map#scroll_preview()` to scroll and `pum#map#toggle_preview()` to toggle it.
+
 ## Filters
 
 Per-client `filters` run in array order. Kinds can repeat or be omitted:

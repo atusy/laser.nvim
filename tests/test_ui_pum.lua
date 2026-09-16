@@ -88,4 +88,43 @@ T["in-place updates apply column highlights to new tail items"] = function()
   vim.fn["pum#set_option"]({ max_height = 0, highlight_columns = {} })
 end
 
+T["preview resolves selection and ignores answers after switching or closing"] = function()
+  local callbacks, cancelled = {}, {}
+  local client = {
+    supports_method = function()
+      return true
+    end,
+    request = function(_, _, _, callback)
+      callbacks[#callbacks + 1] = callback
+      return true, #callbacks
+    end,
+    cancel_request = function(_, id)
+      cancelled[#cancelled + 1] = id
+    end,
+  }
+  vim.fn["pum#set_option"]({ preview = true, preview_delay = 0, auto_select = false })
+  local ui = require("laser.ui.pum").new({
+    preview_context = function()
+      return { client = client, bufnr = 1 }
+    end,
+  })
+  local first, second = candidate("foo"), candidate("bar")
+  first.user_data.laser.id, second.user_data.laser.id = 1, 2
+  ui.open(1, { first, second }, "i")
+  vim.fn["pum#map#select_relative"](1)
+  vim.fn["pum#map#select_relative"](1)
+  expect.equality(cancelled, { 1 })
+  callbacks[1](nil, { documentation = "stale" })
+  callbacks[2](nil, { detail = "bar()", documentation = "Current docs" })
+  expect.equality(vim.fn["pum#current_item"]().info, "bar()\n\nCurrent docs")
+  local buf = vim.fn["pum#get_preview_buf"]()
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "bar()", "", "Current docs" })
+  vim.fn["pum#map#select_relative"](-1)
+  ui.close()
+  callbacks[3](nil, { documentation = "late" })
+  expect.equality(cancelled, { 1, 3 })
+  expect.equality(vim.fn["pum#preview_visible"](), false)
+  vim.fn["pum#set_option"]({ preview = false, preview_delay = 500 })
+end
+
 return T

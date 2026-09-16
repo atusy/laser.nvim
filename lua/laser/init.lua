@@ -86,6 +86,14 @@ local function make_ui(ui)
   if not adapters[ui] then
     adapters[ui] = require("laser.ui." .. ui).new({
       on_confirm = on_confirm,
+      preview_context = function(candidate)
+        if engine and engine.doc then
+          return {
+            bufnr = engine.doc.bufnr,
+            client = vim.lsp.get_client_by_id(candidate.user_data.laser.client_id),
+          }
+        end
+      end,
       commit_characters = function(candidate)
         if not engine or not engine.enable_commit_characters or not engine.doc then
           return {}

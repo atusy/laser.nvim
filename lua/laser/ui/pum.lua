@@ -4,7 +4,7 @@ local active_ui
 
 local augroup = vim.api.nvim_create_augroup("laser.ui.pum", { clear = true })
 
----@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), commit_characters?: fun(candidate: table): string[] }
+---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), commit_characters?: fun(candidate: table): string[], preview_context?: fun(candidate: table): table? }
 ---@return laser.UI
 function M.new(opts)
   opts = opts or {}
@@ -13,8 +13,45 @@ function M.new(opts)
   local initial_cursor = 0
   local pending_commit
   local columns, non_abbr, options
+  local cancel_preview
+
+  local function stop_preview()
+    if cancel_preview then
+      cancel_preview()
+      cancel_preview = nil
+    end
+  end
+
+  local function preview()
+    stop_preview()
+    if active_ui ~= ui or not ui.visible() or not opts.preview_context then
+      return
+    end
+    local pum = vim.fn["pum#_get"]()
+    if pum.preview ~= true and pum.preview ~= 1 then
+      return
+    end
+    local candidate = pum.cursor > 0 and pum.items[pum.cursor] or nil
+    local data = candidate and vim.tbl_get(candidate, "user_data", "laser")
+    local ctx = data and opts.preview_context(candidate)
+    if not ctx then
+      return
+    end
+    cancel_preview = require("laser.preview").resolve(
+      data.item,
+      ctx.client,
+      ctx.bufnr,
+      function(info)
+        if active_ui ~= ui or not ui.visible() then
+          return
+        end
+        vim.fn["laser#pum#preview"](data, info)
+      end
+    )
+  end
 
   function ui.reset()
+    stop_preview()
     browsing, frozen = false, 0
     initial_cursor = vim.fn["pum#_get"]().cursor
   end
@@ -49,6 +86,7 @@ function M.new(opts)
       if active_ui ~= ui or opening or not ui.visible() then
         return
       end
+      preview()
       browsing = true
       ui.frozen_count()
       -- PumCompleteChanged runs just before pum moves its window cursor.
@@ -136,6 +174,7 @@ function M.new(opts)
     initial_cursor = vim.fn["pum#_get"]().cursor
     options = vim.fn["pum#_options"]()
     measure(items)
+    preview()
   end
 
   function ui.update(startcol, items, mode)

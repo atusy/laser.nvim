@@ -49,3 +49,17 @@ function laser#pum#scrollbar() abort
     call nvim_set_option_value('winblend', options.blend, #{win: pum.scroll_id})
   endif
 endfunction
+
+" Update only the still-selected candidate; Lua receives copies of Vim lists.
+function laser#pum#preview(data, info) abort
+  let pum = pum#_get()
+  if !pum#visible() || !pum.preview || pum.cursor <= 0
+    return
+  endif
+  let item = pum.items[pum.cursor - 1]
+  if get(get(item, 'user_data', {}), 'laser', {}) != a:data
+    return
+  endif
+  let item.info = a:info
+  call pum#open_preview()
+endfunction
