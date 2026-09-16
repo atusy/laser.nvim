@@ -75,13 +75,6 @@ local function exec_command(item, opts)
   end
 end
 
----@param client vim.lsp.Client
----@return boolean
-local function can_resolve(client)
-  local provider = client.server_capabilities and client.server_capabilities.completionProvider
-  return type(provider) == "table" and provider.resolveProvider == true
-end
-
 ---@param candidate table complete-item produced by laser.items
 ---@param opts laser.ConfirmOpts
 function M.apply(candidate, opts)
@@ -93,7 +86,7 @@ function M.apply(candidate, opts)
   local had_edits = apply_additional_edits(item.additionalTextEdits, opts)
 
   -- Nothing to gain if the item carried its edits, or it cannot be resolved.
-  if had_edits or not can_resolve(opts.client) then
+  if had_edits or not opts.client:supports_method("completionItem/resolve", opts.bufnr) then
     exec_command(item, opts)
     return
   end

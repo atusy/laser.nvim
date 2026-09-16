@@ -21,6 +21,9 @@ local function client(overrides)
     offset_encoding = "utf-8",
     server_capabilities = { completionProvider = {} },
     commands = {},
+    supports_method = function(self)
+      return self.server_capabilities.completionProvider.resolveProvider == true
+    end,
     exec_cmd = function() end,
     request = function() end,
   }, overrides or {})
@@ -102,6 +105,35 @@ T["an unresolved item is resolved first so late edits and commands apply"] = fun
   confirm.apply(candidate({ label = "bar" }), { bufnr = buf, startcol = 4, client = c })
   expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "import bar", "foo.bar" })
   expect.equality(executed, { "resolved.cmd" })
+end
+
+T["resolve honors dynamic registration for the completion buffer"] = function()
+  local fake = require("tests.helpers.fake_server")
+  local buf = buffer_after_insert("foo.bar", 7)
+  vim.bo[buf].filetype = "lua"
+  local c = fake.start({}, buf)
+  c.server_capabilities.completionProvider = nil
+  c.capabilities.textDocument.completion.dynamicRegistration = true
+  c.dynamic_capabilities:register({
+    {
+      id = "resolve",
+      method = "textDocument/completion",
+      registerOptions = {
+        documentSelector = { { language = "lua" } },
+        resolveProvider = true,
+      },
+    },
+  })
+  -- Keep the current buffer different from the completion document.
+  vim.api.nvim_set_current_buf(vim.api.nvim_create_buf(false, true))
+  local requested = false
+  c.request = function(_, method)
+    requested = method == "completionItem/resolve"
+    return true, 1
+  end
+  confirm.apply(candidate({ label = "bar" }), { bufnr = buf, startcol = 4, client = c })
+  fake.stop_all()
+  expect.equality(requested, true)
 end
 
 return T
