@@ -110,6 +110,42 @@ T["typing a trigger character re-requests that client and replaces its share"] =
   expect.equality(ui.last().labels, { "bar", "baz" })
 end
 
+T["dynamic trigger characters apply only to matching documents"] = function()
+  local buf = scratch("foo")
+  vim.bo[buf].filetype = "lua"
+  local client = fake.start({ items = { { label = "foo" } } }, buf)
+  client.server_capabilities.completionProvider = nil
+  client.capabilities.textDocument.completion.dynamicRegistration = true
+  client.dynamic_capabilities:register({
+    {
+      id = "other",
+      method = "textDocument/completion",
+      registerOptions = {
+        documentSelector = { { language = "python" } },
+        triggerCharacters = { ":" },
+      },
+    },
+    {
+      id = "lua",
+      method = "textDocument/completion",
+      registerOptions = {
+        documentSelector = { { language = "lua" } },
+        triggerCharacters = { "." },
+      },
+    },
+  })
+  local engine = Engine.new({ ui = stub_ui.new(), clients = {} })
+  engine:start(doc(buf, "foo", 3), { triggerKind = 1 })
+  engine:on_char(doc(buf, "foo.", 4), ".")
+  assert(vim.wait(1000, function()
+    local last = fake.last.requests[#fake.last.requests]
+    return last.params.context and last.params.context.triggerKind == 2
+  end))
+  local last = fake.last.requests[#fake.last.requests]
+  expect.equality(last.params.context, { triggerKind = 2, triggerCharacter = "." })
+  expect.equality(engine.session.clients[client.id].trigger_chars, { "." })
+end
+
 T["closing cancels every request still in flight"] = function()
   local buf = scratch("foo.ba")
   fake.start({ name = "a", items = { { label = "bar" } }, delay_ms = 50 }, buf)
