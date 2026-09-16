@@ -88,6 +88,48 @@ T["in-place updates apply column highlights to new tail items"] = function()
   vim.fn["pum#set_option"]({ max_height = 0, highlight_columns = {} })
 end
 
+T["match highlights reach pum on open and tail updates"] = function()
+  local filter = require("laser.filter")
+  local ui = require("laser.ui.pum").new()
+  vim.fn["pum#set_option"]({ max_height = 1, auto_select = false, highlight_matches = "" })
+  local items = filter.apply(
+    { candidate("日本語"), candidate("日常語"), candidate("日用語") },
+    "日語",
+    {
+      filters = {
+        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "converter", callback = filter.highlight },
+      },
+    }
+  )
+  local function ranges(row)
+    local pum = vim.fn["pum#_get"]()
+    local result = {}
+    for _, mark in
+      ipairs(
+        vim.api.nvim_buf_get_extmarks(
+          pum.buf,
+          pum.namespace,
+          { row, 0 },
+          { row, -1 },
+          { details = true }
+        )
+      )
+    do
+      if mark[4].hl_group == "PmenuMatch" then
+        result[#result + 1] = { mark[3], mark[4].end_col }
+      end
+    end
+    return result
+  end
+  ui.open(1, { items[1], items[2] }, "i")
+  expect.equality(ranges(0), { { 0, 3 }, { 6, 9 } })
+  vim.fn["pum#map#select_relative"](1)
+  ui.update(1, items, "i")
+  expect.equality(ranges(2), { { 0, 3 }, { 6, 9 } })
+  vim.fn["pum#set_option"]({ max_height = 0, highlight_matches = "PmenuMatch" })
+end
+
 T["preview resolves selection and ignores answers after switching or closing"] = function()
   local callbacks, cancelled = {}, {}
   local client = {

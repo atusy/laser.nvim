@@ -175,7 +175,7 @@ ID, and completion boundary. Callbacks are synchronous:
 
 | Kind | Callback | Effect |
 | --- | --- | --- |
-| `converter` | `(candidate) -> candidate` | Replace each candidate with the returned candidate. |
+| `converter` | `(candidate, input) -> candidate` | Replace each candidate with the returned candidate. |
 | `matcher` | `(input, candidate) -> boolean, MatchInfo?` | Reject or annotate each candidate. |
 | `sorter` | `(a, b) -> boolean` | Order candidates; return true when `a` belongs before `b`. |
 
@@ -192,6 +192,31 @@ starting at that candidate's own completion boundary.
 then `sortText`, then label; candidates without match info use score zero.
 Sorters preserve the preceding order for equivalent candidates. Comparators must
 use a strict ordering (return false for equal keys).
+
+Add `filter.highlight` after matching and any display-text conversions to highlight
+matched characters with `PmenuMatch`:
+
+```lua
+local filter = require("laser.filter")
+local filters = {
+  { kind = "matcher", callback = filter.fuzzy },
+  { kind = "sorter", callback = filter.by_score },
+  { kind = "converter", callback = filter.highlight },
+}
+require("laser").complete({ clientOptions = { ["*"] = { filters = filters } } })
+-- Disable pum.vim's independent pattern-based matching highlights.
+vim.fn["pum#set_option"]({ highlight_matches = "" })
+```
+
+The converter reuses `MatchInfo.positions` when `abbr` (or `word` if absent)
+equals `item.filterText or item.label`. Otherwise it fuzzy-matches the displayed
+text against the candidate's input; no display match means no match highlights.
+Matchers without positions opt out of highlighting. Character positions become
+byte ranges in `candidate.highlights`, preserving decorations from other producers.
+Converters receive the same candidate-specific input as matchers; existing
+one-argument converters continue to work. If a converter changes `filterText` or
+`label` after matching, it must clear match info or run a matcher again before
+highlighting, since the stored positions refer to the original matching text.
 
 Each run works on deep copies of cached candidates, so conversion and match info
 do not accumulate as you type. Converters may modify their copy or return a new

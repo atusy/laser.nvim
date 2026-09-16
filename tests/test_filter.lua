@@ -234,4 +234,58 @@ T["highlight converts match positions into byte ranges without replacing other d
   })
 end
 
+T["highlight rematches a different abbr using each candidate's input"] = function()
+  local got = filter.apply(
+    { cand("a日本語", { filterText = "日本語" }), cand("xyz") },
+    function(c)
+      return c.abbr == "xyz" and "xz" or "日語"
+    end,
+    {
+      filters = {
+        { kind = "matcher", callback = filter.fuzzy },
+        {
+          kind = "converter",
+          callback = function(candidate, input)
+            return filter.highlight(candidate, input)
+          end,
+        },
+      },
+    }
+  )
+  expect.equality(got[1].highlights, {
+    { name = "laser_match", type = "abbr", hl_group = "PmenuMatch", col = 2, width = 3 },
+    { name = "laser_match", type = "abbr", hl_group = "PmenuMatch", col = 8, width = 3 },
+  })
+  expect.equality(got[2].highlights[2].col, 3)
+end
+
+T["highlight clears only its own decorations when positions are absent or display does not match"] = function()
+  for _, case in ipairs({
+    { input = "", label = "abc" },
+    { input = "z", label = "abc", filterText = "xyz" },
+  }) do
+    local got = filter.apply({ cand(case.label, { filterText = case.filterText }) }, case.input, {
+      filters = {
+        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "converter", callback = filter.highlight },
+      },
+    })
+    expect.equality(got[1].highlights, {})
+  end
+  local item = cand("abc")
+  item.user_data.laser.match_info = { score = 1, positions = { 0 } }
+  filter.highlight(item, "a")
+  expect.equality(#item.highlights, 1)
+  filter.highlight(item, "a")
+  expect.equality(#item.highlights, 1)
+  local decoration = { name = "other", type = "kind", hl_group = "Type", col = 1, width = 1 }
+  item.highlights[#item.highlights + 1] = decoration
+  item.user_data.laser.match_info = { score = 1 }
+  filter.highlight(item, "a")
+  expect.equality(item.highlights, { decoration })
+  item.user_data.laser.match_info = nil
+  filter.highlight(item, "a")
+  expect.equality(item.highlights, { decoration })
+end
+
 return T

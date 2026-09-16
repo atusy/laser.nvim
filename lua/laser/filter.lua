@@ -9,7 +9,7 @@ local M = {}
 ---@alias laser.Matcher
 ---| fun(input: string, candidate: laser.Candidate): false, nil
 ---| fun(input: string, candidate: laser.Candidate): true, laser.MatchInfo
----@alias laser.Converter fun(candidate: laser.Candidate): laser.Candidate
+---@alias laser.Converter fun(candidate: laser.Candidate, input: string): laser.Candidate
 ---@alias laser.LegacyMatcher fun(prefix: string, candidate: table): number?
 ---@alias laser.Sorter fun(a: table, b: table): boolean
 
@@ -57,8 +57,9 @@ end
 
 ---Highlight matching characters in abbr using pum.vim item decorations.
 ---@param candidate laser.Candidate
+---@param input? string Candidate-specific input, used when abbr differs from the matched text.
 ---@return laser.Candidate
-function M.highlight(candidate)
+function M.highlight(candidate, input)
   local info = candidate.user_data.laser.match_info
   local text = candidate.abbr or candidate.word
   local highlights = {}
@@ -68,6 +69,9 @@ function M.highlight(candidate)
     end
   end
   local positions = info and text == filter_text(candidate) and info.positions or {}
+  if info and info.positions and text ~= filter_text(candidate) and input and input ~= "" then
+    positions = vim.fn.matchfuzzypos({ text }, input)[2][1] or {}
+  end
   for _, pos in ipairs(positions) do
     local start = vim.fn.byteidx(text, pos)
     local finish = vim.fn.byteidx(text, pos + 1)
@@ -161,7 +165,8 @@ function M.apply(candidates, prefix, opts)
             next_candidates[#next_candidates + 1] = candidate
           end
         elseif filter.kind == "converter" then
-          next_candidates[#next_candidates + 1] = filter.callback(candidate)
+          local input = type(prefix) == "function" and prefix(candidate) or prefix
+          next_candidates[#next_candidates + 1] = filter.callback(candidate, input)
         else
           error("Unknown filter kind: " .. tostring(filter.kind))
         end
