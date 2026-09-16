@@ -182,8 +182,9 @@ ID, and completion boundary. Callbacks are synchronous:
 A matcher returns `false, nil` to remove a candidate permanently from this run;
 no later filter receives it. Returning `true, match_info` keeps it and replaces
 `candidate.user_data.laser.match_info` in full. Later matchers always win; results
-are never merged. `laser.MatchInfo` currently has one required field, `score: number`.
-Position and highlight metadata are not yet defined. Each matcher receives input
+are never merged. `laser.MatchInfo` has a required `score: number` and optional
+`positions: integer[]`: zero-based character indices into `item.filterText` or
+`item.label` when `filterText` is absent. Each matcher receives input
 starting at that candidate's own completion boundary.
 
 `filter.fuzzy` implements this boolean/MatchInfo contract, matching against

@@ -4,6 +4,7 @@ local M = {}
 
 ---@class laser.MatchInfo
 ---@field score number
+---@field positions? integer[] 0-based character indices into item.filterText or item.label
 
 ---@alias laser.Matcher
 ---| fun(input: string, candidate: laser.Candidate): false, nil
@@ -47,11 +48,11 @@ function M.fuzzy(prefix, candidate)
   if prefix == "" then
     return true, { score = 0 }
   end
-  local scores = vim.fn.matchfuzzypos({ filter_text(candidate) }, prefix)[3]
-  if not scores[1] then
+  local result = vim.fn.matchfuzzypos({ filter_text(candidate) }, prefix)
+  if not result[3][1] then
     return false, nil
   end
-  return true, { score = scores[1] }
+  return true, { score = result[3][1], positions = result[2][1] }
 end
 
 ---@param candidate table

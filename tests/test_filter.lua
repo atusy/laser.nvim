@@ -30,6 +30,12 @@ T["the default matcher drops candidates that do not fuzzy-match the prefix"] = f
   expect.equality(labels(got), { "bar", "baz" })
 end
 
+T["fuzzy exposes character positions in filterText"] = function()
+  local matched, info = filter.fuzzy("日語", cand("other", { filterText = "日本語" }))
+  expect.equality(matched, true)
+  expect.equality(info.positions, { 0, 2 })
+end
+
 T["the default sorter ranks by score, then sortText, then label"] = function()
   local scores = { b = 1, a = 1, c = 1, d = 2 }
   local matcher = function(_, candidate)
