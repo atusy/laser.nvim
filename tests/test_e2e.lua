@@ -77,6 +77,100 @@ T["commit characters opt in confirms the selected item before typing"] = functio
   expect.equality(child.lua_get("COMMITTED"), true)
 end
 
+for name, case in pairs({
+  ["disabled by default"] = { expected = "b." },
+  ["explicitly disabled"] = { enabled = false, expected = "b." },
+  ["static server fallback"] = { enabled = true, expected = "bar." },
+  ["empty item list overrides server"] = { enabled = true, chars = {}, expected = "b." },
+  ["item list overrides server"] = { enabled = true, chars = { ";" }, expected = "b." },
+  ["list defaults override server"] = { enabled = true, defaults = { ";" }, expected = "b." },
+  ["no selection"] = { enabled = true, no_selection = true, expected = "b." },
+  ["dynamic server fallback"] = { enabled = true, dynamic = true, expected = "bar." },
+}) do
+  T["commit characters: " .. name] = function()
+    child.lua("CASE = " .. vim.inspect(case))
+    child.lua([[
+      OPTIONS = { enable_commit_characters = CASE.enabled }
+      vim.fn["pum#set_option"]({ auto_select = false })
+      vim.bo.filetype = "lua"
+      local c = FAKE.start({ items = {
+        isIncomplete = false, itemDefaults = { commitCharacters = CASE.defaults },
+        items = { { label = "bar", commitCharacters = CASE.chars } },
+      } })
+      if CASE.dynamic then
+        c.server_capabilities.completionProvider = nil
+        c.capabilities.textDocument.completion.dynamicRegistration = true
+        c.dynamic_capabilities:register({ {
+          id = "commit", method = "textDocument/completion", registerOptions = {
+            documentSelector = { { language = "lua" } }, allCommitCharacters = { "." },
+          },
+        } })
+      else
+        c.server_capabilities.completionProvider.allCommitCharacters = { "." }
+      end
+      vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#select_relative"](1) end)
+    ]])
+    type_keys("ib")
+    wait_pum_items(1)
+    if not case.no_selection then
+      type_keys("<C-n>")
+    end
+    type_keys(".")
+    child.lua([[vim.wait(100)]])
+    expect.equality(child.api.nvim_get_current_line(), case.expected)
+  end
+end
+
+T["commit character is inserted after snippet expansion"] = function()
+  child.lua([[
+    OPTIONS = { enable_commit_characters = true }
+    FAKE.start({ items = { { label = "bar", insertText = "bar($1)$0",
+      insertTextFormat = 2, commitCharacters = { "." } } } })
+  ]])
+  type_keys("ib")
+  wait_pum_items(1)
+  type_keys("<C-n>")
+  type_keys(".")
+  child.lua([[vim.wait(200)]])
+  expect.equality(child.api.nvim_get_current_line(), "bar(.)")
+end
+
+T["commit character preserves queued input after snippet expansion"] = function()
+  child.lua([[
+    OPTIONS = { enable_commit_characters = true }
+    FAKE.start({ items = { { label = "bar", insertText = "bar($1)$0",
+      insertTextFormat = 2, commitCharacters = { "." } } } })
+  ]])
+  type_keys("ib")
+  wait_pum_items(1)
+  type_keys("<C-n>")
+  type_keys(".x")
+  child.lua([[vim.wait(200)]])
+  expect.equality(child.api.nvim_get_current_line(), "bar(.x)")
+end
+
+T["commit characters confirm command-line candidates"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":", callback = function()
+        require("laser").complete({ language_id = "laser-cmd", enable_commit_characters = true })
+      end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd", callback = function(ev)
+        FAKE.start({ items = { { label = "echo", commitCharacters = { " " } } } }, ev.buf)
+      end,
+    })
+    vim.keymap.set("c", "<C-n>", function() vim.fn["pum#map#select_relative"](1) end)
+  ]])
+  type_keys(":e")
+  wait_pum_items(1)
+  type_keys("<C-n>")
+  type_keys(" ")
+  child.lua([[vim.wait(100)]])
+  expect.equality(child.fn.getcmdline(), "echo ")
+end
+
 T["confirming a snippet item expands it in the buffer"] = function()
   child.lua([[FAKE.start({
     name = "one",

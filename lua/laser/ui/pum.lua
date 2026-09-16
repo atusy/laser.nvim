@@ -11,6 +11,7 @@ function M.new(opts)
   local ui = {}
   local browsing, frozen, opening = false, 0, false
   local initial_cursor = 0
+  local pending_commit
   local columns, non_abbr, options
 
   function ui.reset()
@@ -70,8 +71,14 @@ function M.new(opts)
     end,
   })
 
-  if opts.commit_characters then
+  if opts.commit_characters and opts.on_confirm then
     vim.on_key(function(key, typed)
+      -- pum reports acceptance asynchronously. Keep subsequent typed input
+      -- behind snippet expansion and other confirmation edits as well.
+      if pending_commit and typed ~= "" then
+        pending_commit = pending_commit .. key
+        return ""
+      end
       local mode = vim.api.nvim_get_mode().mode
       if active_ui ~= ui or typed == "" or (mode ~= "i" and mode ~= "c") or not ui.visible() then
         return
@@ -85,7 +92,8 @@ function M.new(opts)
         -- Run outside the input callback, using pum's normal confirmation path.
         local confirm =
           vim.api.nvim_replace_termcodes("<Cmd>call pum#map#confirm()<CR>", true, false, true)
-        vim.api.nvim_feedkeys(confirm .. key, "ni", false)
+        pending_commit = key
+        vim.api.nvim_feedkeys(confirm, "ni", false)
         return ""
       end
     end, vim.api.nvim_create_namespace("laser.ui.pum.commit_characters"))
@@ -232,6 +240,8 @@ function M.new(opts)
         -- pum.vim also fires this with "complete_done" when a menu closes
         -- after the user browsed but kept typing; only explicit confirms
         -- ("confirm", "confirm_word") mean the item was accepted.
+        local char = pending_commit
+        pending_commit = nil
         local event = vim.g["pum#completed_event"] or ""
         local item = vim.g["pum#completed_item"]
         if
@@ -240,6 +250,9 @@ function M.new(opts)
           and vim.tbl_get(item, "user_data", "laser")
         then
           opts.on_confirm(item)
+          if char then
+            vim.api.nvim_feedkeys(char, "ni", false)
+          end
         end
       end,
     })
