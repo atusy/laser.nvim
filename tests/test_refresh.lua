@@ -1,17 +1,17 @@
 local MiniTest = require("mini.test")
 local expect = MiniTest.expect
 local T = MiniTest.new_set()
-local laser = require("laser")
+local refresh = require("laser.refresh")
 local Session = require("laser.session")
 
 T["helpers inspect the snapshot without consulting the editor"] = function()
   local ctx = { inserted_char = "。", trigger_characters = { "。" }, before_cursor = "obj。" }
-  expect.equality(laser.hasTriggerCharacter(ctx), true)
-  expect.equality(laser.hasPattern(ctx, "。$"), true)
-  expect.equality(laser.hasPattern(ctx, "[.:]$"), false)
+  expect.equality(refresh.hasTriggerCharacter(ctx), true)
+  expect.equality(refresh.hasPattern(ctx, "。$"), true)
+  expect.equality(refresh.hasPattern(ctx, "[.:]$"), false)
   ctx.inserted_char = ""
-  expect.equality(laser.hasTriggerCharacter(ctx), false)
-  expect.equality(laser.hasPattern(ctx, "。$"), true)
+  expect.equality(refresh.hasTriggerCharacter(ctx), false)
+  expect.equality(refresh.hasPattern(ctx, "。$"), true)
 end
 
 T["contexts preserve nil and false and do not expose mutable session tables"] = function()
@@ -36,7 +36,7 @@ T["contexts preserve nil and false and do not expose mutable session tables"] = 
   expect.equality(second.is_incomplete, false)
   expect.equality(first.is_incomplete, nil)
   expect.equality(first.pending, true)
-  expect.equality(laser.has_candidate(first), false)
+  expect.equality(refresh.has_candidate(first), false)
   first.trigger_characters[1] = ":"
   expect.equality(s.clients[7].trigger_chars, { "." })
   expect.equality(second.trigger_characters, { "." })

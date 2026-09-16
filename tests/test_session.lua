@@ -56,10 +56,13 @@ T["only clients without filtered candidates refresh"] = function()
   expect.equality(s:on_char("r", doc, {}), { [1] = { triggerKind = 1 } })
   expect.equality(s:on_char("r", doc, { [1] = {} }), {})
   local snapshot = s:refresh_context(1, doc, "r", false)
-  expect.equality(require("laser").has_candidate(snapshot), false)
+  expect.equality(require("laser.refresh").has_candidate(snapshot), false)
   s:set_result(1, { { label = "bar" } }, ctx(1))
-  expect.equality(require("laser").has_candidate(snapshot), false)
-  expect.equality(require("laser").has_candidate(s:refresh_context(1, doc, "r", false)), true)
+  expect.equality(require("laser.refresh").has_candidate(snapshot), false)
+  expect.equality(
+    require("laser.refresh").has_candidate(s:refresh_context(1, doc, "r", false)),
+    true
+  )
 end
 
 T["typing into an incomplete list re-requests that client"] = function()

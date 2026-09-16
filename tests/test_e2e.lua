@@ -297,7 +297,7 @@ T["the public pattern helper controls refresh from an autocmd"] = function()
     SEEN = {}
     OPTIONS = { clients = { ["*"] = { refresh = function(ctx)
       table.insert(SEEN, ctx)
-      return require("laser").hasPattern(ctx, "ba$")
+      return require("laser.refresh").hasPattern(ctx, "ba$")
     end } } }
     FAKE.start({ items = function()
       CALLS = CALLS + 1
@@ -335,7 +335,7 @@ T["command-line refresh receives the scratch document and current input"] = func
     local laser = require("laser")
     local function refresh(ctx)
       CTX = ctx
-      return laser.hasPattern(ctx, "ec$")
+      return require("laser.refresh").hasPattern(ctx, "ec$")
     end
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
       pattern = ":",

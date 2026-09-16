@@ -1,14 +1,4 @@
-local cmdline = require("laser.cmdline")
-local confirm = require("laser.confirm")
-local Engine = require("laser.engine")
-
-local refresh = require("laser.refresh")
-
-local M = {
-  hasTriggerCharacter = refresh.hasTriggerCharacter,
-  hasPattern = refresh.hasPattern,
-  has_candidate = refresh.has_candidate,
-}
+local M = {}
 
 ---@class laser.ClientOpts: laser.FilterOpts
 ---@field enabled? boolean
@@ -70,7 +60,7 @@ local function on_confirm(candidate)
   local session, doc = engine.session, engine.doc
   local client = vim.lsp.get_client_by_id(candidate.user_data.laser.client_id)
   if session and doc and doc.mode == "i" and client then
-    confirm.apply(candidate, {
+    require("laser.confirm").apply(candidate, {
       bufnr = doc.bufnr,
       startcol = candidate.user_data.laser.startcol or session.startcol,
       client = client,
@@ -132,6 +122,7 @@ local function document(opts)
     if not opts.language_id then
       return
     end
+    local cmdline = require("laser.cmdline")
     local doc = cmdline.ensure_buffer(opts.language_id)
     local text = vim.fn.getcmdline()
     cmdline.set_text(doc.bufnr, text)
@@ -193,7 +184,7 @@ function M.complete(opts)
   local clients = opts.clients or {}
   if not engine or engine.ui ~= ui then
     M.close()
-    engine = Engine.new({ ui = ui, clients = {} })
+    engine = require("laser.engine").new({ ui = ui, clients = {} })
   end
   engine.enable_commit_characters = opts.enable_commit_characters == true
   engine.clients_config = vim.deepcopy(clients)

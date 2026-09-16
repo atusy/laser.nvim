@@ -260,14 +260,15 @@ candidates and no request is pending.
 
 ```lua
 local laser = require("laser")
+local refresh = require("laser.refresh")
 
 -- Define the function outside the autocmd so its identity stays stable.
-local function refresh(ctx)
+local function should_refresh(ctx)
   return ctx.timed_out
     or ctx.is_incomplete
-    or laser.hasTriggerCharacter(ctx)
-    or (not ctx.pending and not laser.has_candidate(ctx))
-    or laser.hasPattern(ctx, "[.:]$")
+    or refresh.hasTriggerCharacter(ctx)
+    or (not ctx.pending and not refresh.has_candidate(ctx))
+    or refresh.hasPattern(ctx, "[.:]$")
 end
 
 vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
@@ -275,7 +276,7 @@ vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
   callback = function()
     laser.complete({
       language_id = "vim",
-      clients = { ["*"] = { refresh = refresh } },
+      clients = { ["*"] = { refresh = should_refresh } },
     })
   end,
 })
@@ -303,10 +304,11 @@ scalar fields, rather than exposing the mutable LSP client object.
 | `pending` | Whether this client has a request in flight |
 | `timed_out` | Whether this client's last request timed out; false initially and cleared when the next request starts |
 
-`laser.hasTriggerCharacter(ctx)` checks `inserted_char` against
-`trigger_characters`. `laser.hasPattern(ctx, pattern)` matches a Lua pattern
+Use `local refresh = require("laser.refresh")` to access the helpers.
+`refresh.hasTriggerCharacter(ctx)` checks `inserted_char` against
+`trigger_characters`. `refresh.hasPattern(ctx, pattern)` matches a Lua pattern
 against `before_cursor`; use `$` to anchor it at the cursor. Pattern matches can
-also occur after deletions. `laser.has_candidate(ctx)` reads `has_candidate`:
+also occur after deletions. `refresh.has_candidate(ctx)` reads `has_candidate`:
 only this client's candidates count, using its filters and each item's edit start,
 independently of UI selection or other clients. All helpers use only the supplied
 context. Filters may run for both the refresh decision and display; keep them
