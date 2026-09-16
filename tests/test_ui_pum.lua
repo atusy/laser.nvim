@@ -127,4 +127,66 @@ T["preview resolves selection and ignores answers after switching or closing"] =
   vim.fn["pum#set_option"]({ preview = false, preview_delay = 500 })
 end
 
+T["preview filetype follows initial MarkupContent and resets for plain text"] = function()
+  vim.fn["pum#set_option"]({ preview = true, auto_select = false })
+  local ui = require("laser.ui.pum").new()
+  local entries = {}
+  for i, doc in ipairs({
+    { kind = "markdown", value = "**Markdown**" },
+    { kind = "plaintext", value = "Plain text" },
+    { kind = "markdown", value = "**Markdown again**" },
+    "String documentation",
+  }) do
+    entries[i] = candidate(tostring(i))
+    entries[i].user_data.laser.item.documentation = doc
+    entries[i].info = type(doc) == "table" and doc.value or doc
+  end
+  ui.open(1, entries, "i")
+  for _, ft in ipairs({ "markdown", "", "markdown", "" }) do
+    vim.fn["pum#map#select_relative"](1)
+    vim.fn["pum#open_preview"]()
+    expect.equality(vim.bo[vim.fn["pum#get_preview_buf"]()].filetype, ft)
+  end
+  ui.close()
+  vim.fn["pum#set_option"]({ preview = false })
+end
+
+T["resolved MarkupContent overrides the initial preview filetype"] = function()
+  local reply
+  local client = {
+    supports_method = function()
+      return true
+    end,
+    request = function(_, _, _, callback)
+      reply = callback
+      return true, 1
+    end,
+  }
+  vim.fn["pum#set_option"]({ preview = true, auto_select = false })
+  local ui = require("laser.ui.pum").new({
+    preview_context = function()
+      return { client = client, bufnr = 1 }
+    end,
+  })
+  for _, kind in ipairs({ "markdown", "plaintext" }) do
+    local entry = candidate("foo")
+    entry.user_data.laser.item.documentation = {
+      kind = kind == "markdown" and "plaintext" or "markdown",
+      value = "Initial docs",
+    }
+    entry.info = "Initial docs"
+    ui.open(1, { entry }, "i")
+    vim.fn["pum#map#select_relative"](1)
+    vim.fn["pum#open_preview"]()
+    reply(nil, { documentation = { kind = kind, value = "Resolved docs" } })
+    local buf = vim.fn["pum#get_preview_buf"]()
+    expect.equality(vim.bo[buf].filetype, kind == "markdown" and "markdown" or "")
+    -- pum may redraw later using its own preview timer.
+    vim.fn["pum#open_preview"]()
+    expect.equality(vim.bo[buf].filetype, kind == "markdown" and "markdown" or "")
+    ui.close()
+  end
+  vim.fn["pum#set_option"]({ preview = false })
+end
+
 return T

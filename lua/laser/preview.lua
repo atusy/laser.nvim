@@ -2,8 +2,10 @@ local M = {}
 
 ---@param item lsp.CompletionItem
 ---@return string
+---@return string filetype
 function M.info(item)
   local doc = item.documentation
+  local filetype = type(doc) == "table" and doc.kind == "markdown" and "markdown" or ""
   doc = type(doc) == "table" and doc.value or doc
   local parts = {}
   for _, text in ipairs({ item.detail or "", doc or "" }) do
@@ -11,7 +13,7 @@ function M.info(item)
       parts[#parts + 1] = text
     end
   end
-  return table.concat(parts, "\n\n")
+  return table.concat(parts, "\n\n"), filetype
 end
 
 ---Resolve only presentation data; confirmation still owns edits and commands.

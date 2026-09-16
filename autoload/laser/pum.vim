@@ -51,7 +51,7 @@ function laser#pum#scrollbar() abort
 endfunction
 
 " Update only the still-selected candidate; Lua receives copies of Vim lists.
-function laser#pum#preview(data, info) abort
+function laser#pum#preview(data, info, filetype) abort
   let pum = pum#_get()
   if !pum#visible() || !pum.preview || pum.cursor <= 0
     return
@@ -61,5 +61,6 @@ function laser#pum#preview(data, info) abort
     return
   endif
   let item.info = a:info
+  let item.user_data.laser_preview_filetype = a:filetype
   call pum#open_preview()
 endfunction

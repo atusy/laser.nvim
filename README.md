@@ -117,7 +117,8 @@ Selecting a candidate displays its `detail` and `documentation`. Laser requests
 `completionItem/resolve` when supported and refreshes the preview with the result.
 Switching candidates or closing the menu cancels the pending request and ignores
 late responses. This also works with the command-line scratch document. Preview
-content uses pum.vim's text renderer; Markdown markup is displayed as text.
+buffers use `filetype=markdown` for Markdown `MarkupContent`; plaintext and string
+documentation clear the filetype.
 Use `pum#map#scroll_preview()` to scroll and `pum#map#toggle_preview()` to toggle it.
 
 ## Filters

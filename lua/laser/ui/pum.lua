@@ -41,14 +41,32 @@ function M.new(opts)
       data.item,
       ctx.client,
       ctx.bufnr,
-      function(info)
+      function(info, filetype)
         if active_ui ~= ui or not ui.visible() then
           return
         end
-        vim.fn["laser#pum#preview"](data, info)
+        vim.fn["laser#pum#preview"](data, info, filetype)
       end
     )
   end
+
+  vim.api.nvim_create_autocmd("User", {
+    group = augroup,
+    pattern = "PumPreview",
+    callback = function()
+      if active_ui ~= ui then
+        return
+      end
+      local candidate = vim.fn["pum#current_item"]()
+      local data = vim.tbl_get(candidate, "user_data", "laser")
+      local buf = vim.fn["pum#get_preview_buf"]()
+      if not data or not vim.api.nvim_buf_is_valid(buf) then
+        return
+      end
+      local _, filetype = require("laser.preview").info(data.item)
+      vim.bo[buf].filetype = candidate.user_data.laser_preview_filetype or filetype
+    end,
+  })
 
   function ui.reset()
     stop_preview()
