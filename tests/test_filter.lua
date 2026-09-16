@@ -212,4 +212,26 @@ T["legacy sorters still receive the default match score"] = function()
   expect.equality(labels(got), { "abc", "axbyc" })
 end
 
+T["highlight converts match positions into byte ranges without replacing other decorations"] = function()
+  local item = cand("日本語")
+  local decoration = { name = "kind", type = "kind", hl_group = "Type", col = 1, width = 1 }
+  item.highlights = { decoration }
+  local got = filter.apply({ item }, "日語", {
+    filters = {
+      { kind = "matcher", callback = filter.fuzzy },
+      {
+        kind = "converter",
+        callback = function(candidate)
+          return filter.highlight(candidate)
+        end,
+      },
+    },
+  })
+  expect.equality(got[1].highlights, {
+    decoration,
+    { name = "laser_match", type = "abbr", hl_group = "PmenuMatch", col = 1, width = 3 },
+    { name = "laser_match", type = "abbr", hl_group = "PmenuMatch", col = 7, width = 3 },
+  })
+end
+
 return T

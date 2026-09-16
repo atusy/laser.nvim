@@ -55,6 +55,34 @@ function M.fuzzy(prefix, candidate)
   return true, { score = result[3][1], positions = result[2][1] }
 end
 
+---Highlight matching characters in abbr using pum.vim item decorations.
+---@param candidate laser.Candidate
+---@return laser.Candidate
+function M.highlight(candidate)
+  local info = candidate.user_data.laser.match_info
+  local text = candidate.abbr or candidate.word
+  local highlights = {}
+  for _, hl in ipairs(candidate.highlights or {}) do
+    if hl.name ~= "laser_match" then
+      highlights[#highlights + 1] = hl
+    end
+  end
+  local positions = info and text == filter_text(candidate) and info.positions or {}
+  for _, pos in ipairs(positions) do
+    local start = vim.fn.byteidx(text, pos)
+    local finish = vim.fn.byteidx(text, pos + 1)
+    highlights[#highlights + 1] = {
+      name = "laser_match",
+      type = "abbr",
+      hl_group = "PmenuMatch",
+      col = start + 1,
+      width = finish - start,
+    }
+  end
+  candidate.highlights = highlights
+  return candidate
+end
+
 ---@param candidate table
 ---@return string
 local function sort_text(candidate)
