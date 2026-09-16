@@ -39,7 +39,10 @@ local function filter_text(candidate)
 end
 
 ---Fuzzy match against filterText (or label). Returns false when it does not match.
----@type laser.Matcher
+---@param prefix string
+---@param candidate laser.Candidate
+---@return boolean matched
+---@return laser.MatchInfo? info
 function M.fuzzy(prefix, candidate)
   if prefix == "" then
     return true, { score = 0 }
@@ -59,7 +62,9 @@ local function sort_text(candidate)
 end
 
 ---Higher score first, then the server's sortText, then label.
----@type laser.Sorter
+---@param a laser.Candidate
+---@param b laser.Candidate
+---@return boolean
 function M.by_score(a, b)
   local ai, bi = a.user_data.laser.match_info, b.user_data.laser.match_info
   local ascore, bscore = ai and ai.score or a.score or 0, bi and bi.score or b.score or 0
@@ -88,7 +93,7 @@ function M.apply(candidates, prefix, opts)
       else
         matched, info = M.fuzzy(input, candidate)
       end
-      candidate.score = matched and info.score or nil -- Legacy sorter callbacks.
+      candidate.score = info and info.score or nil -- Legacy sorter callbacks.
       return matched, matched and info or nil
     end
     filters = {
@@ -100,7 +105,22 @@ function M.apply(candidates, prefix, opts)
   local current = vim.deepcopy(candidates)
   for _, filter in ipairs(filters) do
     if filter.kind == "sorter" then
-      table.sort(current, filter.callback)
+      local ordered = {}
+      for i, candidate in ipairs(current) do
+        ordered[i] = { candidate = candidate, index = i }
+      end
+      table.sort(ordered, function(a, b)
+        if filter.callback(a.candidate, b.candidate) then
+          return true
+        end
+        if filter.callback(b.candidate, a.candidate) then
+          return false
+        end
+        return a.index < b.index
+      end)
+      for i, entry in ipairs(ordered) do
+        current[i] = entry.candidate
+      end
     else
       local next_candidates = {}
       for _, candidate in ipairs(current) do

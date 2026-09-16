@@ -7,7 +7,8 @@ LSP-only completion for Neovim. Experimental.
 - **Sources are LSP clients, picked by name.** Nothing is configured means every
   attached client serves completion. Per-client options live in one table keyed by
   client name, with `"*"` as the defaults.
-- **Matcher and sorter are plain Lua functions**, configurable per client. Defaults:
+- **Converters, matchers, and sorters are plain Lua functions**, configurable per
+  client in any order through `filters`. Defaults:
   fuzzy matching via `matchfuzzypos()` and ordering by score, `sortText`, label.
 - **Typing reuses the candidates you already have.** By default, a client is asked again when
   it said its list was incomplete, or when you typed one of its trigger characters.
@@ -40,8 +41,10 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
       -- { ["*"] = { enabled = false }, lua_ls = {} } acts as an allow-list.
       clients = {
         ["*"] = {
-          -- matcher = function(prefix, candidate) return score_or_nil end,
-          -- sorter = function(a, b) return a_before_b end,
+          -- filters = {
+          --   { kind = "matcher", callback = require("laser.match").fuzzy },
+          --   { kind = "sorter", callback = require("laser.match").by_score },
+          -- },
           priority = 0,
           timeout_ms = 1000, -- omitted or 0: no request timeout
         },
@@ -77,7 +80,7 @@ without a newly typed keyword character.
 Options apply to each call; omitted options use defaults, not the previous call's
 values. Equivalent client options reuse the current session. Changing client
 options invalidates only that client's results; changing the UI starts a new
-session. Reuse the same custom UI table and matcher/sorter/refresh functions
+session. Reuse the same custom UI table and filter callbacks and refresh functions
 across calls to retain cached results.
 
 In command-line mode, pass `language_id` to choose the scratch document's filetype.
@@ -97,9 +100,64 @@ Migration: replace `setup()` and `trigger()` with the autocmds above and
 `complete(opts)` respectively. `config`, `autotrigger`, and the command-line
 configuration map are replaced by per-call options and autocmd conditions.
 
-Candidates handed to a matcher or sorter are `complete-items` (see `:h complete-items`)
-with `user_data.laser = { client_id = ..., item = <lsp.CompletionItem> }`; the matcher's
-score is stored in `candidate.score` for the sorter.
+## Filters
+
+Per-client `filters` run in array order. Kinds can repeat or be omitted:
+
+```lua
+local match = require("laser.match")
+local filters = {
+  { kind = "converter", callback = function(candidate)
+    -- Change the text used by the following matcher.
+    candidate.user_data.laser.item.filterText = candidate.abbr:lower()
+    return candidate
+  end },
+  { kind = "matcher", callback = match.fuzzy },
+  { kind = "sorter", callback = match.by_score },
+  { kind = "converter", callback = function(candidate)
+    candidate.menu = tostring(candidate.user_data.laser.match_info.score)
+    return candidate
+  end },
+}
+require("laser").complete({ clients = { ["*"] = { filters = filters } } })
+```
+
+Candidates (`laser.Candidate`) are `complete-items` (see `:h complete-items`)
+with `user_data.laser` containing the client ID, original LSP item, stable candidate
+ID, and completion boundary. Callbacks are synchronous:
+
+| Kind | Callback | Effect |
+| --- | --- | --- |
+| `converter` | `(candidate) -> candidate` | Replace each candidate with the returned candidate. |
+| `matcher` | `(input, candidate) -> boolean, MatchInfo?` | Reject or annotate each candidate. |
+| `sorter` | `(a, b) -> boolean` | Order candidates; return true when `a` belongs before `b`. |
+
+A matcher returns `false, nil` to remove a candidate permanently from this run;
+no later filter receives it. Returning `true, match_info` keeps it and replaces
+`candidate.user_data.laser.match_info` in full. Later matchers always win; results
+are never merged. `laser.MatchInfo` currently has one required field, `score: number`.
+Position and highlight metadata are not yet defined. Each matcher receives input
+starting at that candidate's own completion boundary.
+
+`match.fuzzy` implements this boolean/MatchInfo contract, matching against
+`item.filterText` or `item.label`. `match.by_score` sorts by descending score,
+then `sortText`, then label; candidates without match info use score zero.
+Sorters preserve the preceding order for equivalent candidates. Comparators must
+use a strict ordering (return false for equal keys).
+
+Each run works on deep copies of cached candidates, so conversion and match info
+do not accumulate as you type. Converters may modify their copy or return a new
+candidate, but must preserve `user_data.laser` identity and the information needed
+for confirmation (`client_id`, `id`, `startcol`, and the LSP `item`). Changes to
+matching or sorting text affect only filters that follow them. Filters run per
+client before merging results and padding words to the shared menu boundary.
+
+Omitting `filters` uses fuzzy matching followed by score sorting. `filters = {}`
+performs neither filtering nor sorting. An explicit list overrides the legacy
+`matcher` and `sorter` options, including those inherited from `"*"`.
+The legacy options remain supported: `matcher(input, candidate)` returns a
+numeric score or nil, and legacy sorters receive `candidate.score`. Direct calls
+to `match.fuzzy` now return a boolean and MatchInfo instead of a numeric score.
 
 ## Completion position
 
@@ -241,7 +299,7 @@ trigger character uses `TriggerCharacter`, an incomplete result uses
 | --- | --- |
 | `laser.clients` | select clients by name, resolve per-client options |
 | `laser.items` | `lsp.CompletionItem` to `complete-item` |
-| `laser.match` | matcher/sorter stage |
+| `laser.match` | ordered converter/matcher/sorter pipeline |
 | `laser.session` | per-client results, refresh snapshots and decisions |
 | `laser.refresh` | predicate helpers and LSP request context |
 | `laser.request` | async per-client `textDocument/completion` with cancel |

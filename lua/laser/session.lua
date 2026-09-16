@@ -4,7 +4,7 @@ local refresh = require("laser.refresh")
 
 ---@class laser.SessionClient
 ---@field name string
----@field opts? table resolved per-client options (matcher, sorter, priority, refresh)
+---@field opts? table resolved per-client options (filters, matcher, sorter, priority, refresh)
 ---@field trigger_chars? string[]
 
 ---@class laser.Session

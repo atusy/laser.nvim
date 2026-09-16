@@ -45,7 +45,7 @@ function Engine:clients_for(doc)
   return clients_mod.select(attached, self.clients_config)
 end
 
----Re-run matcher/sorter over the current candidates and show them.
+---Re-run filters over the current candidates and show them.
 function Engine:render()
   self.render_ticket = nil
   local session, doc = self.session, self.doc

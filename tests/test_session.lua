@@ -99,4 +99,58 @@ T["different item starts are matched independently and padded to a shared menu"]
   expect.equality(got[1].word, "bar")
 end
 
+T["per-client filters see each item input and preserve identity on rerender"] = function()
+  local seen = {}
+  local s = Session.new({
+    startcol = 4,
+    clients = {
+      [1] = {
+        name = "one",
+        opts = {
+          filters = {
+            {
+              kind = "matcher",
+              callback = function(input, candidate)
+                seen[#seen + 1] = input
+                return true, { score = #input }
+              end,
+            },
+            {
+              kind = "converter",
+              callback = function(candidate)
+                candidate.abbr = candidate.abbr .. "!"
+                return candidate
+              end,
+            },
+          },
+        },
+      },
+      [2] = { name = "two", opts = { filters = {} } },
+    },
+  })
+  s:set_result(1, {
+    { label = "bar" },
+    {
+      label = "foo.bar",
+      textEdit = {
+        newText = "foo.bar",
+        range = {
+          start = { line = 0, character = 0 },
+          ["end"] = { line = 0, character = 6 },
+        },
+      },
+    },
+  }, ctx(1))
+  s:set_result(2, { { label = "other" } }, ctx(2))
+  local first = s:candidates("bar", doc)
+  expect.equality(seen, { "bar", "foo.bar" })
+  expect.equality(labels(first), { "bar!", "foo.bar!", "other" })
+  expect.equality(first[1].user_data.laser.match_info, { score = 3 })
+  expect.equality(first[3].user_data.laser.match_info, nil)
+  local second = s:candidates("bar", doc)
+  expect.equality(first, second)
+  expect.equality(first[1].user_data.laser.id, s.results[1].candidates[1].user_data.laser.id)
+  expect.equality(labels(s.results[1].candidates), { "bar", "foo.bar" })
+end
+
 return T
