@@ -15,13 +15,37 @@ function M.resolve(name, config)
   return resolved
 end
 
+---Select clients in display order. Explicit names are excluded from "*".
 ---@param clients vim.lsp.Client[]
----@param config table<string, table>
+---@param names? string[] nil selects all; an empty list selects none
+---@param config? table<string, table>
 ---@return vim.lsp.Client[]
-function M.select(clients, config)
-  return vim.tbl_filter(function(client)
-    return M.resolve(client.name, config).enabled ~= false
-  end, clients)
+function M.select(clients, names, config)
+  config = config or {}
+  names = names or { "*" }
+  local explicit, seen, selected = {}, {}, {}
+  for _, name in ipairs(names) do
+    if name ~= "*" then
+      explicit[name] = true
+    end
+  end
+  local sorted = vim.list_slice(clients)
+  table.sort(sorted, function(a, b)
+    return a.id < b.id
+  end)
+  for _, name in ipairs(names) do
+    for _, client in ipairs(sorted) do
+      if
+        (client.name == name or (name == "*" and not explicit[client.name]))
+        and not seen[client.id]
+        and M.resolve(client.name, config).enabled ~= false
+      then
+        seen[client.id] = true
+        selected[#selected + 1] = client
+      end
+    end
+  end
+  return selected
 end
 
 ---@param client vim.lsp.Client

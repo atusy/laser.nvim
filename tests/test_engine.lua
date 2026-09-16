@@ -43,7 +43,7 @@ T["starting a session shows the server's candidates from the keyword start"] = f
     buf
   )
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
 
   engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
   wait_opened(ui, 1)
@@ -56,7 +56,7 @@ T["a slow client's answer is merged into the open menu"] = function()
   fake.start({ name = "quick", items = { { label = "bar" } } }, buf)
   fake.start({ name = "slow", items = { { label = "baz" } }, delay_ms = 30 }, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
 
   engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
   wait_opened(ui, 2)
@@ -69,7 +69,7 @@ T["typing narrows a complete list locally without a new request"] = function()
   local buf = scratch("foo.ba")
   fake.start({ name = "one", items = { { label = "bar" }, { label = "baz" } } }, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
   wait_opened(ui, 1)
   local requests_before = #fake.last.requests
@@ -86,7 +86,7 @@ T["an empty response for older input retries the latest input once"] = function(
   local client = fake.start({ name = "one", manual = true }, buf)
   local srv = fake.last
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "", 0), { triggerKind = 1 })
   local first = engine.pending[client.id]
   local before = #srv.requests
@@ -111,7 +111,7 @@ T["empty current responses wait for the next input instead of looping"] = functi
   local buf = scratch("")
   fake.start({ name = "one", manual = true }, buf)
   local srv = fake.last
-  local engine = Engine.new({ ui = stub_ui.new(), clients = {} })
+  local engine = Engine.new({ ui = stub_ui.new(), clientOptions = {} })
   engine:start(doc(buf, "", 0), { triggerKind = 1 })
   local before = #srv.requests
   srv.respond({})
@@ -131,7 +131,7 @@ T["a custom predicate can reject retries after an older empty response"] = funct
   local seen
   local engine = Engine.new({
     ui = stub_ui.new(),
-    clients = {
+    clientOptions = {
       one = {
         refresh = function(ctx)
           seen = ctx
@@ -165,7 +165,7 @@ T["typing a trigger character re-requests that client and replaces its share"] =
     end,
   }, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "foo", 3), { triggerKind = 1 })
   wait_opened(ui, 1)
 
@@ -203,7 +203,7 @@ T["dynamic trigger characters apply only to matching documents"] = function()
       },
     },
   })
-  local engine = Engine.new({ ui = stub_ui.new(), clients = {} })
+  local engine = Engine.new({ ui = stub_ui.new(), clientOptions = {} })
   engine:start(doc(buf, "foo", 3), { triggerKind = 1 })
   engine:on_char(doc(buf, "foo.", 4), ".")
   assert(vim.wait(1000, function()
@@ -222,7 +222,7 @@ T["closing cancels every request still in flight"] = function()
   fake.start({ name = "b", items = { { label = "baz" } }, delay_ms = 50 }, buf)
   local b = fake.last
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
 
   engine:close()
@@ -247,7 +247,7 @@ T["a newer request supersedes an older request for the same client"] = function(
   local ui = stub_ui.new()
   local engine = Engine.new({
     ui = ui,
-    clients = { ["*"] = {
+    clientOptions = { ["*"] = {
       matcher = function()
         return 1
       end,
@@ -280,7 +280,7 @@ T["refresh can suppress incomplete results for one client"] = function()
   local ui = stub_ui.new()
   local engine = Engine.new({
     ui = ui,
-    clients = {
+    clientOptions = {
       one = {
         refresh = function(ctx)
           seen = ctx
@@ -312,7 +312,7 @@ T["a new keyword starts fresh even when refresh rejects a trigger"] = function()
   }, buf)
   local engine = Engine.new({
     ui = stub_ui.new(),
-    clients = { one = {
+    clientOptions = { one = {
       refresh = function()
         return false
       end,
@@ -334,7 +334,7 @@ T["a refresh predicate can supersede the first pending response"] = function()
   local seen = {}
   local engine = Engine.new({
     ui = stub_ui.new(),
-    clients = {
+    clientOptions = {
       one = {
         refresh = function(ctx)
           table.insert(seen, ctx)
@@ -375,7 +375,7 @@ T["a trigger inside the same keyword refreshes only its client"] = function()
   local ui = stub_ui.new()
   local engine = Engine.new({
     ui = ui,
-    clients = { two = {
+    clientOptions = { two = {
       refresh = function()
         return false
       end,
@@ -394,7 +394,7 @@ T["a server cancellation clears pending while preserving accepted results"] = fu
   local ui = stub_ui.new()
   local engine = Engine.new({
     ui = ui,
-    clients = { one = {
+    clientOptions = { one = {
       refresh = function()
         return true
       end,
@@ -431,10 +431,10 @@ T["changing one client's options preserves the other client's results"] = functi
     }, buf)
   end
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   wait_opened(ui, 2)
-  engine.clients_config = { one = { priority = 1 } }
+  engine.client_options = { one = { timeout_ms = 1000 } }
   engine:on_char(doc(buf, "bar", 3), "r")
   vim.wait(50)
   expect.equality(calls, { 2, 1 })
@@ -443,7 +443,7 @@ end
 T["a request that cannot be sent does not remain pending"] = function()
   local buf = scratch("ba")
   local client = fake.start({ name = "one", items = { { label = "bar" } } }, buf)
-  local engine = Engine.new({ ui = stub_ui.new(), clients = {} })
+  local engine = Engine.new({ ui = stub_ui.new(), clientOptions = {} })
   client.request = function()
     return false
   end
@@ -456,7 +456,7 @@ T["typing retries an initial timeout only once while the retry is pending"] = fu
   local client = fake.start({ name = "one", manual = true }, buf)
   local server = fake.last
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = { one = { timeout_ms = 20 } } })
+  local engine = Engine.new({ ui = ui, clientOptions = { one = { timeout_ms = 20 } } })
   engine:start(doc(buf, "b", 1), { triggerKind = 1 })
   local session = engine.session
   local late_response = server.respond
@@ -485,7 +485,7 @@ T["timeout cancels only the slow client and preserves its previous result"] = fu
   local opts = { name = "slow", items = { { label = "bar" } } }
   local client = fake.start(opts, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = { slow = { timeout_ms = 20 } } })
+  local engine = Engine.new({ ui = ui, clientOptions = { slow = { timeout_ms = 20 } } })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   wait_opened(ui, 1)
   opts.items = { { label = "baz" } }
@@ -508,7 +508,7 @@ T["custom refresh controls timeout retries using independent snapshots"] = funct
   local seen, retry = {}, false
   local engine = Engine.new({
     ui = stub_ui.new(),
-    clients = {
+    clientOptions = {
       one = {
         timeout_ms = 20,
         refresh = function(ctx)
@@ -545,7 +545,7 @@ T["a superseded request's timeout cannot cancel its replacement"] = function()
   local opts = { name = "one", delay_ms = 150, items = { { label = "bar" } } }
   local client = fake.start(opts, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = { one = { timeout_ms = 80 } } })
+  local engine = Engine.new({ ui = ui, clientOptions = { one = { timeout_ms = 80 } } })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   vim.wait(40)
   opts.delay_ms = 60
@@ -561,8 +561,10 @@ T["a timed-out client does not prevent another client's answer"] = function()
   local slow = fake.start({ name = "slow", delay_ms = 120, items = { { label = "bar" } } }, buf)
   local quick = fake.start({ name = "quick", delay_ms = 40, items = { { label = "baz" } } }, buf)
   local ui = stub_ui.new()
-  local engine =
-    Engine.new({ ui = ui, clients = { slow = { timeout_ms = 20 }, quick = { timeout_ms = 0 } } })
+  local engine = Engine.new({
+    ui = ui,
+    clientOptions = { slow = { timeout_ms = 20 }, quick = { timeout_ms = 0 } },
+  })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   wait_opened(ui, 1)
   vim.wait(140)
@@ -591,7 +593,7 @@ T["textEdit chooses the menu boundary and survives further typing"] = function()
     end,
   }, buf)
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
   wait_opened(ui, 1)
   expect.equality(ui.last().startcol, 1)
@@ -606,7 +608,7 @@ T["streamed candidates survive null completion and retain list defaults"] = func
   local client = fake.start({ manual = true }, buf)
   local server = fake.last
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   local token = server.requests[#server.requests].params.partialResultToken
   server.progress(
@@ -645,7 +647,7 @@ T["selection freezes the seen prefix across clients and typing releases it"] = f
   ui.reset = function()
     locked = 0
   end
-  local engine = Engine.new({ ui = ui, clients = { slow = { priority = 10 } } })
+  local engine = Engine.new({ ui = ui, clients = { "slow", "*" } })
   engine:start(doc(buf, "b", 1), { triggerKind = 1 })
   wait_opened(ui, 1)
   locked = 2
@@ -668,7 +670,7 @@ T["partial bursts from multiple clients share one render"] = function()
   fake.start({ name = "two", manual = true }, buf)
   local two = fake.last
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "b", 1), { triggerKind = 1 })
   one.progress(one.requests[#one.requests].params.partialResultToken, { { label = "bb" } })
   two.progress(two.requests[#two.requests].params.partialResultToken, { { label = "bc" } })
@@ -683,7 +685,7 @@ T["a timed out partial list is retried on further input"] = function()
   local client = fake.start({ name = "one", manual = true }, buf)
   local server = fake.last
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, clients = { one = { timeout_ms = 50 } } })
+  local engine = Engine.new({ ui = ui, clientOptions = { one = { timeout_ms = 50 } } })
   engine:start(doc(buf, "b", 1), { triggerKind = 1 })
   local token = server.requests[#server.requests].params.partialResultToken
   server.progress(token, { { label = "bar" } })
@@ -713,7 +715,7 @@ T["earlier edit boundaries wait until typing releases the frozen menu"] = functi
     frozen = 0
   end
   ui.update = ui.open
-  local engine = Engine.new({ ui = ui, clients = {} })
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "foo.b", 5), { triggerKind = 1 })
   local token = server.requests[#server.requests].params.partialResultToken
   server.progress(token, { { label = "bar" } })
@@ -733,6 +735,52 @@ T["earlier edit boundaries wait until typing releases the frozen menu"] = functi
   engine:on_char(doc(buf, "foo.ba", 6), "a")
   expect.equality(ui.last().startcol, 1)
   expect.equality(#ui.last().labels, 2)
+end
+
+T["reordering clients preserves cached results and pending requests"] = function()
+  local buf = scratch("b")
+  local one = fake.start({ name = "one", manual = true }, buf)
+  local first = fake.last
+  local two = fake.start({ name = "two", manual = true }, buf)
+  local second = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = { "one", "two" } })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  first.respond({ { label = "bar" } })
+  local cached = engine.session.results[one.id]
+  local pending = engine.pending[two.id]
+  local counts = { #first.requests, #second.requests }
+  engine.clients = { "two", "one" }
+  engine:on_char(doc(buf, "b", 1), "")
+  expect.equality(engine.session.results[one.id] == cached, true)
+  expect.equality(engine.pending[two.id] == pending, true)
+  expect.equality({ #first.requests, #second.requests }, counts)
+  second.respond({ { label = "baz" } })
+  expect.equality(ui.last().labels, { "baz", "bar" })
+  engine.clients = { "one", "two" }
+  engine:on_char(doc(buf, "b", 1), "")
+  expect.equality(ui.last().labels, { "bar", "baz" })
+  expect.equality({ #first.requests, #second.requests }, counts)
+end
+
+T["removing a selected client cancels its request and ignores its late response"] = function()
+  local buf = scratch("b")
+  local one = fake.start({ name = "one", manual = true }, buf)
+  local first = fake.last
+  local two = fake.start({ name = "two", manual = true }, buf)
+  local second = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  first.respond({ { label = "bar" } })
+  local cached = engine.session.results[one.id]
+  engine.clients = { "one" }
+  engine:on_char(doc(buf, "b", 1), "")
+  expect.equality(second.cancelled_count, 1)
+  expect.equality(engine.pending[two.id], nil)
+  expect.equality(engine.session.results[one.id] == cached, true)
+  second.respond({ { label = "baz" } })
+  expect.equality(ui.last().labels, { "bar" })
 end
 
 return T

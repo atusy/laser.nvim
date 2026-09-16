@@ -23,7 +23,8 @@ local Session = require("laser.session")
 ---@class laser.Engine
 ---@field ui laser.UI
 ---@field enable_commit_characters? boolean
----@field clients_config table<string, table>
+---@field clients? string[]
+---@field client_options table<string, laser.ClientOpts>
 ---@field session laser.Session?
 ---@field doc laser.Doc?
 ---@field pending table<integer, { cancel?: fun() }> requests still in flight, keyed by client id
@@ -32,17 +33,22 @@ local Session = require("laser.session")
 local Engine = {}
 Engine.__index = Engine
 
----@param opts { ui: laser.UI, clients: table<string, table> }
+---@param opts { ui: laser.UI, clients?: string[], clientOptions?: table<string, laser.ClientOpts> }
 ---@return laser.Engine
 function Engine.new(opts)
-  return setmetatable({ ui = opts.ui, clients_config = opts.clients or {}, pending = {} }, Engine)
+  return setmetatable({
+    ui = opts.ui,
+    clients = opts.clients,
+    client_options = opts.clientOptions or {},
+    pending = {},
+  }, Engine)
 end
 
 ---@param doc laser.Doc
 ---@return vim.lsp.Client[]
 function Engine:clients_for(doc)
   local attached = vim.lsp.get_clients({ bufnr = doc.bufnr, method = "textDocument/completion" })
-  return clients_mod.select(attached, self.clients_config)
+  return clients_mod.select(attached, self.clients, self.client_options)
 end
 
 ---Re-run filters over the current candidates and show them.
@@ -216,10 +222,11 @@ function Engine:start(doc, ctx)
     return
   end
   local session_clients = {}
-  for _, client in ipairs(clients) do
+  for order, client in ipairs(clients) do
     session_clients[client.id] = {
+      order = order,
       name = client.name,
-      opts = clients_mod.resolve(client.name, self.clients_config),
+      opts = clients_mod.resolve(client.name, self.client_options),
       trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
     }
   end
@@ -294,8 +301,8 @@ function Engine:on_char(doc, char)
     return self:close()
   end
   local active, added = {}, {}
-  for _, client in ipairs(clients) do
-    local opts = clients_mod.resolve(client.name, self.clients_config)
+  for order, client in ipairs(clients) do
+    local opts = clients_mod.resolve(client.name, self.client_options)
     active[client.id] = true
     local cached = session.clients[client.id]
     if cached and not vim.deep_equal(cached.opts, opts) then
@@ -303,10 +310,12 @@ function Engine:on_char(doc, char)
       cached = nil
     end
     if cached then
+      cached.order = order
       cached.trigger_chars =
         clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters")
     else
       added[client.id] = {
+        order = order,
         name = client.name,
         opts = opts,
         trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),

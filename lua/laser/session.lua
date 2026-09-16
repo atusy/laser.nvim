@@ -4,7 +4,8 @@ local refresh = require("laser.refresh")
 
 ---@class laser.SessionClient
 ---@field name string
----@field opts? table resolved per-client options (filters, matcher, sorter, priority, refresh)
+---@field order? integer position in the selected client list
+---@field opts? table resolved per-client options (filters, matcher, sorter, refresh)
 ---@field trigger_chars? string[]
 ---@field timed_out? boolean last request timed out; cleared when a new request starts
 
@@ -67,20 +68,14 @@ function Session:set_result(client_id, result, ctx, append)
     { candidates = candidates, incomplete = incomplete, defaults = defaults }
 end
 
----@param client laser.SessionClient
----@return number
-local function priority(client)
-  return (client.opts or {}).priority or 0
-end
-
----Higher priority first; equal priorities fall back to client id for stability.
+---Follow the selected client order, using client id as a stable fallback.
 ---@return integer[]
 function Session:ordered_client_ids()
   local ids = vim.tbl_keys(self.results)
   table.sort(ids, function(a, b)
-    local pa, pb = priority(self.clients[a]), priority(self.clients[b])
+    local pa, pb = self.clients[a].order or a, self.clients[b].order or b
     if pa ~= pb then
-      return pa > pb
+      return pa < pb
     end
     return a < b
   end)

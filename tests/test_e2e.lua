@@ -249,11 +249,11 @@ T["trigger characters request a new list with trigger context"] = function()
   })
 end
 
-T["per-call client options replace the previous selection"] = function()
+T["an empty client list closes completion and omitted clients restore all"] = function()
   child.lua([[
     FAKE.start({ items = { { label = "bar" } } })
     vim.keymap.set("i", "<F5>", function()
-      require("laser").complete({ clients = { ["*"] = { enabled = false } } })
+      require("laser").complete({ clients = {} })
     end)
     vim.keymap.set("i", "<F6>", function() require("laser").complete() end)
   ]])
@@ -295,7 +295,7 @@ T["the public pattern helper controls refresh from an autocmd"] = function()
   child.lua([[
     CALLS = 0
     SEEN = {}
-    OPTIONS = { clients = { ["*"] = { refresh = function(ctx)
+    OPTIONS = { clientOptions = { ["*"] = { refresh = function(ctx)
       table.insert(SEEN, ctx)
       return require("laser.refresh").hasPattern(ctx, "ba$")
     end } } }
@@ -340,7 +340,7 @@ T["command-line refresh receives the scratch document and current input"] = func
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
       pattern = ":",
       callback = function()
-        laser.complete({ language_id = "laser-cmd", clients = { ["*"] = { refresh = refresh } } })
+        laser.complete({ language_id = "laser-cmd", clientOptions = { ["*"] = { refresh = refresh } } })
       end,
     })
     vim.api.nvim_create_autocmd("FileType", {
@@ -362,7 +362,7 @@ end
 T["mixed edit starts preserve the prefix when confirming a snippet"] = function()
   child.lua([[
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "é.b" })
-    OPTIONS = { clients = { wide = { priority = 10 } } }
+    OPTIONS = { clients = { "wide", "*" } }
     FAKE.start({ name = "wide", items = { { label = "é.bar", textEdit = {
       newText = "é.bar", range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 4 } },
     } } } })
@@ -564,6 +564,29 @@ T["mouse selection is retained when a partial batch arrives"] = function()
   wait_pum_items(4)
   expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected >= 0]]), true)
   expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
+end
+
+T["per-call client order rearranges cached candidates"] = function()
+  child.lua([[
+    vim.fn["pum#set_option"]({ auto_select = false })
+    FAKE.start({ name = "one", items = { { label = "bar" } } })
+    FIRST = FAKE.last
+    FAKE.start({ name = "two", items = { { label = "baz" } } })
+    OPTIONS = { clients = { "two", "one" } }
+    vim.keymap.set("i", "<F5>", function()
+      BEFORE = { #FIRST.requests, #FAKE.last.requests }
+      require("laser").complete({ clients = { "one", "two" } })
+    end)
+  ]])
+  type_keys("ib")
+  wait_pum_items(2)
+  expect.equality(pum_labels(), { "baz", "bar" })
+  type_keys("<F5>")
+  expect.equality(pum_labels(), { "bar", "baz" })
+  expect.equality(
+    child.lua_get("{ #FIRST.requests, #FAKE.last.requests }"),
+    child.lua_get("BEFORE")
+  )
 end
 
 return T

@@ -5,8 +5,8 @@ LSP-only completion for Neovim. Experimental.
 ## Design
 
 - **Sources are LSP clients, picked by name.** Nothing is configured means every
-  attached client serves completion. Per-client options live in one table keyed by
-  client name, with `"*"` as the defaults.
+  attached client serves completion. `clients` lists names in display order;
+  `clientOptions` holds per-client options, with `"*"` as the defaults.
 - **Converters, matchers, and sorters are plain Lua functions**, configurable per
   client in any order through `filters`. Defaults:
   fuzzy matching via `matchfuzzypos()` and ordering by score, `sortText`, label.
@@ -16,7 +16,7 @@ LSP-only completion for Neovim. Experimental.
   A per-client `refresh(ctx)` predicate can replace that policy.
   The answer replaces that client's share of the menu when it arrives.
 - **Clients answer independently.** The first answer opens the menu; later ones are
-  merged in, grouped per client and ordered by a per-client `priority`.
+  merged in, grouped per client and ordered by the `clients` array.
 - **The command line is completed through a scratch document** whose `filetype` is
   the configured `language_id`, so `vim.lsp.enable()` attaches the same clients it
   would for a file.
@@ -38,15 +38,14 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
   group = group,
   callback = function(args)
     require("laser").complete({
-      -- Per-call options keyed by client name. "*" holds the defaults.
-      -- { ["*"] = { enabled = false }, lua_ls = {} } acts as an allow-list.
-      clients = {
+      -- "*" expands attached clients not explicitly named elsewhere in the list.
+      clients = { "lua_ls", "*" },
+      clientOptions = {
         ["*"] = {
           -- filters = {
           --   { kind = "matcher", callback = require("laser.filter").fuzzy },
           --   { kind = "sorter", callback = require("laser.filter").by_score },
           -- },
-          priority = 0,
           timeout_ms = 1000, -- omitted or 0: no request timeout
         },
         copilot = { enabled = false },
@@ -83,6 +82,32 @@ values. Equivalent client options reuse the current session. Changing client
 options invalidates only that client's results; changing the UI starts a new
 session. Reuse the same custom UI table and filter callbacks and refresh functions
 across calls to retain cached results.
+
+`clients` selects clients and orders their candidate groups:
+
+- Omitted: all attached completion clients, in client ID order.
+- `{}`: no clients; closes any active completion session.
+- `{ "copilot", "lua_ls" }`: only those names, in that order.
+- `{ "copilot", "*", "lua_ls" }`: Copilot, then all other names, then lua_ls.
+  The wildcard excludes every explicitly listed name, even names appearing after it.
+- Multiple clients with the same name and clients within `"*"` use client ID order.
+  Repeated names or wildcards never include a client twice; unattached names are skipped.
+
+`clientOptions["*"]` supplies shared defaults; `clientOptions[name]` overrides them.
+Options alone never add a client to the selected list. `enabled = false` excludes a
+client even when selected by name or wildcard. As before, a named options entry
+without `enabled` overrides a shared `enabled = false` with `true`.
+
+Changing only the order does not invalidate cached results or cancel pending
+requests; the usual `refresh` predicate still runs on each call. All selected
+clients are requested independently; their array order does not introduce waiting
+or fallback behavior. A selected menu prefix stays frozen until the next input,
+as described below.
+
+Migration from the previous client configuration: move the name-keyed `clients`
+table to `clientOptions`, remove `priority`, and specify display order in the new
+`clients` array. An explicit list without `"*"` replaces an allow-list based on
+`enabled` defaults.
 
 In command-line mode, pass `language_id` to choose the scratch document's filetype.
 Laser handles trigger characters, ignores pum's selection edits, and closes and
@@ -141,7 +166,7 @@ local filters = {
     return candidate
   end },
 }
-require("laser").complete({ clients = { ["*"] = { filters = filters } } })
+require("laser").complete({ clientOptions = { ["*"] = { filters = filters } } })
 ```
 
 Candidates (`laser.Candidate`) are `complete-items` (see `:h complete-items`)
@@ -212,7 +237,7 @@ responses from other clients:
 - Once navigation starts, the prefix through the last visible item is frozen.
   Scrolling farther expands that prefix; returning upward or to the unselected
   position does not shrink it. Only the remaining candidates are filtered and
-  sorted, including newly arrived candidates from higher-priority clients.
+  sorted, including newly arrived candidates from clients earlier in `clients`.
 - Selection, inserted text, scroll position, menu dimensions and column widths
   stay stable. Candidates requiring an earlier completion boundary are retained
   for the next full update.
@@ -240,7 +265,7 @@ working and receive full snapshots. Stable selection is opt-in through:
 
 ## Request timeout
 
-Set `clients[name].timeout_ms` (or `clients["*"].timeout_ms`) to bound a
+Set `clientOptions[name].timeout_ms` (or `clientOptions["*"].timeout_ms`) to bound a
 completion request in milliseconds. Omitted or zero means no timeout.
 When the deadline expires, only that client's request is cancelled; its previous
 candidates remain available and late responses are ignored. Timers are stopped
@@ -250,7 +275,7 @@ the retry clears its timeout flag; no background retry is scheduled.
 
 ## Refresh predicates
 
-Set `clients[name].refresh` or a default in `clients["*"].refresh`. The predicate
+Set `clientOptions[name].refresh` or a default in `clientOptions["*"].refresh`. The predicate
 runs once per reusable client on each `complete()` call (except UI selection
 edits), including while a request is pending. A truthy return value requests a
 new result for that client; false or nil keeps its candidates for local filtering.
@@ -276,7 +301,7 @@ vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
   callback = function()
     laser.complete({
       language_id = "vim",
-      clients = { ["*"] = { refresh = should_refresh } },
+      clientOptions = { ["*"] = { refresh = should_refresh } },
     })
   end,
 })

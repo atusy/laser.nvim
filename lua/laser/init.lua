@@ -2,12 +2,12 @@ local M = {}
 
 ---@class laser.ClientOpts: laser.FilterOpts
 ---@field enabled? boolean
----@field priority? number
 ---@field timeout_ms? integer request timeout in milliseconds; nil or 0 disables it
 ---@field refresh? laser.Refresh predicate for refreshing reusable results
 
 ---@class laser.CompleteOpts
----@field clients? table<string, laser.ClientOpts> per-client options; "*" holds defaults
+---@field clients? string[] names in display order; "*" expands remaining clients; nil selects all
+---@field clientOptions? table<string, laser.ClientOpts> per-client options; "*" holds defaults
 ---@field enable_commit_characters? boolean accept selected candidates on LSP commit characters; default false
 ---@field ui? "pum"|laser.UI
 ---@field language_id? string filetype of the scratch document in command-line mode
@@ -181,13 +181,13 @@ function M.complete(opts)
     M.close()
     return
   end
-  local clients = opts.clients or {}
   if not engine or engine.ui ~= ui then
     M.close()
-    engine = require("laser.engine").new({ ui = ui, clients = {} })
+    engine = require("laser.engine").new({ ui = ui })
   end
   engine.enable_commit_characters = opts.enable_commit_characters == true
-  engine.clients_config = vim.deepcopy(clients)
+  engine.clients = vim.deepcopy(opts.clients)
+  engine.client_options = vim.deepcopy(opts.clientOptions or {})
   engine:on_char(doc, inserted_char(engine.doc, doc))
 end
 
