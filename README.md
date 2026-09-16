@@ -47,6 +47,7 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
         },
         copilot = { enabled = false },
       },
+      enable_commit_characters = false, -- opt in to LSP commit characters
       ui = "pum", -- or a table implementing open/close/visible
     })
   end,
@@ -83,6 +84,14 @@ In command-line mode, pass `language_id` to choose the scratch document's filety
 Laser handles trigger characters, ignores pum's selection edits, and closes and
 cancels pending requests on mode exit or buffer departure. To close explicitly,
 call `require("laser").close()`.
+
+With the default pum UI, `enable_commit_characters = true` accepts the selected
+candidate when you type one of its LSP commit characters, then inserts that
+character. This works in Insert and command-line mode and is disabled by default.
+Item `commitCharacters` (including `CompletionList.itemDefaults`) takes precedence
+over the server's `allCommitCharacters`; an empty item list disables this behavior
+for that candidate. Static and buffer-matching dynamic registrations are supported.
+No candidate is accepted when the menu has no selection.
 
 Migration: replace `setup()` and `trigger()` with the autocmds above and
 `complete(opts)` respectively. `config`, `autotrigger`, and the command-line

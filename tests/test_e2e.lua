@@ -60,6 +60,23 @@ T["typing in Insert mode opens pum.vim with the attached client's items"] = func
   expect.equality(pum_labels(), { "baz" })
 end
 
+T["commit characters opt in confirms the selected item before typing"] = function()
+  child.lua([[
+    OPTIONS = { enable_commit_characters = true }
+    FAKE.start({ items = { { label = "bar", commitCharacters = { "." },
+      command = { title = "test", command = "test.commit" } } } })
+    vim.lsp.commands["test.commit"] = function() COMMITTED = true end
+    vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#select_relative"](1) end)
+  ]])
+  type_keys("ib")
+  wait_pum_items(1)
+  type_keys("<C-n>")
+  type_keys(".")
+  child.lua([[vim.wait(200)]])
+  expect.equality(child.api.nvim_get_current_line(), "bar.")
+  expect.equality(child.lua_get("COMMITTED"), true)
+end
+
 T["confirming a snippet item expands it in the buffer"] = function()
   child.lua([[FAKE.start({
     name = "one",

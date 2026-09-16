@@ -22,6 +22,7 @@ local Session = require("laser.session")
 
 ---@class laser.Engine
 ---@field ui laser.UI
+---@field enable_commit_characters? boolean
 ---@field clients_config table<string, table>
 ---@field session laser.Session?
 ---@field doc laser.Doc?
@@ -35,37 +36,6 @@ Engine.__index = Engine
 ---@return laser.Engine
 function Engine.new(opts)
   return setmetatable({ ui = opts.ui, clients_config = opts.clients or {}, pending = {} }, Engine)
-end
-
----@param client vim.lsp.Client
----@param bufnr integer
----@return string[]
-local function trigger_chars(client, bufnr)
-  local chars = {}
-  local function collect(options)
-    if type(options) == "table" then
-      for _, char in ipairs(options.triggerCharacters or {}) do
-        if not vim.list_contains(chars, char) then
-          chars[#chars + 1] = char
-        end
-      end
-    end
-  end
-  collect(client.server_capabilities and client.server_capabilities.completionProvider)
-  if client.dynamic_capabilities then
-    local method = "textDocument/completion"
-    local provider = client._registration_provider and client:_registration_provider(method)
-      or method
-    local registrations = client.dynamic_capabilities:get(provider, { bufnr = bufnr })
-    -- Neovim 0.11 returns one registration; newer versions return a list.
-    if registrations and registrations.method then
-      registrations = { registrations }
-    end
-    for _, registration in ipairs(registrations or {}) do
-      collect(registration.registerOptions)
-    end
-  end
-  return chars
 end
 
 ---@param doc laser.Doc
@@ -238,7 +208,7 @@ function Engine:start(doc, ctx)
     session_clients[client.id] = {
       name = client.name,
       opts = clients_mod.resolve(client.name, self.clients_config),
-      trigger_chars = trigger_chars(client, doc.bufnr),
+      trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
     }
   end
   self.doc = doc
@@ -295,7 +265,13 @@ function Engine:on_char(doc, char)
     -- needs fresh results regardless of the predicate's return value.
     return self:start(doc, function(client)
       local kind = vim.lsp.protocol.CompletionTriggerKind
-      if char ~= "" and vim.list_contains(trigger_chars(client, doc.bufnr), char) then
+      if
+        char ~= ""
+        and vim.list_contains(
+          clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
+          char
+        )
+      then
         return { triggerKind = kind.TriggerCharacter, triggerCharacter = char }
       end
       return { triggerKind = kind.Invoked }
@@ -315,10 +291,14 @@ function Engine:on_char(doc, char)
       cached = nil
     end
     if cached then
-      cached.trigger_chars = trigger_chars(client, doc.bufnr)
+      cached.trigger_chars =
+        clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters")
     else
-      added[client.id] =
-        { name = client.name, opts = opts, trigger_chars = trigger_chars(client, doc.bufnr) }
+      added[client.id] = {
+        name = client.name,
+        opts = opts,
+        trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
+      }
     end
   end
   for client_id in pairs(session.clients) do

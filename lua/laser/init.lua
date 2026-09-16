@@ -17,6 +17,7 @@ local M = {
 
 ---@class laser.CompleteOpts
 ---@field clients? table<string, laser.ClientOpts> per-client options; "*" holds defaults
+---@field enable_commit_characters? boolean accept selected candidates on LSP commit characters; default false
 ---@field ui? "pum"|laser.UI
 ---@field language_id? string filetype of the scratch document in command-line mode
 
@@ -85,6 +86,23 @@ local function make_ui(ui)
   if not adapters[ui] then
     adapters[ui] = require("laser.ui." .. ui).new({
       on_confirm = on_confirm,
+      commit_characters = function(candidate)
+        if not engine or not engine.enable_commit_characters or not engine.doc then
+          return {}
+        end
+        local data = candidate.user_data.laser
+        if data.item.commitCharacters ~= nil then
+          return data.item.commitCharacters
+        end
+        local client = vim.lsp.get_client_by_id(data.client_id)
+        return client
+            and require("laser.clients").completion_characters(
+              client,
+              engine.doc.bufnr,
+              "allCommitCharacters"
+            )
+          or {}
+      end,
       -- PumCompleteDone follows PumClose asynchronously. Preserve the session
       -- until confirmation can apply its edits, but stop any more responses now.
       on_close = function()
@@ -168,6 +186,7 @@ function M.complete(opts)
     M.close()
     engine = Engine.new({ ui = ui, clients = {} })
   end
+  engine.enable_commit_characters = opts.enable_commit_characters == true
   engine.clients_config = vim.deepcopy(clients)
   engine:on_char(doc, inserted_char(engine.doc, doc))
 end

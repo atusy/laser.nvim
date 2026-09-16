@@ -4,7 +4,7 @@ local active_ui
 
 local augroup = vim.api.nvim_create_augroup("laser.ui.pum", { clear = true })
 
----@param opts? { on_confirm?: fun(candidate: table), on_close?: fun() }
+---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), commit_characters?: fun(candidate: table): string[] }
 ---@return laser.UI
 function M.new(opts)
   opts = opts or {}
@@ -69,6 +69,27 @@ function M.new(opts)
       end
     end,
   })
+
+  if opts.commit_characters then
+    vim.on_key(function(key, typed)
+      local mode = vim.api.nvim_get_mode().mode
+      if active_ui ~= ui or typed == "" or (mode ~= "i" and mode ~= "c") or not ui.visible() then
+        return
+      end
+      local pum = vim.fn["pum#_get"]()
+      local item = pum.cursor > 0 and pum.items[pum.cursor] or nil
+      if not item or not vim.tbl_get(item, "user_data", "laser") then
+        return
+      end
+      if vim.fn.strchars(key) == 1 and vim.list_contains(opts.commit_characters(item), key) then
+        -- Run outside the input callback, using pum's normal confirmation path.
+        local confirm =
+          vim.api.nvim_replace_termcodes("<Cmd>call pum#map#confirm()<CR>", true, false, true)
+        vim.api.nvim_feedkeys(confirm .. key, "ni", false)
+        return ""
+      end
+    end, vim.api.nvim_create_namespace("laser.ui.pum.commit_characters"))
+  end
 
   local function measure(items)
     columns, non_abbr = {}, 0
