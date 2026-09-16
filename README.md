@@ -244,6 +244,8 @@ completion request in milliseconds. Omitted or zero means no timeout.
 When the deadline expires, only that client's request is cancelled; its previous
 candidates remain available and late responses are ignored. Timers are stopped
 on response, superseding requests, detachment, and session closure.
+By default, the next `complete()` call retries the timed-out client. Starting
+the retry clears its timeout flag; no background retry is scheduled.
 
 ## Refresh predicates
 
@@ -251,14 +253,16 @@ Set `clients[name].refresh` or a default in `clients["*"].refresh`. The predicat
 runs once per reusable client on each `complete()` call (except UI selection
 edits), including while a request is pending. A truthy return value requests a
 new result for that client; false or nil keeps its candidates for local filtering.
-Omitting `refresh` preserves the default incomplete-or-trigger behavior.
+Omitting `refresh` retries after a timeout, refreshes incomplete results, or
+requests on trigger characters.
 
 ```lua
 local laser = require("laser")
 
 -- Define the function outside the autocmd so its identity stays stable.
 local function refresh(ctx)
-  return ctx.is_incomplete
+  return ctx.timed_out
+    or ctx.is_incomplete
     or laser.hasTriggerCharacter(ctx)
     or laser.hasPattern(ctx, "[.:]$")
 end
@@ -276,7 +280,8 @@ vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
 
 To always refresh, use a function returning `true`; to never refresh reusable
 results, return `false`. A custom predicate replaces the whole policy, so include
-`ctx.is_incomplete` explicitly if incomplete responses should force a refresh.
+`ctx.is_incomplete` explicitly if incomplete responses should force a refresh,
+and `ctx.timed_out` if timed-out requests should be retried.
 
 Each call receives a new snapshot, which laser does not retain or subsequently
 modify. Treat predicates as read-only decisions. Client identity is provided as
@@ -292,6 +297,7 @@ scalar fields, rather than exposing the mutable LSP client object.
 | `trigger_characters` | A copy of this client's current trigger characters |
 | `is_incomplete` | Last accepted response's `isIncomplete`; nil before any response, false for a complete or empty response |
 | `pending` | Whether this client has a request in flight |
+| `timed_out` | Whether this client's last request timed out; false initially and cleared when the next request starts |
 
 `laser.hasTriggerCharacter(ctx)` checks `inserted_char` against
 `trigger_characters`. `laser.hasPattern(ctx, pattern)` matches a Lua pattern

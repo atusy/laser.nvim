@@ -28,6 +28,7 @@ T["contexts preserve nil and false and do not expose mutable session tables"] = 
     inserted_char = ".",
     trigger_characters = { "." },
     pending = true,
+    timed_out = false,
   })
   s:set_result(7, {}, {})
   local second = s:refresh_context(7, doc, "", false)

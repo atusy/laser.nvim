@@ -10,6 +10,7 @@ local M = {}
 ---@field trigger_characters string[] this client's trigger characters
 ---@field is_incomplete boolean? nil until a response has been accepted
 ---@field pending boolean whether this client has a request in flight
+---@field timed_out boolean whether this client's last request timed out; cleared on request start
 
 ---@alias laser.Refresh fun(ctx: laser.RefreshContext): boolean?
 
@@ -31,7 +32,7 @@ end
 
 ---@type laser.Refresh
 function M.default(ctx)
-  return ctx.is_incomplete == true or M.hasTriggerCharacter(ctx)
+  return ctx.timed_out == true or ctx.is_incomplete == true or M.hasTriggerCharacter(ctx)
 end
 
 ---The predicate chooses whether to request; laser chooses the LSP context.

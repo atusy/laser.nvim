@@ -124,6 +124,7 @@ function Engine:request(clients, ctx)
     -- Install the token before sending: in-process clients may reply synchronously.
     local token = {}
     self.pending[client.id] = token
+    session.clients[client.id].timed_out = false
     local timer
     local function stop_timer()
       if timer then
@@ -187,6 +188,7 @@ function Engine:request(clients, ctx)
         timer = nil
         if self.pending[client.id] == token then
           self.pending[client.id] = nil
+          session.clients[client.id].timed_out = true
           token.cancel()
         end
       end, timeout)

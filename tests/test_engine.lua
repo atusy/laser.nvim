@@ -382,6 +382,35 @@ T["a request that cannot be sent does not remain pending"] = function()
   expect.equality(engine.pending[client.id], nil)
 end
 
+T["typing retries an initial timeout only once while the retry is pending"] = function()
+  local buf = scratch("b")
+  local client = fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clients = { one = { timeout_ms = 20 } } })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  local session = engine.session
+  local late_response = server.respond
+  assert(vim.wait(1000, function()
+    return engine.pending[client.id] == nil
+  end))
+
+  engine:on_char(doc(buf, "ba", 2), "a")
+  expect.equality(engine.pending[client.id] ~= nil, true)
+  expect.equality(engine.session == session, true)
+  local retry = engine.pending[client.id]
+  engine:on_char(doc(buf, "bar", 3), "r")
+  expect.equality(engine.pending[client.id] == retry, true)
+  late_response({ { label = "bad" } })
+  expect.equality(engine.session.results[client.id], nil)
+  server.respond({ { label = "bar" } })
+  wait_opened(ui, 1)
+  expect.equality(ui.last().labels, { "bar" })
+  engine:on_char(doc(buf, "ba", 2), "")
+  expect.equality(engine.pending[client.id], nil)
+  engine:close()
+end
+
 T["timeout cancels only the slow client and preserves its previous result"] = function()
   local buf = scratch("ba")
   local opts = { name = "slow", items = { { label = "bar" } } }
@@ -397,6 +426,49 @@ T["timeout cancels only the slow client and preserves its previous result"] = fu
   expect.equality(ui.last().labels, { "bar" })
   expect.equality(engine.pending[client.id], nil)
   expect.equality(fake.last.cancelled_count, 1)
+  opts.manual = true
+  engine:on_char(doc(buf, "bar", 3), "r")
+  expect.equality(engine.pending[client.id] ~= nil, true)
+  expect.equality(ui.last().labels, { "bar" })
+  engine:close()
+end
+
+T["custom refresh controls timeout retries using independent snapshots"] = function()
+  local buf = scratch("b")
+  local client = fake.start({ name = "one", manual = true }, buf)
+  local seen, retry = {}, false
+  local engine = Engine.new({
+    ui = stub_ui.new(),
+    clients = {
+      one = {
+        timeout_ms = 20,
+        refresh = function(ctx)
+          seen[#seen + 1] = ctx
+          return retry and ctx.timed_out
+        end,
+      },
+    },
+  })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  engine:on_char(doc(buf, "ba", 2), "a")
+  expect.equality(seen[1].timed_out, false)
+  assert(vim.wait(1000, function()
+    return engine.pending[client.id] == nil
+  end))
+  engine:on_char(doc(buf, "bar", 3), "r")
+  expect.equality(seen[2].timed_out, true)
+  expect.equality(engine.pending[client.id], nil)
+  retry = true
+  engine:on_char(doc(buf, "bars", 4), "s")
+  expect.equality(engine.pending[client.id] ~= nil, true)
+  engine:on_char(doc(buf, "barst", 5), "t")
+  expect.equality(seen[4].timed_out, false)
+  expect.equality(seen[2].timed_out, true)
+  engine:close()
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  engine:on_char(doc(buf, "ba", 2), "a")
+  expect.equality(seen[5].timed_out, false)
+  engine:close()
 end
 
 T["a superseded request's timeout cannot cancel its replacement"] = function()
@@ -428,6 +500,8 @@ T["a timed-out client does not prevent another client's answer"] = function()
   expect.equality(ui.last().labels, { "baz" })
   expect.equality(engine.session.results[slow.id], nil)
   expect.equality(engine.session.results[quick.id].incomplete, false)
+  expect.equality(engine.session:refresh_context(slow.id, engine.doc, "", false).timed_out, true)
+  expect.equality(engine.session:refresh_context(quick.id, engine.doc, "", false).timed_out, false)
 end
 
 T["textEdit chooses the menu boundary and survives further typing"] = function()

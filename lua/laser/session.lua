@@ -6,6 +6,7 @@ local refresh = require("laser.refresh")
 ---@field name string
 ---@field opts? table resolved per-client options (filters, matcher, sorter, priority, refresh)
 ---@field trigger_chars? string[]
+---@field timed_out? boolean last request timed out; cleared when a new request starts
 
 ---@class laser.Session
 ---@field startcol integer common menu boundary
@@ -106,6 +107,7 @@ function Session:refresh_context(client_id, doc, char, pending)
     trigger_characters = vim.list_slice(client.trigger_chars or {}),
     is_incomplete = result and result.incomplete,
     pending = pending,
+    timed_out = client.timed_out == true,
   }
 end
 
