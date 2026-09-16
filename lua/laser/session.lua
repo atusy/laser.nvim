@@ -1,5 +1,5 @@
 local items = require("laser.items")
-local match = require("laser.match")
+local filter = require("laser.filter")
 local refresh = require("laser.refresh")
 
 ---@class laser.SessionClient
@@ -149,7 +149,7 @@ function Session:candidates(prefix, doc, projection)
         return not projection.exclude[data.id] and data.startcol >= projection.startcol
       end, candidates)
     end
-    local matched = match.apply(candidates, input, opts)
+    local matched = filter.apply(candidates, input, opts)
     vim.list_extend(merged, matched)
   end
   if not doc or (#merged == 0 and not projection) then

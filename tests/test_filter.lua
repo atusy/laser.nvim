@@ -2,7 +2,7 @@ local MiniTest = require("mini.test")
 local expect = MiniTest.expect
 local T = MiniTest.new_set()
 
-local match = require("laser.match")
+local filter = require("laser.filter")
 
 local function cand(label, extra)
   local item = vim.tbl_extend("force", { label = label }, extra or {})
@@ -17,7 +17,7 @@ end
 
 T["an empty prefix keeps every candidate, ordered as the server asked"] = function()
   -- LSP: when sortText is omitted the label is used for sorting.
-  local got = match.apply(
+  local got = filter.apply(
     { cand("zeta"), cand("alpha", { sortText = "zzz" }), cand("mid") },
     "",
     {}
@@ -26,7 +26,7 @@ T["an empty prefix keeps every candidate, ordered as the server asked"] = functi
 end
 
 T["the default matcher drops candidates that do not fuzzy-match the prefix"] = function()
-  local got = match.apply({ cand("bar"), cand("qux"), cand("baz") }, "ba", {})
+  local got = filter.apply({ cand("bar"), cand("qux"), cand("baz") }, "ba", {})
   expect.equality(labels(got), { "bar", "baz" })
 end
 
@@ -35,7 +35,7 @@ T["the default sorter ranks by score, then sortText, then label"] = function()
   local matcher = function(_, candidate)
     return scores[candidate.abbr]
   end
-  local got = match.apply({
+  local got = filter.apply({
     cand("b", { sortText = "9" }),
     cand("a", { sortText = "9" }),
     cand("c", { sortText = "0" }),
@@ -45,7 +45,7 @@ T["the default sorter ranks by score, then sortText, then label"] = function()
 end
 
 T["filters run in order and expose match info to later stages"] = function()
-  local got = match.apply({ cand("b"), cand("a") }, "x", {
+  local got = filter.apply({ cand("b"), cand("a") }, "x", {
     filters = {
       {
         kind = "converter",
@@ -85,7 +85,7 @@ T["equal sort keys retain the preceding filter order"] = function()
   for i = 1, 20 do
     input[i] = cand(tostring(i))
   end
-  local got = match.apply(input, "", {
+  local got = filter.apply(input, "", {
     filters = {
       {
         kind = "sorter",
@@ -102,7 +102,7 @@ T["later matchers replace info and rejected candidates never reach later filters
   local first = { score = 10 }
   local second = { score = 0 }
   local seen = {}
-  local got = match.apply({ cand("early"), cand("late"), cand("keep") }, "", {
+  local got = filter.apply({ cand("early"), cand("late"), cand("keep") }, "", {
     filters = {
       {
         kind = "matcher",
@@ -162,8 +162,8 @@ T["conversions and match info do not accumulate across renders"] = function()
       },
     },
   }
-  local first = match.apply(input, "", opts)
-  local second = match.apply(input, "", opts)
+  local first = filter.apply(input, "", opts)
+  local second = filter.apply(input, "", opts)
   expect.equality(first, second)
   expect.equality(input, original)
   expect.equality(first[1].user_data.laser.id, 42)
@@ -171,7 +171,7 @@ T["conversions and match info do not accumulate across renders"] = function()
 end
 
 T["empty filters override legacy options and preserve input order"] = function()
-  local got = match.apply({ cand("z"), cand("a") }, "no match", {
+  local got = filter.apply({ cand("z"), cand("a") }, "no match", {
     filters = {},
     matcher = function()
       error("legacy matcher must not run")
@@ -185,10 +185,10 @@ T["empty filters override legacy options and preserve input order"] = function()
 end
 
 T["the built-in sorter works before any matcher"] = function()
-  local got = match.apply({ cand("z"), cand("a") }, "", {
+  local got = filter.apply({ cand("z"), cand("a") }, "", {
     filters = {
-      { kind = "sorter", callback = match.by_score },
-      { kind = "matcher", callback = match.fuzzy },
+      { kind = "sorter", callback = filter.by_score },
+      { kind = "matcher", callback = filter.fuzzy },
     },
   })
   expect.equality(labels(got), { "a", "z" })
@@ -196,7 +196,7 @@ T["the built-in sorter works before any matcher"] = function()
 end
 
 T["legacy sorters still receive the default match score"] = function()
-  local got = match.apply({ cand("abc"), cand("axbyc") }, "abc", {
+  local got = filter.apply({ cand("abc"), cand("axbyc") }, "abc", {
     sorter = function(a, b)
       expect.equality(type(a.score), "number")
       expect.equality(type(b.score), "number")

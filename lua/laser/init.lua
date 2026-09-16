@@ -9,7 +9,7 @@ local M = {
   hasPattern = refresh.hasPattern,
 }
 
----@class laser.ClientOpts: laser.MatchOpts
+---@class laser.ClientOpts: laser.FilterOpts
 ---@field enabled? boolean
 ---@field priority? number
 ---@field timeout_ms? integer request timeout in milliseconds; nil or 0 disables it

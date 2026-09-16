@@ -42,8 +42,8 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
       clients = {
         ["*"] = {
           -- filters = {
-          --   { kind = "matcher", callback = require("laser.match").fuzzy },
-          --   { kind = "sorter", callback = require("laser.match").by_score },
+          --   { kind = "matcher", callback = require("laser.filter").fuzzy },
+          --   { kind = "sorter", callback = require("laser.filter").by_score },
           -- },
           priority = 0,
           timeout_ms = 1000, -- omitted or 0: no request timeout
@@ -105,15 +105,15 @@ configuration map are replaced by per-call options and autocmd conditions.
 Per-client `filters` run in array order. Kinds can repeat or be omitted:
 
 ```lua
-local match = require("laser.match")
+local filter = require("laser.filter")
 local filters = {
   { kind = "converter", callback = function(candidate)
     -- Change the text used by the following matcher.
     candidate.user_data.laser.item.filterText = candidate.abbr:lower()
     return candidate
   end },
-  { kind = "matcher", callback = match.fuzzy },
-  { kind = "sorter", callback = match.by_score },
+  { kind = "matcher", callback = filter.fuzzy },
+  { kind = "sorter", callback = filter.by_score },
   { kind = "converter", callback = function(candidate)
     candidate.menu = tostring(candidate.user_data.laser.match_info.score)
     return candidate
@@ -139,8 +139,8 @@ are never merged. `laser.MatchInfo` currently has one required field, `score: nu
 Position and highlight metadata are not yet defined. Each matcher receives input
 starting at that candidate's own completion boundary.
 
-`match.fuzzy` implements this boolean/MatchInfo contract, matching against
-`item.filterText` or `item.label`. `match.by_score` sorts by descending score,
+`filter.fuzzy` implements this boolean/MatchInfo contract, matching against
+`item.filterText` or `item.label`. `filter.by_score` sorts by descending score,
 then `sortText`, then label; candidates without match info use score zero.
 Sorters preserve the preceding order for equivalent candidates. Comparators must
 use a strict ordering (return false for equal keys).
@@ -156,8 +156,9 @@ Omitting `filters` uses fuzzy matching followed by score sorting. `filters = {}`
 performs neither filtering nor sorting. An explicit list overrides the legacy
 `matcher` and `sorter` options, including those inherited from `"*"`.
 The legacy options remain supported: `matcher(input, candidate)` returns a
-numeric score or nil, and legacy sorters receive `candidate.score`. Direct calls
-to `match.fuzzy` now return a boolean and MatchInfo instead of a numeric score.
+numeric score or nil, and legacy sorters receive `candidate.score`. The pipeline
+module is now `laser.filter`; update existing require calls accordingly. Its
+`fuzzy` function returns a boolean and MatchInfo instead of a numeric score.
 
 ## Completion position
 
@@ -299,7 +300,7 @@ trigger character uses `TriggerCharacter`, an incomplete result uses
 | --- | --- |
 | `laser.clients` | select clients by name, resolve per-client options |
 | `laser.items` | `lsp.CompletionItem` to `complete-item` |
-| `laser.match` | ordered converter/matcher/sorter pipeline |
+| `laser.filter` | ordered converter/matcher/sorter pipeline |
 | `laser.session` | per-client results, refresh snapshots and decisions |
 | `laser.refresh` | predicate helpers and LSP request context |
 | `laser.request` | async per-client `textDocument/completion` with cancel |

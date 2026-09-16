@@ -26,7 +26,7 @@ local M = {}
 
 ---@alias laser.Filter laser.MatcherFilter|laser.SorterFilter|laser.ConverterFilter
 
----@class laser.MatchOpts
+---@class laser.FilterOpts
 ---@field filters? laser.Filter[] Overrides matcher/sorter; an empty list preserves input order.
 ---@field matcher? laser.LegacyMatcher
 ---@field sorter? laser.Sorter
@@ -80,7 +80,7 @@ end
 
 ---@param candidates table[]
 ---@param prefix string|fun(candidate: table): string
----@param opts laser.MatchOpts
+---@param opts laser.FilterOpts
 ---@return table[]
 function M.apply(candidates, prefix, opts)
   local filters = opts.filters
