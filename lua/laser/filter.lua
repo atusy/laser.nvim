@@ -87,29 +87,18 @@ function M.highlight(candidate, input)
   return candidate
 end
 
----@param candidate table
----@return string
-local function sort_text(candidate)
-  local item = candidate.user_data.laser.item
-  return item.sortText or item.label
-end
-
----Higher score first, then the server's sortText, then label.
----@param a laser.Candidate
----@param b laser.Candidate
----@return boolean
-function M.by_score(a, b)
-  local ai, bi = a.user_data.laser.match_info, b.user_data.laser.match_info
-  local ascore, bscore = ai and ai.score or a.score or 0, bi and bi.score or b.score or 0
-  if ascore ~= bscore then
+---Create a descending fuzzy-score comparator. Equal scores retain input order.
+---@return laser.Sorter
+function M.fuzzy_sorter()
+  return function(a, b)
+    local ai, bi = a.user_data.laser.match_info, b.user_data.laser.match_info
+    local ascore, bscore = ai and ai.score or a.score or 0, bi and bi.score or b.score or 0
     return ascore > bscore
   end
-  local sa, sb = sort_text(a), sort_text(b)
-  if sa ~= sb then
-    return sa < sb
-  end
-  return a.abbr < b.abbr
 end
+
+---Compatibility name for the default fuzzy sorter.
+M.by_score = M.fuzzy_sorter()
 
 ---@param candidates table[]
 ---@param prefix string|fun(candidate: table): string

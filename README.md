@@ -44,7 +44,7 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
         ["*"] = {
           -- filters = {
           --   { kind = "matcher", callback = require("laser.filter").fuzzy },
-          --   { kind = "sorter", callback = require("laser.filter").by_score },
+          --   { kind = "sorter", callback = require("laser.filter").fuzzy_sorter() },
           -- },
           timeout_ms = 1000, -- omitted or 0: no request timeout
         },
@@ -160,7 +160,7 @@ local filters = {
     return candidate
   end },
   { kind = "matcher", callback = filter.fuzzy },
-  { kind = "sorter", callback = filter.by_score },
+  { kind = "sorter", callback = filter.fuzzy_sorter() },
   { kind = "converter", callback = function(candidate)
     candidate.menu = tostring(candidate.user_data.laser.match_info.score)
     return candidate
@@ -188,8 +188,9 @@ are never merged. `laser.MatchInfo` has a required `score: number` and optional
 starting at that candidate's own completion boundary.
 
 `filter.fuzzy` implements this boolean/MatchInfo contract, matching against
-`item.filterText` or `item.label`. `filter.by_score` sorts by descending score,
-then `sortText`, then label; candidates without match info use score zero.
+`item.filterText` or `item.label`. `filter.fuzzy_sorter()` creates a comparator that sorts by descending score,
+preserving input order on ties; candidates without match info use score zero.
+`filter.by_score` remains an alias for the default comparator.
 Sorters preserve the preceding order for equivalent candidates. Comparators must
 use a strict ordering (return false for equal keys).
 
@@ -200,7 +201,7 @@ matched characters with `PmenuMatch`:
 local filter = require("laser.filter")
 local filters = {
   { kind = "matcher", callback = filter.fuzzy },
-  { kind = "sorter", callback = filter.by_score },
+  { kind = "sorter", callback = filter.fuzzy_sorter() },
   { kind = "converter", callback = filter.highlight },
 }
 require("laser").complete({ clientOptions = { ["*"] = { filters = filters } } })

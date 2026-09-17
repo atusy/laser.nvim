@@ -15,14 +15,13 @@ local function labels(list)
   end, list)
 end
 
-T["an empty prefix keeps every candidate, ordered as the server asked"] = function()
-  -- LSP: when sortText is omitted the label is used for sorting.
+T["an empty prefix preserves input order regardless of sortText"] = function()
   local got = filter.apply(
     { cand("zeta"), cand("alpha", { sortText = "zzz" }), cand("mid") },
     "",
     {}
   )
-  expect.equality(labels(got), { "mid", "zeta", "alpha" })
+  expect.equality(labels(got), { "zeta", "alpha", "mid" })
 end
 
 T["the default matcher drops candidates that do not fuzzy-match the prefix"] = function()
@@ -36,7 +35,7 @@ T["fuzzy exposes character positions in filterText"] = function()
   expect.equality(info.positions, { 0, 2 })
 end
 
-T["the default sorter ranks by score, then sortText, then label"] = function()
+T["the default sorter ranks by score and preserves input order on ties"] = function()
   local scores = { b = 1, a = 1, c = 1, d = 2 }
   local matcher = function(_, candidate)
     return scores[candidate.abbr]
@@ -47,7 +46,7 @@ T["the default sorter ranks by score, then sortText, then label"] = function()
     cand("c", { sortText = "0" }),
     cand("d"),
   }, "x", { matcher = matcher })
-  expect.equality(labels(got), { "d", "c", "a", "b" })
+  expect.equality(labels(got), { "d", "b", "a", "c" })
 end
 
 T["filters run in order and expose match info to later stages"] = function()
@@ -197,7 +196,7 @@ T["the built-in sorter works before any matcher"] = function()
       { kind = "matcher", callback = filter.fuzzy },
     },
   })
-  expect.equality(labels(got), { "a", "z" })
+  expect.equality(labels(got), { "z", "a" })
   expect.equality(got[1].user_data.laser.match_info, { score = 0 })
 end
 
@@ -286,6 +285,24 @@ T["highlight clears only its own decorations when positions are absent or displa
   item.user_data.laser.match_info = nil
   filter.highlight(item, "a")
   expect.equality(item.highlights, { decoration })
+end
+
+T["fuzzy_sorter keeps input order for equal scores despite different labels and sortText"] = function()
+  local got = filter.apply(
+    {
+      cand("weak", { filterText = "axb" }),
+      cand("zeta", { filterText = "ab", sortText = "9" }),
+      cand("alpha", { filterText = "ab", sortText = "0" }),
+    },
+    "ab",
+    {
+      filters = {
+        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "sorter", callback = filter.fuzzy_sorter() },
+      },
+    }
+  )
+  expect.equality(labels(got), { "zeta", "alpha", "weak" })
 end
 
 return T

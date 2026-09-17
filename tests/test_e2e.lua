@@ -411,6 +411,7 @@ end
 
 T["partial updates preserve the inserted selection and cancellation input"] = function()
   child.lua([[
+    OPTIONS = { clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } } }
     vim.fn['pum#set_option']({ max_height = 2, auto_select = false })
     FAKE.start({ name = 'stream', manual = true })
     SERVER = FAKE.last
@@ -437,6 +438,7 @@ end
 
 T["scrolling expands the frozen prefix and returning does not shrink it"] = function()
   child.lua([[
+    OPTIONS = { clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } } }
     vim.fn['pum#set_option']({ max_height = 3, auto_select = false })
     FAKE.start({ manual = true })
     SERVER = FAKE.last
@@ -474,6 +476,7 @@ end
 
 T["reversed menus preserve selection when candidates are prepended visually"] = function()
   child.lua([[
+    OPTIONS = { clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } } }
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { '', '', '', '', '', '', '', '', '', '' })
     vim.api.nvim_win_set_cursor(0, { 10, 0 })
     vim.fn['pum#set_option']({ max_height = 2, auto_select = false, direction = 'above', reversed = true })
@@ -536,7 +539,7 @@ T["automatic highlighting does not freeze an untouched menu"] = function()
   wait_pum_items(1)
   child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
   wait_pum_items(2)
-  expect.equality(pum_labels(), { "ba", "bb" })
+  expect.equality(pum_labels(), { "bb", "ba" })
   expect.equality(child.api.nvim_get_current_line(), "b")
 end
 
