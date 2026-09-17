@@ -140,4 +140,23 @@ T["missing or inapplicable ranges fall back to the keyword boundary"] = function
   end
 end
 
+T["file labels show the path replaced by an insert-replace edit"] = function()
+  local range = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 14 } }
+  local item = {
+    label = "prompt.md",
+    kind = vim.lsp.protocol.CompletionItemKind.File,
+    filterText = "__ignored/prompt.md",
+    insertText = "__ignored/prompt.md",
+    textEdit = { insert = range, replace = range, newText = "__ignored/prompt.md" },
+  }
+  local got = require("laser.items").convert(item, {
+    line = "e __ignored/pr",
+    startcol = 2,
+    cursor_col = 14,
+    encoding = "utf-16",
+    client_id = 1,
+  })
+  expect.equality(got.abbr, "__ignored/prompt.md")
+end
+
 return T
