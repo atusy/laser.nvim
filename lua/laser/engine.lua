@@ -22,7 +22,6 @@ local Session = require("laser.session")
 
 ---@class laser.Engine
 ---@field ui laser.UI
----@field max_items? integer
 ---@field enable_commit_characters? boolean
 ---@field clients? string[]
 ---@field client_options table<string, laser.ClientOpts>
@@ -34,12 +33,11 @@ local Session = require("laser.session")
 local Engine = {}
 Engine.__index = Engine
 
----@param opts { ui: laser.UI, max_items?: integer, clients?: string[], clientOptions?: table<string, laser.ClientOpts> }
+---@param opts { ui: laser.UI, clients?: string[], clientOptions?: table<string, laser.ClientOpts> }
 ---@return laser.Engine
 function Engine.new(opts)
   return setmetatable({
     ui = opts.ui,
-    max_items = opts.max_items,
     clients = opts.clients,
     client_options = opts.clientOptions or {},
     pending = {},
@@ -76,9 +74,13 @@ function Engine:render()
     vim.list_extend(frozen, items)
     items = frozen
   end
-  if self.max_items and self.max_items > 0 then
-    items = vim.list_slice(items, 1, self.max_items)
-  end
+  local counts = {}
+  items = vim.tbl_filter(function(item)
+    local client_id = item.user_data.laser.client_id
+    local max_items = (session.clients[client_id].opts or {}).max_items
+    counts[client_id] = (counts[client_id] or 0) + 1
+    return not max_items or max_items <= 0 or counts[client_id] <= max_items
+  end, items)
   if #items == 0 then
     self.ui.close()
     return

@@ -64,7 +64,7 @@ require("laser").complete({
 
 Omit `clients` to use all attached completion clients, or list names without `"*"` to use only those clients. `clientOptions["*"]` provides shared defaults; `clientOptions[name]` overrides them for a particular client. Requests have no timeout by default.
 
-Set `max_items = 30` in `complete()` to display at most 30 candidates after filtering and sorting. Cached results remain available for further narrowing. Omit it or use `0` for no limit.
+Set `clientOptions[name].max_items = 30` to display at most 30 candidates from that client after filtering and sorting. Use `clientOptions["*"].max_items = 30` to apply the limit to each client by default; individual clients can override it. Cached results remain available for further narrowing. Omit it or use `0` for no limit.
 
 ### Command-line completion
 

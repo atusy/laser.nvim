@@ -58,12 +58,57 @@ T["max_items limits display without discarding cached candidates"] = function()
     buf
   )
   local ui = stub_ui.new()
-  local engine = Engine.new({ ui = ui, max_items = 2 })
+  local engine = Engine.new({ ui = ui, clientOptions = { one = { max_items = 2 } } })
   engine:start(doc(buf, "b", 1), { triggerKind = 1 })
   wait_opened(ui, 1)
   expect.equality(ui.last().labels, { "bar", "bat" })
   engine:on_char(doc(buf, "baz", 3), "z")
   expect.equality(ui.last().labels, { "baz" })
+end
+
+T["max_items defaults and overrides limit each client independently"] = function()
+  local buf = scratch("b")
+  for _, name in ipairs({ "one", "two", "three" }) do
+    fake.start({
+      name = name,
+      items = { { label = "bar" }, { label = "bat" }, { label = "baz" } },
+    }, buf)
+  end
+  local ui = stub_ui.new()
+  local engine = Engine.new({
+    ui = ui,
+    clients = { "one", "two", "three" },
+    clientOptions = {
+      ["*"] = { max_items = 1 },
+      two = { max_items = 2 },
+      three = { max_items = 0 },
+    },
+  })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  wait_opened(ui, 3)
+  expect.equality(ui.last().labels, { "bar", "bar", "bat", "bar", "bat", "baz" })
+end
+
+T["frozen candidates count toward their client's max_items during streaming"] = function()
+  local buf = scratch("b")
+  fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local locked = 0
+  ui.frozen_count = function()
+    return locked
+  end
+  ui.update = ui.open
+  local engine = Engine.new({ ui = ui, clientOptions = { one = { max_items = 2 } } })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  local token = server.requests[#server.requests].params.partialResultToken
+  server.progress(token, { { label = "bar" }, { label = "bat" } })
+  wait_opened(ui, 1)
+  locked = 1
+  server.progress(token, { { label = "baz" } })
+  wait_opened(ui, 2)
+  expect.equality(ui.last().labels, { "bar", "bat" })
+  engine:close()
 end
 
 T["a slow client's answer is merged into the open menu"] = function()
