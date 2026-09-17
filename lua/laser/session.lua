@@ -176,7 +176,13 @@ function Session:candidates(prefix, doc, projection)
       merged[i] = vim.tbl_extend("force", candidate, {
         word = prefix .. candidate.word,
         abbr = prefix .. (candidate.abbr or candidate.word),
+        highlights = vim.deepcopy(candidate.highlights),
       })
+      for _, hl in ipairs(merged[i].highlights or {}) do
+        if hl.type == "abbr" then
+          hl.col = (hl.col or 1) + #prefix
+        end
+      end
     end
   end
   return merged, startcol

@@ -179,4 +179,30 @@ T["per-client filters see each item input and preserve identity on rerender"] = 
   expect.equality(labels(s.results[1].candidates), { "bar", "foo.bar" })
 end
 
+T["shared labels shift abbreviation highlights by UTF-8 bytes without accumulation"] = function()
+  local s =
+    Session.new({ startcol = 4, clients = { [1] = { name = "file", opts = { filters = {} } } } })
+  local doc = { bufnr = 1, line = "界/pr", col = 6, line_nr = 0, mode = "c" }
+  s:set_result(1, { { label = "prompt.md" } }, {
+    line = doc.line,
+    line_nr = 0,
+    startcol = 4,
+    cursor_col = 6,
+    encoding = "utf-8",
+    client_id = 1,
+  })
+  s.results[1].candidates[1].highlights = {
+    { type = "abbr", col = 1, width = 2, hl_group = "PmenuMatch" },
+    { type = "menu", col = 1, width = 3, hl_group = "Comment" },
+  }
+  local projection = { startcol = 0, exclude = {} }
+  local got = s:candidates("pr", doc, projection)
+  expect.equality(got[1].highlights, {
+    { type = "abbr", col = 5, width = 2, hl_group = "PmenuMatch" },
+    { type = "menu", col = 1, width = 3, hl_group = "Comment" },
+  })
+  expect.equality(s:candidates("pr", doc, projection), got)
+  expect.equality(s.results[1].candidates[1].highlights[1].col, 1)
+end
+
 return T
