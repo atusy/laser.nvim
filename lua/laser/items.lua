@@ -105,12 +105,9 @@ end
 ---@param ctx laser.ConvertContext
 ---@return table complete-item
 function M.convert(item, ctx)
-  local text = word(item, ctx)
-  local kind = vim.lsp.protocol.CompletionItemKind
-  local path = item.kind == kind.File or item.kind == kind.Folder
   return {
-    word = text,
-    abbr = path and text or item.label,
+    word = word(item, ctx),
+    abbr = item.label,
     kind = item.kind and vim.lsp.protocol.CompletionItemKind[item.kind] or nil,
     menu = item.labelDetails and item.labelDetails.description or nil,
     info = require("laser.preview").info(item),
