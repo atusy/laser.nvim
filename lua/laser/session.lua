@@ -172,8 +172,10 @@ function Session:candidates(prefix, doc, projection)
   for i, candidate in ipairs(merged) do
     local own_start = candidate.user_data.laser.startcol
     if own_start > startcol then
+      local prefix = doc.line:sub(startcol + 1, own_start)
       merged[i] = vim.tbl_extend("force", candidate, {
-        word = doc.line:sub(startcol + 1, own_start) .. candidate.word,
+        word = prefix .. candidate.word,
+        abbr = prefix .. (candidate.abbr or candidate.word),
       })
     end
   end

@@ -223,7 +223,8 @@ do not accumulate as you type. Converters may modify their copy or return a new
 candidate, but must preserve `user_data.laser` identity and the information needed
 for confirmation (`client_id`, `id`, `startcol`, and the LSP `item`). Changes to
 matching or sorting text affect only filters that follow them. Filters run per
-client before merging results and padding words to the shared menu boundary.
+client before merging results and padding words and display labels to the shared
+menu boundary.
 
 Omitting `filters` uses fuzzy matching followed by score sorting. `filters = {}`
 performs neither filtering nor sorting. An explicit list overrides the legacy
@@ -243,6 +244,8 @@ range fall back to the keyword boundary; no position callback is required.
 Each candidate is matched against the input starting at its own boundary. The
 menu starts at the earliest boundary among the displayed candidates. Candidates
 that start later retain the intervening text, including when confirming snippets.
+Their display labels include that text too, so a filename-only candidate aligns
+with a full-path candidate in the same menu.
 The original keyword boundary remains the session's reuse boundary, so a menu
 position supplied by the server does not cause unnecessary requests while typing.
 
