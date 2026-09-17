@@ -44,7 +44,7 @@ end
 ---@param candidate laser.Candidate
 ---@return boolean matched
 ---@return laser.MatchInfo? info
-function M.fuzzy(prefix, candidate)
+local function fuzzy(prefix, candidate)
   if prefix == "" then
     return true, { score = 0 }
   end
@@ -55,11 +55,17 @@ function M.fuzzy(prefix, candidate)
   return true, { score = result[3][1], positions = result[2][1] }
 end
 
+---Create a fuzzy matcher against filterText (or label).
+---@return laser.Matcher
+function M.fuzzy_matcher()
+  return fuzzy
+end
+
 ---Highlight matching characters in abbr using pum.vim item decorations.
 ---@param candidate laser.Candidate
 ---@param input? string Candidate-specific input, used when abbr differs from the matched text.
 ---@return laser.Candidate
-function M.highlight(candidate, input)
+local function highlight(candidate, input)
   local info = candidate.user_data.laser.match_info
   local text = candidate.abbr or candidate.word
   local highlights = {}
@@ -85,6 +91,12 @@ function M.highlight(candidate, input)
   end
   candidate.highlights = highlights
   return candidate
+end
+
+---Create a converter that highlights matched characters using PmenuMatch.
+---@return laser.Converter
+function M.highlight_converter()
+  return highlight
 end
 
 ---Create a descending score comparator. Equal scores retain input order.
@@ -114,11 +126,11 @@ function M.apply(candidates, prefix, opts)
   if filters == nil then
     local function matcher(input, candidate)
       local matched, info
-      if opts.matcher and opts.matcher ~= M.fuzzy then
+      if opts.matcher and opts.matcher ~= fuzzy then
         local score = opts.matcher(input, candidate)
         matched, info = score ~= nil and score ~= false, { score = score }
       else
-        matched, info = M.fuzzy(input, candidate)
+        matched, info = fuzzy(input, candidate)
       end
       candidate.score = info and info.score or nil -- Legacy sorter callbacks.
       return matched, matched and info or nil

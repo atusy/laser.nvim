@@ -29,8 +29,9 @@ T["the default matcher drops candidates that do not fuzzy-match the prefix"] = f
   expect.equality(labels(got), { "bar", "baz" })
 end
 
-T["fuzzy exposes character positions in filterText"] = function()
-  local matched, info = filter.fuzzy("日語", cand("other", { filterText = "日本語" }))
+T["fuzzy_matcher exposes character positions in filterText"] = function()
+  local matched, info =
+    filter.fuzzy_matcher()("日語", cand("other", { filterText = "日本語" }))
   expect.equality(matched, true)
   expect.equality(info.positions, { 0, 2 })
 end
@@ -193,7 +194,7 @@ T["the built-in sorter works before any matcher"] = function()
   local got = filter.apply({ cand("z"), cand("a") }, "", {
     filters = {
       { kind = "sorter", callback = filter.by_score },
-      { kind = "matcher", callback = filter.fuzzy },
+      { kind = "matcher", callback = filter.fuzzy_matcher() },
     },
   })
   expect.equality(labels(got), { "z", "a" })
@@ -211,17 +212,17 @@ T["legacy sorters still receive the default match score"] = function()
   expect.equality(labels(got), { "abc", "axbyc" })
 end
 
-T["highlight converts match positions into byte ranges without replacing other decorations"] = function()
+T["highlight_converter converts match positions into byte ranges without replacing other decorations"] = function()
   local item = cand("日本語")
   local decoration = { name = "kind", type = "kind", hl_group = "Type", col = 1, width = 1 }
   item.highlights = { decoration }
   local got = filter.apply({ item }, "日語", {
     filters = {
-      { kind = "matcher", callback = filter.fuzzy },
+      { kind = "matcher", callback = filter.fuzzy_matcher() },
       {
         kind = "converter",
         callback = function(candidate)
-          return filter.highlight(candidate)
+          return filter.highlight_converter()(candidate)
         end,
       },
     },
@@ -233,7 +234,7 @@ T["highlight converts match positions into byte ranges without replacing other d
   })
 end
 
-T["highlight rematches a different abbr using each candidate's input"] = function()
+T["highlight_converter rematches a different abbr using each candidate's input"] = function()
   local got = filter.apply(
     { cand("a日本語", { filterText = "日本語" }), cand("xyz") },
     function(c)
@@ -241,11 +242,11 @@ T["highlight rematches a different abbr using each candidate's input"] = functio
     end,
     {
       filters = {
-        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "matcher", callback = filter.fuzzy_matcher() },
         {
           kind = "converter",
           callback = function(candidate, input)
-            return filter.highlight(candidate, input)
+            return filter.highlight_converter()(candidate, input)
           end,
         },
       },
@@ -258,32 +259,32 @@ T["highlight rematches a different abbr using each candidate's input"] = functio
   expect.equality(got[2].highlights[2].col, 3)
 end
 
-T["highlight clears only its own decorations when positions are absent or display does not match"] = function()
+T["highlight_converter clears only its own decorations when positions are absent or display does not match"] = function()
   for _, case in ipairs({
     { input = "", label = "abc" },
     { input = "z", label = "abc", filterText = "xyz" },
   }) do
     local got = filter.apply({ cand(case.label, { filterText = case.filterText }) }, case.input, {
       filters = {
-        { kind = "matcher", callback = filter.fuzzy },
-        { kind = "converter", callback = filter.highlight },
+        { kind = "matcher", callback = filter.fuzzy_matcher() },
+        { kind = "converter", callback = filter.highlight_converter() },
       },
     })
     expect.equality(got[1].highlights, {})
   end
   local item = cand("abc")
   item.user_data.laser.match_info = { score = 1, positions = { 0 } }
-  filter.highlight(item, "a")
+  filter.highlight_converter()(item, "a")
   expect.equality(#item.highlights, 1)
-  filter.highlight(item, "a")
+  filter.highlight_converter()(item, "a")
   expect.equality(#item.highlights, 1)
   local decoration = { name = "other", type = "kind", hl_group = "Type", col = 1, width = 1 }
   item.highlights[#item.highlights + 1] = decoration
   item.user_data.laser.match_info = { score = 1 }
-  filter.highlight(item, "a")
+  filter.highlight_converter()(item, "a")
   expect.equality(item.highlights, { decoration })
   item.user_data.laser.match_info = nil
-  filter.highlight(item, "a")
+  filter.highlight_converter()(item, "a")
   expect.equality(item.highlights, { decoration })
 end
 
@@ -297,7 +298,7 @@ T["score_sorter keeps input order for equal scores despite different labels and 
     "ab",
     {
       filters = {
-        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "matcher", callback = filter.fuzzy_matcher() },
         { kind = "sorter", callback = filter.score_sorter() },
       },
     }
@@ -323,7 +324,7 @@ T["score_sorter invokes the custom tiebreak only for equal scores"] = function()
     "ab",
     {
       filters = {
-        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "matcher", callback = filter.fuzzy_matcher() },
         { kind = "sorter", callback = sorter },
       },
     }

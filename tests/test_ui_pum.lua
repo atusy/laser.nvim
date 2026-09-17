@@ -97,8 +97,8 @@ T["match highlights reach pum on open and tail updates"] = function()
     "日語",
     {
       filters = {
-        { kind = "matcher", callback = filter.fuzzy },
-        { kind = "converter", callback = filter.highlight },
+        { kind = "matcher", callback = filter.fuzzy_matcher() },
+        { kind = "converter", callback = filter.highlight_converter() },
       },
     }
   )

@@ -159,7 +159,7 @@ local filters = {
     candidate.user_data.laser.item.filterText = candidate.abbr:lower()
     return candidate
   end },
-  { kind = "matcher", callback = filter.fuzzy },
+  { kind = "matcher", callback = filter.fuzzy_matcher() },
   { kind = "sorter", callback = filter.score_sorter() },
   { kind = "converter", callback = function(candidate)
     candidate.menu = tostring(candidate.user_data.laser.match_info.score)
@@ -187,7 +187,7 @@ are never merged. `laser.MatchInfo` has a required `score: number` and optional
 `item.label` when `filterText` is absent. Each matcher receives input
 starting at that candidate's own completion boundary.
 
-`filter.fuzzy` implements this boolean/MatchInfo contract, matching against
+The callback returned by `filter.fuzzy_matcher()` implements this boolean/MatchInfo contract, matching against
 `item.filterText` or `item.label`. `filter.score_sorter()` creates a comparator
 that sorts by descending score, preserving input order on ties; candidates
 without match info use score zero.
@@ -211,15 +211,15 @@ The callback runs only for equal scores. If it considers both candidates equal,
 their preceding order is retained. Create the comparator once outside input
 callbacks so its identity stays stable between `complete()` calls.
 
-Add `filter.highlight` after matching and any display-text conversions to highlight
+Add `filter.highlight_converter()` after matching and any display-text conversions to highlight
 matched characters with `PmenuMatch`:
 
 ```lua
 local filter = require("laser.filter")
 local filters = {
-  { kind = "matcher", callback = filter.fuzzy },
+  { kind = "matcher", callback = filter.fuzzy_matcher() },
   { kind = "sorter", callback = filter.score_sorter() },
-  { kind = "converter", callback = filter.highlight },
+  { kind = "converter", callback = filter.highlight_converter() },
 }
 require("laser").complete({ clientOptions = { ["*"] = { filters = filters } } })
 -- Disable pum.vim's independent pattern-based matching highlights.
@@ -250,7 +250,8 @@ performs neither filtering nor sorting. An explicit list overrides the legacy
 The legacy options remain supported: `matcher(input, candidate)` returns a
 numeric score or nil, and legacy sorters receive `candidate.score`. The pipeline
 module is now `laser.filter`; update existing require calls accordingly. Its
-`fuzzy` function returns a boolean and MatchInfo instead of a numeric score.
+`fuzzy_matcher()` factory returns a callback that yields a boolean and MatchInfo
+instead of a numeric score.
 
 ## Completion position
 
