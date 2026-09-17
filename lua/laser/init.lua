@@ -6,6 +6,7 @@ local M = {}
 ---@field refresh? laser.Refresh predicate for refreshing reusable results
 
 ---@class laser.CompleteOpts
+---@field max_items? integer maximum displayed candidates after filtering; nil or 0 means unlimited
 ---@field clients? string[] names in display order; "*" expands remaining clients; nil selects all
 ---@field clientOptions? table<string, laser.ClientOpts> per-client options; "*" holds defaults
 ---@field enable_commit_characters? boolean accept selected candidates on LSP commit characters; default false
@@ -185,6 +186,7 @@ function M.complete(opts)
     M.close()
     engine = require("laser.engine").new({ ui = ui })
   end
+  engine.max_items = opts.max_items
   engine.enable_commit_characters = opts.enable_commit_characters == true
   engine.clients = vim.deepcopy(opts.clients)
   engine.client_options = vim.deepcopy(opts.clientOptions or {})

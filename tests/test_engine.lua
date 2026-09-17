@@ -51,6 +51,21 @@ T["starting a session shows the server's candidates from the keyword start"] = f
   expect.equality(ui.last(), { startcol = 5, mode = "i", labels = { "bar", "baz" } })
 end
 
+T["max_items limits display without discarding cached candidates"] = function()
+  local buf = scratch("b")
+  fake.start(
+    { name = "one", items = { { label = "bar" }, { label = "bat" }, { label = "baz" } } },
+    buf
+  )
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, max_items = 2 })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  expect.equality(ui.last().labels, { "bar", "bat" })
+  engine:on_char(doc(buf, "baz", 3), "z")
+  expect.equality(ui.last().labels, { "baz" })
+end
+
 T["a slow client's answer is merged into the open menu"] = function()
   local buf = scratch("foo.ba")
   fake.start({ name = "quick", items = { { label = "bar" } } }, buf)
