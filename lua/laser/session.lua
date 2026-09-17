@@ -176,13 +176,20 @@ function Session:candidates(prefix, doc, projection)
       merged[i] = vim.tbl_extend("force", candidate, {
         word = prefix .. candidate.word,
         abbr = prefix .. (candidate.abbr or candidate.word),
-        highlights = vim.deepcopy(candidate.highlights),
+        highlights = vim.deepcopy(candidate.highlights or {}),
       })
       for _, hl in ipairs(merged[i].highlights or {}) do
         if hl.type == "abbr" then
           hl.col = (hl.col or 1) + #prefix
         end
       end
+      table.insert(merged[i].highlights, {
+        name = "laser_prefix",
+        type = "abbr",
+        col = 1,
+        width = #prefix,
+        hl_group = "Comment",
+      })
     end
   end
   return merged, startcol

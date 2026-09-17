@@ -246,6 +246,8 @@ menu starts at the earliest boundary among the displayed candidates. Candidates
 that start later retain the intervening text, including when confirming snippets.
 Their display labels include that text too, so a filename-only candidate aligns
 with a full-path candidate in the same menu.
+Laser highlights this added prefix with `Comment` to distinguish it from the
+candidate's own label.
 Abbreviation highlights shift with the label; other columns keep their positions.
 The original keyword boundary remains the session's reuse boundary, so a menu
 position supplied by the server does not cause unnecessary requests while typing.

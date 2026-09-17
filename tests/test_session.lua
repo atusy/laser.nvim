@@ -200,6 +200,7 @@ T["shared labels shift abbreviation highlights by UTF-8 bytes without accumulati
   expect.equality(got[1].highlights, {
     { type = "abbr", col = 5, width = 2, hl_group = "PmenuMatch" },
     { type = "menu", col = 1, width = 3, hl_group = "Comment" },
+    { name = "laser_prefix", type = "abbr", col = 1, width = 4, hl_group = "Comment" },
   })
   expect.equality(s:candidates("pr", doc, projection), got)
   expect.equality(s.results[1].candidates[1].highlights[1].col, 1)
