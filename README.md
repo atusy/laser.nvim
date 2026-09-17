@@ -44,7 +44,7 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
         ["*"] = {
           -- filters = {
           --   { kind = "matcher", callback = require("laser.filter").fuzzy },
-          --   { kind = "sorter", callback = require("laser.filter").fuzzy_sorter() },
+          --   { kind = "sorter", callback = require("laser.filter").by_score },
           -- },
           timeout_ms = 1000, -- omitted or 0: no request timeout
         },
@@ -188,11 +188,28 @@ are never merged. `laser.MatchInfo` has a required `score: number` and optional
 starting at that candidate's own completion boundary.
 
 `filter.fuzzy` implements this boolean/MatchInfo contract, matching against
-`item.filterText` or `item.label`. `filter.fuzzy_sorter()` creates a comparator that sorts by descending score,
-preserving input order on ties; candidates without match info use score zero.
+`item.filterText` or `item.label`. `filter.fuzzy_sorter()` creates a comparator
+that sorts by descending score, preserving input order on ties; candidates
+without match info use score zero.
 `filter.by_score` remains an alias for the default comparator.
 Sorters preserve the preceding order for equivalent candidates. Comparators must
 use a strict ordering (return false for equal keys).
+
+To choose how equal scores are ordered, pass `tiebreak`:
+
+```lua
+local sorter = filter.fuzzy_sorter({
+  tiebreak = function(a, b)
+    local ai, bi = a.user_data.laser.item, b.user_data.laser.item
+    return (ai.sortText or ai.label) < (bi.sortText or bi.label)
+  end,
+})
+-- Use { kind = "sorter", callback = sorter } in the filter pipeline.
+```
+
+The callback runs only for equal scores. If it considers both candidates equal,
+their preceding order is retained. Create the comparator once outside input
+callbacks so its identity stays stable between `complete()` calls.
 
 Add `filter.highlight` after matching and any display-text conversions to highlight
 matched characters with `PmenuMatch`:

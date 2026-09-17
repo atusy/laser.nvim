@@ -305,4 +305,31 @@ T["fuzzy_sorter keeps input order for equal scores despite different labels and 
   expect.equality(labels(got), { "zeta", "alpha", "weak" })
 end
 
+T["fuzzy_sorter invokes the custom tiebreak only for equal scores"] = function()
+  local called = false
+  local sorter = filter.fuzzy_sorter({
+    tiebreak = function(a, b)
+      called = true
+      expect.equality(a.user_data.laser.match_info.score, b.user_data.laser.match_info.score)
+      return a.abbr < b.abbr
+    end,
+  })
+  local got = filter.apply(
+    {
+      cand("weak", { filterText = "axb" }),
+      cand("zeta", { filterText = "ab" }),
+      cand("alpha", { filterText = "ab" }),
+    },
+    "ab",
+    {
+      filters = {
+        { kind = "matcher", callback = filter.fuzzy },
+        { kind = "sorter", callback = sorter },
+      },
+    }
+  )
+  expect.equality(labels(got), { "alpha", "zeta", "weak" })
+  expect.equality(called, true)
+end
+
 return T

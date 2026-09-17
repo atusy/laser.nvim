@@ -88,12 +88,17 @@ function M.highlight(candidate, input)
 end
 
 ---Create a descending fuzzy-score comparator. Equal scores retain input order.
+---@param opts? { tiebreak?: laser.Sorter } Called only when scores are equal.
 ---@return laser.Sorter
-function M.fuzzy_sorter()
+function M.fuzzy_sorter(opts)
+  local tiebreak = opts and opts.tiebreak
   return function(a, b)
     local ai, bi = a.user_data.laser.match_info, b.user_data.laser.match_info
     local ascore, bscore = ai and ai.score or a.score or 0, bi and bi.score or b.score or 0
-    return ascore > bscore
+    if ascore ~= bscore then
+      return ascore > bscore
+    end
+    return tiebreak ~= nil and tiebreak(a, b) or false
   end
 end
 
