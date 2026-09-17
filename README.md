@@ -160,7 +160,7 @@ local filters = {
     return candidate
   end },
   { kind = "matcher", callback = filter.fuzzy },
-  { kind = "sorter", callback = filter.fuzzy_sorter() },
+  { kind = "sorter", callback = filter.score_sorter() },
   { kind = "converter", callback = function(candidate)
     candidate.menu = tostring(candidate.user_data.laser.match_info.score)
     return candidate
@@ -188,7 +188,7 @@ are never merged. `laser.MatchInfo` has a required `score: number` and optional
 starting at that candidate's own completion boundary.
 
 `filter.fuzzy` implements this boolean/MatchInfo contract, matching against
-`item.filterText` or `item.label`. `filter.fuzzy_sorter()` creates a comparator
+`item.filterText` or `item.label`. `filter.score_sorter()` creates a comparator
 that sorts by descending score, preserving input order on ties; candidates
 without match info use score zero.
 `filter.by_score` remains an alias for the default comparator.
@@ -198,7 +198,7 @@ use a strict ordering (return false for equal keys).
 To choose how equal scores are ordered, pass `tiebreak`:
 
 ```lua
-local sorter = filter.fuzzy_sorter({
+local sorter = filter.score_sorter({
   tiebreak = function(a, b)
     local ai, bi = a.user_data.laser.item, b.user_data.laser.item
     return (ai.sortText or ai.label) < (bi.sortText or bi.label)
@@ -218,7 +218,7 @@ matched characters with `PmenuMatch`:
 local filter = require("laser.filter")
 local filters = {
   { kind = "matcher", callback = filter.fuzzy },
-  { kind = "sorter", callback = filter.fuzzy_sorter() },
+  { kind = "sorter", callback = filter.score_sorter() },
   { kind = "converter", callback = filter.highlight },
 }
 require("laser").complete({ clientOptions = { ["*"] = { filters = filters } } })

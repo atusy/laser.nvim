@@ -87,10 +87,10 @@ function M.highlight(candidate, input)
   return candidate
 end
 
----Create a descending fuzzy-score comparator. Equal scores retain input order.
+---Create a descending score comparator. Equal scores retain input order.
 ---@param opts? { tiebreak?: laser.Sorter } Called only when scores are equal.
 ---@return laser.Sorter
-function M.fuzzy_sorter(opts)
+function M.score_sorter(opts)
   local tiebreak = opts and opts.tiebreak
   return function(a, b)
     local ai, bi = a.user_data.laser.match_info, b.user_data.laser.match_info
@@ -102,8 +102,8 @@ function M.fuzzy_sorter(opts)
   end
 end
 
----Compatibility name for the default fuzzy sorter.
-M.by_score = M.fuzzy_sorter()
+---Compatibility name for the default score sorter.
+M.by_score = M.score_sorter()
 
 ---@param candidates table[]
 ---@param prefix string|fun(candidate: table): string

@@ -287,7 +287,7 @@ T["highlight clears only its own decorations when positions are absent or displa
   expect.equality(item.highlights, { decoration })
 end
 
-T["fuzzy_sorter keeps input order for equal scores despite different labels and sortText"] = function()
+T["score_sorter keeps input order for equal scores despite different labels and sortText"] = function()
   local got = filter.apply(
     {
       cand("weak", { filterText = "axb" }),
@@ -298,16 +298,16 @@ T["fuzzy_sorter keeps input order for equal scores despite different labels and 
     {
       filters = {
         { kind = "matcher", callback = filter.fuzzy },
-        { kind = "sorter", callback = filter.fuzzy_sorter() },
+        { kind = "sorter", callback = filter.score_sorter() },
       },
     }
   )
   expect.equality(labels(got), { "zeta", "alpha", "weak" })
 end
 
-T["fuzzy_sorter invokes the custom tiebreak only for equal scores"] = function()
+T["score_sorter invokes the custom tiebreak only for equal scores"] = function()
   local called = false
-  local sorter = filter.fuzzy_sorter({
+  local sorter = filter.score_sorter({
     tiebreak = function(a, b)
       called = true
       expect.equality(a.user_data.laser.match_info.score, b.user_data.laser.match_info.score)
