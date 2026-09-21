@@ -6,6 +6,7 @@ local M = {}
 ---@field bufnr integer completion document (scratch buffer in command-line mode)
 ---@field mode "i"|"c"
 ---@field before_cursor string current line up to the cursor
+---@field previous_before_cursor? string previous line up to the cursor, when available
 ---@field inserted_char string single inserted character, or "" for other changes
 ---@field trigger_characters string[] this client's trigger characters
 ---@field is_incomplete boolean? nil until a response has been accepted
@@ -38,11 +39,22 @@ function M.has_candidate(ctx)
   return ctx.has_candidate == true
 end
 
+---Whether the current input retains the previous input as a prefix.
+---Identical inputs also return true; a missing previous input returns false.
+---This compares text, not edit operations or the resulting candidate sets.
+---@param ctx laser.RefreshContext
+---@return boolean
+function M.extendsPreviousInput(ctx)
+  return ctx.previous_before_cursor ~= nil
+    and vim.startswith(ctx.before_cursor, ctx.previous_before_cursor)
+end
+
 ---@type laser.Refresh
 function M.default(ctx)
   return ctx.timed_out == true
     or ctx.is_incomplete == true
     or M.hasTriggerCharacter(ctx)
+    or (ctx.previous_before_cursor ~= nil and not M.extendsPreviousInput(ctx))
     or (not ctx.pending and not M.has_candidate(ctx))
 end
 

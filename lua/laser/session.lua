@@ -88,8 +88,9 @@ end
 ---@param doc laser.Doc
 ---@param char string
 ---@param pending boolean
+---@param previous_doc? laser.Doc
 ---@return laser.RefreshContext
-function Session:refresh_context(client_id, doc, char, pending)
+function Session:refresh_context(client_id, doc, char, pending, previous_doc)
   local client = self.clients[client_id]
   local result = self.results[client_id]
   return {
@@ -98,6 +99,7 @@ function Session:refresh_context(client_id, doc, char, pending)
     bufnr = doc.bufnr,
     mode = doc.mode,
     before_cursor = doc.line:sub(1, doc.col),
+    previous_before_cursor = previous_doc and previous_doc.line:sub(1, previous_doc.col),
     inserted_char = char,
     trigger_characters = vim.list_slice(client.trigger_chars or {}),
     is_incomplete = result and result.incomplete,
@@ -111,11 +113,12 @@ end
 ---@param char string
 ---@param doc laser.Doc
 ---@param pending table<integer, any>
+---@param previous_doc? laser.Doc
 ---@return table<integer, lsp.CompletionContext>
-function Session:on_char(char, doc, pending)
+function Session:on_char(char, doc, pending, previous_doc)
   local requests = {}
   for client_id, client in pairs(self.clients) do
-    local ctx = self:refresh_context(client_id, doc, char, pending[client_id] ~= nil)
+    local ctx = self:refresh_context(client_id, doc, char, pending[client_id] ~= nil, previous_doc)
     -- Compute protocol metadata before calling user code, which may mutate ctx.
     local lsp_context = refresh.lsp_context(ctx)
     local predicate = (client.opts or {}).refresh or refresh.default

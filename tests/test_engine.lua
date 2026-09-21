@@ -66,6 +66,70 @@ T["max_items limits display without discarding cached candidates"] = function()
   expect.equality(ui.last().labels, { "baz" })
 end
 
+T["deleting input refreshes surviving candidates without closing the menu"] = function()
+  local buf = scratch("git rev")
+  local client = fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
+  engine:start(doc(buf, "git rev", 7), { triggerKind = 1 })
+  server.respond({ isIncomplete = false, items = { { label = "revert" } } })
+  wait_opened(ui, 1)
+  local session, closed = engine.session, ui.closed
+
+  engine:on_char(doc(buf, "git re", 6), "")
+  expect.equality(engine.pending[client.id] ~= nil, true)
+  expect.equality(engine.session == session, true)
+  expect.equality(ui.closed, closed)
+  expect.equality(ui.last().labels, { "revert" })
+
+  server.respond({ isIncomplete = false, items = { { label = "reset" } } })
+  wait_opened(ui, 3)
+  expect.equality(ui.last().labels, { "reset" })
+  engine:close()
+end
+
+T["replacement refresh supersedes pending results even when fuzzy candidates survive"] = function()
+  local buf = scratch("git rev")
+  local client = fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({
+    ui = ui,
+    clientOptions = {
+      one = {
+        filters = { { kind = "matcher", callback = require("laser.filter").fuzzy_matcher() } },
+      },
+    },
+  })
+  engine:start(doc(buf, "git rev", 7), { triggerKind = 1 })
+  server.respond({
+    isIncomplete = false,
+    items = { { label = "revert" }, { label = "fish_color_cwd" } },
+  })
+  wait_opened(ui, 1)
+  local session, closed = engine.session, ui.closed
+
+  engine:on_char(doc(buf, "git re", 6), "")
+  local late_response = server.respond
+  local previous_request = engine.pending[client.id]
+  engine:on_char(doc(buf, "git c", 5), "")
+  expect.equality(engine.pending[client.id] ~= previous_request, true)
+  expect.equality(engine.session == session, true)
+  expect.equality(ui.closed, closed)
+  expect.equality(ui.last().labels, { "fish_color_cwd" })
+  late_response({ isIncomplete = false, items = { { label = "cherry-pick" } } })
+  expect.equality(ui.last().labels, { "fish_color_cwd" })
+
+  server.respond({ isIncomplete = false, items = { { label = "commit" } } })
+  expect.equality(ui.last().labels, { "commit" })
+  engine:on_char(doc(buf, "git co", 6), "o")
+  expect.equality(engine.pending[client.id], nil)
+  engine:on_char(doc(buf, "git co", 6), "")
+  expect.equality(engine.pending[client.id], nil)
+  engine:close()
+end
+
 T["max_items defaults and overrides limit each client independently"] = function()
   local buf = scratch("b")
   for _, name in ipairs({ "one", "two", "three" }) do
@@ -536,7 +600,8 @@ T["typing retries an initial timeout only once while the retry is pending"] = fu
   wait_opened(ui, 1)
   expect.equality(ui.last().labels, { "bar" })
   engine:on_char(doc(buf, "ba", 2), "")
-  expect.equality(engine.pending[client.id], nil)
+  -- Deleting now refreshes even after a successful timeout retry.
+  expect.equality(engine.pending[client.id] ~= nil, true)
   engine:close()
 end
 

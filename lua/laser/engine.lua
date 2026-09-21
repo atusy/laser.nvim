@@ -196,7 +196,7 @@ function Engine:request(clients, ctx)
         -- Input may have advanced while an empty initial request was pending.
         -- Retry only a newer snapshot, so an empty answer cannot loop by itself.
         if self.session == session and not vim.deep_equal(doc, self.doc) then
-          local latest = session:refresh_context(client.id, assert(self.doc), "", false)
+          local latest = session:refresh_context(client.id, assert(self.doc), "", false, doc)
           local predicate = (session.clients[client.id].opts or {}).refresh or refresh.default
           local context = refresh.lsp_context(latest)
           if not refresh.has_candidate(latest) and predicate(latest) then
@@ -334,7 +334,7 @@ function Engine:on_char(doc, char)
       self:drop_client(client_id)
     end
   end
-  local needed = session:on_char(char, doc, self.pending)
+  local needed = session:on_char(char, doc, self.pending, old)
   for client_id, client in pairs(added) do
     session.clients[client_id] = client
     needed[client_id] = refresh.lsp_context(session:refresh_context(client_id, doc, char, false))

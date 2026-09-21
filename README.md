@@ -130,3 +130,9 @@ require("laser").complete({
 ```
 
 For custom matching, sorting, or refresh behavior, see the API details in [filters](lua/laser/filter.lua), [refresh helpers](lua/laser/refresh.lua), and [completion options](lua/laser/init.lua).
+
+By default, edits that no longer retain the previous input as a prefix trigger
+a background refresh, even when cached candidates still match. The menu keeps
+matching cached candidates until the new response replaces that client's results.
+Custom refresh callbacks can use `require("laser.refresh").extendsPreviousInput(ctx)`
+to make the same comparison; identical input counts as extending the previous input.

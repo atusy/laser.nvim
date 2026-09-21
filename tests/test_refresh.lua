@@ -14,6 +14,28 @@ T["helpers inspect the snapshot without consulting the editor"] = function()
   expect.equality(refresh.hasPattern(ctx, "。$"), true)
 end
 
+T["extendsPreviousInput compares prefixes including identical and multibyte input"] = function()
+  for _, case in ipairs({
+    { "git re", "git rev", true },
+    { "git rev", "git rev", true },
+    { "git rev", "git re", false },
+    { "git rev", "git cat", false },
+    { "git rev", "git checkout", false },
+    { "", "c", true },
+    { "日本", "日本語", true },
+    { "日本語", "日本", false },
+  }) do
+    expect.equality(
+      refresh.extendsPreviousInput({
+        previous_before_cursor = case[1],
+        before_cursor = case[2],
+      }),
+      case[3]
+    )
+  end
+  expect.equality(refresh.extendsPreviousInput({ before_cursor = "git c" }), false)
+end
+
 T["contexts preserve nil and false and do not expose mutable session tables"] = function()
   local s =
     Session.new({ startcol = 0, clients = { [7] = { name = "one", trigger_chars = { "." } } } })
@@ -32,7 +54,9 @@ T["contexts preserve nil and false and do not expose mutable session tables"] = 
     timed_out = false,
   })
   s:set_result(7, {}, {})
-  local second = s:refresh_context(7, doc, "", false)
+  local second = s:refresh_context(7, doc, "", false, { line = "ech.suffix", col = 3 })
+  expect.equality(second.previous_before_cursor, "ech")
+  expect.equality(first.previous_before_cursor, nil)
   expect.equality(second.is_incomplete, false)
   expect.equality(first.is_incomplete, nil)
   expect.equality(first.pending, true)
