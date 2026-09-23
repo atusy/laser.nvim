@@ -53,7 +53,7 @@ end
 ---@field max_height? integer rows shown at once; defaults to 'pumheight' or 10
 ---@field max_width? integer columns shown at once; defaults to 80
 ---@field border? string|string[] nvim_open_win() border
----@field auto_select? boolean highlight the first candidate without inserting it
+---@field auto_select? boolean highlight the first candidate without inserting it; defaults to whether 'completeopt' has "noinsert"
 ---@field direction? "auto"|"below"|"above" "auto" prefers below unless above has more room
 ---@field reversed? boolean list candidates bottom-up when the menu opens above
 ---@field preview? boolean|laser.PreviewOpts show documentation of the selected candidate
@@ -612,7 +612,11 @@ function M.new(opts)
   ---@param new_mode "i"|"c"
   function ui.open(col, new_items, new_mode)
     top = 1
-    cursor = menu.auto_select and #new_items > 0 and 1 or 0
+    local auto_select = menu.auto_select
+    if auto_select == nil then
+      auto_select = vim.o.completeopt:find("noinsert", 1, true) ~= nil
+    end
+    cursor = auto_select and #new_items > 0 and 1 or 0
     browsing, frozen, initial_cursor = false, 0, cursor
     local state = text_state(new_mode)
     typed = state.line:sub(col, state.col)
