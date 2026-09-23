@@ -97,6 +97,8 @@ local function highlight(candidate, input)
 end
 
 ---Create a converter that highlights matched characters using PmenuMatch.
+---The menu already highlights matches of the rows it draws; this stores them
+---on every converted candidate instead, and the menu then leaves them as set.
 ---@return laser.Converter
 function M.highlight_converter()
   return highlight

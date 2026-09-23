@@ -528,4 +528,79 @@ T["the menu and preview use pumblend"] = function()
   expect.equality(got, { 20, 20 })
 end
 
+---@param label string
+---@param positions? integer[]
+---@param extra? table
+local function matched(label, positions, extra)
+  local item = candidate(label, extra)
+  item.user_data.laser.startcol = 0
+  item.user_data.laser.match_info = { score = 1, positions = positions }
+  return item
+end
+
+---Byte ranges of the menu's match highlights on `row` (0-based).
+local function match_ranges(ui, row, group)
+  local got = {}
+  for _, mark in ipairs(marks(ui)) do
+    if mark[2] == row and mark[4].hl_group == (group or "PmenuMatch") then
+      got[#got + 1] = { mark[3], mark[4].end_col }
+    end
+  end
+  table.sort(got, function(a, b)
+    return a[1] < b[1]
+  end)
+  return got
+end
+
+T["matched characters are highlighted from the matcher's positions"] = function()
+  set_line("bz")
+  local ui = new()
+  ui.open(1, { matched("baz", { 0, 2 }), matched("日本語", { 0, 2 }) }, "i")
+  expect.equality(match_ranges(ui, 0), { { 0, 1 }, { 2, 3 } })
+  expect.equality(match_ranges(ui, 1), { { 0, 3 }, { 6, 9 } })
+  ui.select(1, { insert = false })
+  expect.equality(match_ranges(ui, 0, "PmenuMatchSel"), { { 0, 1 }, { 2, 3 } })
+  expect.equality(match_ranges(ui, 0), {})
+end
+
+T["labels shown differently from the matched text are matched again"] = function()
+  -- Normal mode cannot put the cursor past the end, so stand on a space.
+  set_line("ba ")
+  vim.api.nvim_win_set_cursor(0, { 1, 2 })
+  local ui = new()
+  local item = matched("bar()", { 0, 1 })
+  item.user_data.laser.item.filterText = "xbar"
+  ui.open(1, { item }, "i")
+  expect.equality(match_ranges(ui, 0), { { 0, 1 }, { 1, 2 } })
+end
+
+T["padding added for earlier edit starts shifts the highlights"] = function()
+  set_line("x.b")
+  local ui = new()
+  local item = matched("x.bar", { 0 }, {
+    highlights = {
+      { name = "laser_prefix", type = "abbr", col = 1, width = 2, hl_group = "Comment" },
+    },
+  })
+  item.user_data.laser.item.label = "bar"
+  item.user_data.laser.startcol = 2
+  ui.open(1, { item }, "i")
+  expect.equality(match_ranges(ui, 0), { { 2, 3 } })
+end
+
+T["candidates without positions or with their own match highlights are left alone"] = function()
+  set_line("b")
+  local ui = new()
+  ui.open(1, {
+    matched("bar", nil),
+    matched("baz", { 0 }, {
+      highlights = {
+        { name = "laser_match", type = "abbr", col = 3, width = 1, hl_group = "PmenuMatch" },
+      },
+    }),
+  }, "i")
+  expect.equality(match_ranges(ui, 0), {})
+  expect.equality(match_ranges(ui, 1), { { 2, 3 } })
+end
+
 return T

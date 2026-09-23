@@ -310,6 +310,47 @@ function M.new(opts)
     return table.concat(parts, " "), spans
   end
 
+  ---Highlights for the characters the matcher matched, computed only for
+  ---rows being drawn. Candidates decorated by a converter keep their own.
+  ---@param item table
+  ---@return table[]
+  local function match_highlights(item)
+    local data = item.user_data and item.user_data.laser
+    local positions = data and data.match_info and data.match_info.positions
+    if not positions then
+      return {}
+    end
+    local pad = 0
+    for _, hl in ipairs(item.highlights or {}) do
+      if hl.name == "laser_match" then
+        return {}
+      elseif hl.name == "laser_prefix" then
+        pad = hl.width
+      end
+    end
+    -- Positions index the matched text; padding for an earlier edit start is
+    -- not part of it, and a label shown differently must be matched again.
+    local shown = field(item, "abbr"):sub(pad + 1)
+    if shown ~= (data.item.filterText or data.item.label) then
+      local state = text_state(mode)
+      local input = state.line:sub((data.startcol or 0) + 1, state.col)
+      positions = input ~= "" and vim.fn.matchfuzzypos({ shown }, input)[2][1] or {}
+    end
+    local highlights = {}
+    for _, pos in ipairs(positions) do
+      local first, last = vim.fn.byteidx(shown, pos), vim.fn.byteidx(shown, pos + 1)
+      if first >= 0 and last > first then
+        highlights[#highlights + 1] = {
+          type = "abbr",
+          col = pad + first + 1,
+          width = last - first,
+          hl_group = "PmenuMatch",
+        }
+      end
+    end
+    return highlights
+  end
+
   local function render()
     local lines, decorations = {}, {}
     for row = 1, height() do
@@ -341,7 +382,11 @@ function M.new(opts)
           priority = 100,
         })
       end
-      for _, hl in ipairs(decoration.item.highlights or {}) do
+      local highlights = vim.list_extend(
+        vim.list_slice(decoration.item.highlights or {}),
+        match_highlights(decoration.item)
+      )
+      for _, hl in ipairs(highlights) do
         local span = decoration.spans[hl.type]
         if span and hl.hl_group and hl.hl_group ~= "" then
           -- Truncated fields keep only the highlight that is still visible.
