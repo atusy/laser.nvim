@@ -115,8 +115,7 @@ require("laser").complete({
     max_height = 10, -- Rows shown at once; defaults to 'pumheight' or 10.
     max_width = 80,
     border = "none",
-    auto_select = false, -- Highlight the first candidate without inserting it;
-    -- defaults to whether 'completeopt' contains "noinsert".
+    auto_select = false, -- Highlight the first candidate without inserting it.
     direction = "auto", -- "auto", "below", or "above".
     reversed = false, -- List candidates bottom-up when the menu opens above.
   },

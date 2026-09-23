@@ -515,20 +515,6 @@ T["moves past either end return to the typed input instead of wrapping"] = funct
   expect.equality(ui.selected(), 0)
 end
 
-T["auto_select follows noinsert in completeopt unless configured"] = function()
-  set_line("b")
-  local completeopt = vim.o.completeopt
-  vim.o.completeopt = "menuone,noinsert"
-  local ui = new()
-  ui.open(1, labels(2), "i")
-  local implicit = ui.selected()
-  ui.configure({ auto_select = false })
-  ui.open(1, labels(2), "i")
-  local explicit = ui.selected()
-  vim.o.completeopt = completeopt
-  expect.equality({ implicit, explicit }, { 1, 0 })
-end
-
 T["the menu and preview use pumblend"] = function()
   set_line("b")
   local blend = vim.o.pumblend
