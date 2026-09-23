@@ -10,9 +10,9 @@
 
 ## 🚀 Get started
 
-You need Neovim 0.11 or newer, [pum.vim](https://github.com/Shougo/pum.vim), and a configured LSP server that supports completion.
+You need Neovim 0.11 or newer and a configured LSP server that supports completion.
 
-Install `atusy/laser.nvim` and `Shougo/pum.vim` with your plugin manager, then add:
+Install `atusy/laser.nvim` with your plugin manager, then add:
 
 ```lua
 local group = vim.api.nvim_create_augroup("my-completion", { clear = true })
@@ -24,19 +24,25 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
   end,
 })
 
+local laser = require("laser")
 vim.keymap.set({ "i", "c" }, "<C-n>", function()
-  vim.fn["pum#map#insert_relative"](1)
+  laser.insert_relative(1)
 end)
 vim.keymap.set({ "i", "c" }, "<C-p>", function()
-  vim.fn["pum#map#insert_relative"](-1)
+  laser.insert_relative(-1)
 end)
 vim.keymap.set({ "i", "c" }, "<C-y>", function()
-  vim.fn["pum#map#confirm"]()
+  laser.confirm()
 end)
 vim.keymap.set({ "i", "c" }, "<C-e>", function()
-  vim.fn["pum#map#cancel"]()
+  laser.cancel()
 end)
 ```
+
+Each action returns `false` when the menu is closed or has nothing to act on,
+so a mapping can fall back to the key's default behavior. Use
+`laser.select_relative(delta)` to move the selection without inserting, and
+map `<LeftMouse>` to `laser.select_mouse()` to select with the mouse.
 
 For manual completion, replace the autocmd with a mapping:
 
@@ -81,20 +87,38 @@ vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
 
 The mappings above work in both Insert and command-line mode.
 
-### 📖 Documentation preview
+### 🪟 Menu
 
-Enable pum.vim's preview in Insert and command-line mode:
+Pass `menu` to adjust the built-in menu:
 
 ```lua
-vim.fn["pum#set_option"]({
-  preview = true,
-  preview_border = "single",
-  preview_width = 60,
-  preview_height = 20,
+require("laser").complete({
+  menu = {
+    max_height = 10, -- Rows shown at once; defaults to 'pumheight' or 10.
+    max_width = 80,
+    border = "none",
+    auto_select = false, -- Highlight the first candidate without inserting it.
+    direction = "auto", -- "auto", "below", or "above".
+    reversed = false, -- List candidates bottom-up when the menu opens above.
+  },
 })
 ```
 
-Map `pum#map#scroll_preview()` and `pum#map#toggle_preview()` to scroll or toggle the preview.
+The menu draws only the rows in view, so long candidate lists stay cheap to
+show.
+
+### 📖 Documentation preview
+
+Show documentation for the selected candidate beside the menu:
+
+```lua
+require("laser").complete({
+  menu = { preview = { border = "single", max_width = 60, max_height = 20 } },
+})
+```
+
+Use `preview = true` for the defaults. Map `laser.scroll_preview(delta)` and
+`laser.toggle_preview()` to scroll or toggle the preview.
 
 ### Commit characters
 
@@ -117,8 +141,6 @@ local filters = {
   { kind = "sorter", callback = filter.score_sorter() },
   { kind = "converter", callback = filter.highlight_converter() },
 }
-
-vim.fn["pum#set_option"]({ highlight_matches = "" })
 ```
 
 Then use them in the callback:

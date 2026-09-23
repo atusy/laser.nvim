@@ -548,6 +548,11 @@ function M.new(opts)
     end
   end
 
+  ---@return table[] candidates in menu order
+  function ui.items()
+    return items
+  end
+
   ---@return integer index of the selected candidate, or 0 for the typed input
   function ui.selected()
     return cursor

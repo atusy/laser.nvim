@@ -10,7 +10,8 @@ local M = {}
 ---@field clients? string[] names in display order; "*" expands remaining clients; nil selects all
 ---@field clientOptions? table<string, laser.ClientOpts> per-client options; "*" holds defaults
 ---@field enable_commit_characters? boolean accept selected candidates on LSP commit characters; default false
----@field ui? "pum"|laser.UI
+---@field menu? laser.MenuOpts appearance and behavior of the built-in menu
+---@field ui? "float"|"pum"|laser.UI
 ---@field language_id? string filetype of the scratch document in command-line mode
 
 ---@type laser.Engine?
@@ -74,7 +75,7 @@ local function make_ui(ui)
   if type(ui) == "table" then
     return ui
   end
-  ui = ui or "pum"
+  ui = ui or "float"
   if not adapters[ui] then
     adapters[ui] = require("laser.ui." .. ui).new({
       on_confirm = on_confirm,
@@ -114,6 +115,37 @@ local function make_ui(ui)
   end
   return adapters[ui]
 end
+
+---Run a menu action when the active menu supports it.
+---@param name string
+---@return fun(...): boolean
+local function action(name)
+  return function(...)
+    local ui = engine and engine.ui
+    if not ui or not ui[name] then
+      return false
+    end
+    return ui[name](...) == true
+  end
+end
+
+---Move the selection by `delta` and insert the selected candidate. Moving past
+---either end restores the typed input.
+M.insert_relative = action("insert_relative")
+---Move the selection by `delta` without inserting.
+M.select_relative = action("select_relative")
+---Accept the selected candidate; returns false when nothing was selected.
+M.confirm = action("confirm")
+---Restore the typed input and close the menu.
+M.cancel = action("cancel")
+---Select the candidate under the mouse; returns false outside the menu.
+M.select_mouse = action("select_mouse")
+---Scroll the documentation preview by `delta` lines.
+M.scroll_preview = action("scroll_preview")
+---Hide or show the documentation preview.
+M.toggle_preview = action("toggle_preview")
+---Whether the menu is open.
+M.visible = action("visible")
 
 ---@param opts laser.CompleteOpts
 ---@return laser.Doc?
@@ -174,6 +206,9 @@ function M.complete(opts)
   opts = opts or {}
   initialize()
   local ui = make_ui(opts.ui)
+  if ui.configure then
+    ui.configure(opts.menu)
+  end
   if ui.skip_text_change and ui.skip_text_change() then
     return
   end

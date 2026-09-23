@@ -13,51 +13,59 @@ local T = MiniTest.new_set({
         vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
           callback = function() require("laser").complete(OPTIONS) end,
         })
-        vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#insert_relative"](1) end)
+        LASER = require("laser")
+        vim.keymap.set("i", "<C-n>", function() LASER.insert_relative(1) end)
       ]])
     end,
     post_case = child.stop,
   },
 })
 
----pum.vim runs `silent! matchdelete()` while redrawing, which leaves E803 in
----v:errmsg and makes child.type_keys() raise; feed input directly instead.
 local function type_keys(keys)
   child.api.nvim_input(keys)
   child.lua([[vim.wait(20)]])
-  child.v.errmsg = ""
 end
 
-local function wait_pum_items(n)
+local function wait_menu_items(n)
   local ok = child.lua_get(string.format(
     [[
     vim.wait(1000, function()
-      local visible = vim.fn["pum#visible"]()
-      return (visible == true or visible == 1) and #vim.fn["pum#complete_info"]().items >= %d
+      local ui = require("laser")._engine().ui
+      return ui.visible() and #ui.items() >= %d
     end)
   ]],
     n
   ))
-  assert(ok, "pum did not show " .. n .. " items")
+  assert(ok, "the menu did not show " .. n .. " items")
 end
 
-local function pum_labels()
+local function menu_labels()
   return child.lua_get(
-    [[vim.tbl_map(function(i) return i.abbr end, vim.fn["pum#complete_info"]().items)]]
+    [[vim.tbl_map(function(i) return i.abbr end, require("laser")._engine().ui.items())]]
   )
 end
 
-T["typing in Insert mode opens pum.vim with the attached client's items"] = function()
+local function selected()
+  return child.lua_get([[require("laser")._engine().ui.selected()]])
+end
+
+local function selected_label()
+  return child.lua_get(
+    [[require("laser")._engine().ui.items()[require("laser")._engine().ui.selected()].abbr]]
+  )
+end
+
+T["typing in Insert mode opens the menu with the attached client's items"] = function()
   child.lua(
     [[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" }, { label = "qux" } } })]]
   )
   type_keys("ib")
-  wait_pum_items(2)
-  expect.equality(pum_labels(), { "bar", "baz" })
+  wait_menu_items(2)
+  expect.equality(menu_labels(), { "bar", "baz" })
 
   type_keys("az")
-  child.lua([[vim.wait(200, function() return #vim.fn["pum#complete_info"]().items == 1 end)]])
-  expect.equality(pum_labels(), { "baz" })
+  child.lua([[vim.wait(200, function() return #require("laser")._engine().ui.items() == 1 end)]])
+  expect.equality(menu_labels(), { "baz" })
 end
 
 T["commit characters opt in confirms the selected item before typing"] = function()
@@ -66,10 +74,10 @@ T["commit characters opt in confirms the selected item before typing"] = functio
     FAKE.start({ items = { { label = "bar", commitCharacters = { "." },
       command = { title = "test", command = "test.commit" } } } })
     vim.lsp.commands["test.commit"] = function() COMMITTED = true end
-    vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#select_relative"](1) end)
+    vim.keymap.set("i", "<C-n>", function() LASER.select_relative(1) end)
   ]])
   type_keys("ib")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(".")
   child.lua([[vim.wait(200)]])
@@ -91,7 +99,6 @@ for name, case in pairs({
     child.lua("CASE = " .. vim.inspect(case))
     child.lua([[
       OPTIONS = { enable_commit_characters = CASE.enabled }
-      vim.fn["pum#set_option"]({ auto_select = false })
       vim.bo.filetype = "lua"
       local c = FAKE.start({ items = {
         isIncomplete = false, itemDefaults = { commitCharacters = CASE.defaults },
@@ -108,10 +115,10 @@ for name, case in pairs({
       else
         c.server_capabilities.completionProvider.allCommitCharacters = { "." }
       end
-      vim.keymap.set("i", "<C-n>", function() vim.fn["pum#map#select_relative"](1) end)
+      vim.keymap.set("i", "<C-n>", function() LASER.select_relative(1) end)
     ]])
     type_keys("ib")
-    wait_pum_items(1)
+    wait_menu_items(1)
     if not case.no_selection then
       type_keys("<C-n>")
     end
@@ -128,7 +135,7 @@ T["commit character is inserted after snippet expansion"] = function()
       insertTextFormat = 2, commitCharacters = { "." } } } })
   ]])
   type_keys("ib")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(".")
   child.lua([[vim.wait(200)]])
@@ -142,7 +149,7 @@ T["commit character preserves queued input after snippet expansion"] = function(
       insertTextFormat = 2, commitCharacters = { "." } } } })
   ]])
   type_keys("ib")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(".x")
   child.lua([[vim.wait(200)]])
@@ -161,10 +168,10 @@ T["commit characters confirm command-line candidates"] = function()
         FAKE.start({ items = { { label = "echo", commitCharacters = { " " } } } }, ev.buf)
       end,
     })
-    vim.keymap.set("c", "<C-n>", function() vim.fn["pum#map#select_relative"](1) end)
+    vim.keymap.set("c", "<C-n>", function() LASER.select_relative(1) end)
   ]])
   type_keys(":e")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(" ")
   child.lua([[vim.wait(100)]])
@@ -176,9 +183,9 @@ T["confirming a snippet item expands it in the buffer"] = function()
     name = "one",
     items = { { label = "bar", insertText = "bar($1)$0", insertTextFormat = 2 } },
   })]])
-  child.lua([[vim.keymap.set("i", "<C-y>", function() vim.fn["pum#map#confirm"]() end)]])
+  child.lua([[vim.keymap.set("i", "<C-y>", function() LASER.confirm() end)]])
   type_keys("ib")
-  wait_pum_items(1)
+  wait_menu_items(1)
 
   type_keys("<C-n>")
   child.lua([[vim.wait(50)]])
@@ -203,21 +210,21 @@ T["the command line completes through the scratch document"] = function()
     })
   ]])
   type_keys(":e")
-  wait_pum_items(2)
-  expect.equality(pum_labels(), { "echo", "edit" })
+  wait_menu_items(2)
+  expect.equality(menu_labels(), { "echo", "edit" })
   expect.equality(child.api.nvim_get_mode().mode, "c")
 end
 
 T["moving the selection does not reopen the menu"] = function()
   child.lua([[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" } } })]])
   type_keys("ib")
-  wait_pum_items(2)
+  wait_menu_items(2)
 
   type_keys("<C-n>")
   child.lua([[vim.wait(100)]])
 
   expect.equality(child.api.nvim_get_current_line(), "bar")
-  expect.equality(child.lua_get([[vim.fn["pum#complete_info"]().selected]]), 0)
+  expect.equality(selected(), 1)
 end
 
 local function completion_requests()
@@ -229,19 +236,19 @@ end
 T["typing reuses a complete list"] = function()
   child.lua([[FAKE.start({ items = { { label = "bar" }, { label = "baz" } } })]])
   type_keys("ib")
-  wait_pum_items(2)
+  wait_menu_items(2)
   local count = #completion_requests()
   type_keys("a")
-  wait_pum_items(2)
+  wait_menu_items(2)
   expect.equality(#completion_requests(), count)
 end
 
 T["trigger characters request a new list with trigger context"] = function()
   child.lua([[FAKE.start({ trigger_chars = { "." }, items = { { label = "bar" } } })]])
   type_keys("ib")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys(".")
-  wait_pum_items(1)
+  wait_menu_items(1)
   local requests = completion_requests()
   expect.equality(requests[#requests].params.context, {
     triggerKind = 2,
@@ -258,11 +265,11 @@ T["an empty client list closes completion and omitted clients restore all"] = fu
     vim.keymap.set("i", "<F6>", function() require("laser").complete() end)
   ]])
   type_keys("ib")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys("<F5>")
   expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
   type_keys("<F6>")
-  wait_pum_items(1)
+  wait_menu_items(1)
 end
 
 T["leaving Insert mode cancels delayed completion"] = function()
@@ -286,7 +293,7 @@ T["leaving the command line closes its session"] = function()
     })
   ]])
   type_keys(":e")
-  wait_pum_items(1)
+  wait_menu_items(1)
   type_keys("<Esc>")
   expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
 end
@@ -305,10 +312,10 @@ T["the public pattern helper controls refresh from an autocmd"] = function()
     end })
   ]])
   type_keys("ib")
-  wait_pum_items(2)
+  wait_menu_items(2)
   local initial = child.lua_get("CALLS")
   type_keys("a")
-  wait_pum_items(2)
+  wait_menu_items(2)
   expect.equality(child.lua_get("CALLS"), initial + 1)
   expect.equality(child.lua_get("SEEN[#SEEN].before_cursor"), "ba")
   expect.equality(child.lua_get("SEEN[#SEEN].is_incomplete"), false)
@@ -320,10 +327,10 @@ T["detaching a client removes its candidates without discarding the other client
     TWO = FAKE.start({ name = "two", items = { { label = "baz" } } })
   ]])
   type_keys("ib")
-  wait_pum_items(2)
+  wait_menu_items(2)
   child.lua([[vim.lsp.buf_detach_client(0, ONE.id)]])
   child.lua([[vim.wait(100)]])
-  expect.equality(pum_labels(), { "baz" })
+  expect.equality(menu_labels(), { "baz" })
   expect.equality(
     child.lua_get([[require("laser")._engine().session.results[ONE.id] == nil]]),
     true
@@ -349,10 +356,10 @@ T["command-line refresh receives the scratch document and current input"] = func
     })
   ]])
   type_keys(":e")
-  wait_pum_items(1)
+  wait_menu_items(1)
   local count = #completion_requests()
   type_keys("c")
-  wait_pum_items(1)
+  wait_menu_items(1)
   expect.equality(#completion_requests(), count + 1)
   expect.equality(child.lua_get("CTX.mode"), "c")
   expect.equality(child.lua_get("CTX.before_cursor"), "ec")
@@ -373,10 +380,10 @@ T["mixed edit starts preserve the prefix when confirming a snippet"] = function(
         replace = { start = { line = 0, character = 2 }, ["end"] = { line = 0, character = 4 } },
       } },
     } })
-    vim.keymap.set("i", "<C-y>", function() vim.fn["pum#map#confirm"]() end)
+    vim.keymap.set("i", "<C-y>", function() LASER.confirm() end)
   ]])
   type_keys("Aa")
-  wait_pum_items(2)
+  wait_menu_items(2)
   expect.equality(child.lua_get([[require("laser")._engine().session.startcol]]), 0)
   type_keys("<C-n><C-n>")
   type_keys("<C-y>")
@@ -399,11 +406,11 @@ T["command-line textEdit sets the menu position and accepted text"] = function()
         } } }
       end }, ev.buf) end,
     })
-    vim.keymap.set("c", "<C-n>", function() vim.fn["pum#map#insert_relative"](1) end)
-    vim.keymap.set("c", "<C-y>", function() vim.fn["pum#map#confirm"]() end)
+    vim.keymap.set("c", "<C-n>", function() LASER.insert_relative(1) end)
+    vim.keymap.set("c", "<C-y>", function() LASER.confirm() end)
   ]])
   type_keys(":foo.ba")
-  wait_pum_items(1)
+  wait_menu_items(1)
   expect.equality(child.lua_get([[require("laser")._engine().session.startcol]]), 0)
   type_keys("<C-n><C-y>")
   expect.equality(child.fn.getcmdline(), "foo.bar")
@@ -411,24 +418,26 @@ end
 
 T["partial updates preserve the inserted selection and cancellation input"] = function()
   child.lua([[
-    OPTIONS = { clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } } }
-    vim.fn['pum#set_option']({ max_height = 2, auto_select = false })
+    OPTIONS = {
+      clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } },
+      menu = { max_height = 2 },
+    }
     FAKE.start({ name = 'stream', manual = true })
     SERVER = FAKE.last
-    vim.keymap.set('i', '<C-e>', function() vim.fn['pum#map#cancel']() end)
+    vim.keymap.set('i', '<C-e>', function() LASER.cancel() end)
   ]])
   type_keys("ib")
   child.lua([[
     TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
     SERVER.progress(TOKEN, { { label = 'bb' }, { label = 'bc' }, { label = 'bz' } })
   ]])
-  wait_pum_items(3)
+  wait_menu_items(3)
   type_keys("<C-n>")
   expect.equality(child.api.nvim_get_current_line(), "bb")
   child.lua([[SERVER.progress(TOKEN, { { label = 'ba' } })]])
-  wait_pum_items(4)
-  expect.equality(pum_labels(), { "bb", "bc", "ba", "bz" })
-  expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected]]), 0)
+  wait_menu_items(4)
+  expect.equality(menu_labels(), { "bb", "bc", "ba", "bz" })
+  expect.equality(selected(), 1)
   expect.equality(child.api.nvim_get_current_line(), "bb")
   type_keys("<C-e>")
   expect.equality(child.api.nvim_get_current_line(), "b")
@@ -438,11 +447,13 @@ end
 
 T["scrolling expands the frozen prefix and returning does not shrink it"] = function()
   child.lua([[
-    OPTIONS = { clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } } }
-    vim.fn['pum#set_option']({ max_height = 3, auto_select = false })
+    OPTIONS = {
+      clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } },
+      menu = { max_height = 3 },
+    }
     FAKE.start({ manual = true })
     SERVER = FAKE.last
-    vim.keymap.set('i', '<C-p>', function() vim.fn['pum#map#insert_relative'](-1) end)
+    vim.keymap.set('i', '<C-p>', function() LASER.insert_relative(-1) end)
   ]])
   type_keys("ib")
   child.lua([[
@@ -451,27 +462,32 @@ T["scrolling expands the frozen prefix and returning does not shrink it"] = func
     for i = 1, 9 do items[i] = { label = 'b' .. i } end
     SERVER.progress(TOKEN, items)
   ]])
-  wait_pum_items(9)
+  wait_menu_items(9)
   for _ = 1, 5 do
     type_keys("<C-n>")
   end
   local before = child.lua_get([[{
     frozen = require('laser')._engine().ui.frozen_count(),
-    top = vim.fn.line('w0', vim.fn['pum#_get']().id),
+    rows = vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(require('laser')._engine().ui.win()), 0, -1, false),
   }]])
   expect.equality(before.frozen >= 5 and before.frozen < 9, true)
   child.lua([[SERVER.progress(TOKEN, { { label = 'b0' } })]])
-  wait_pum_items(10)
-  expect.equality(child.lua_get([[vim.fn.line('w0', vim.fn['pum#_get']().id)]]), before.top)
+  wait_menu_items(10)
+  expect.equality(
+    child.lua_get(
+      [[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(require('laser')._engine().ui.win()), 0, -1, false)]]
+    ),
+    before.rows
+  )
   expect.equality(child.api.nvim_get_current_line(), "b5")
-  expect.equality(pum_labels()[before.frozen + 1], "b0")
+  expect.equality(menu_labels()[before.frozen + 1], "b0")
   for _ = 1, 5 do
     type_keys("<C-p>")
   end
   child.lua([[SERVER.progress(TOKEN, { { label = 'b00' } })]])
-  wait_pum_items(11)
-  expect.equality(pum_labels()[1], "b1")
-  expect.equality(pum_labels()[before.frozen + 1], "b0")
+  wait_menu_items(11)
+  expect.equality(menu_labels()[1], "b1")
+  expect.equality(menu_labels()[before.frozen + 1], "b0")
 end
 
 T["reversed menus preserve selection when candidates are prepended visually"] = function()
@@ -479,8 +495,7 @@ T["reversed menus preserve selection when candidates are prepended visually"] = 
     OPTIONS = { clientOptions = { ['*'] = { sorter = function(a, b) return a.abbr < b.abbr end } } }
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { '', '', '', '', '', '', '', '', '', '' })
     vim.api.nvim_win_set_cursor(0, { 10, 0 })
-    vim.fn['pum#set_option']({ max_height = 2, auto_select = false, direction = 'above', reversed = true })
-    vim.keymap.set('i', '<C-n>', function() vim.fn['pum#map#insert_relative'](1, 'loop') end)
+    OPTIONS.menu = { max_height = 2, direction = 'above', reversed = true }
     FAKE.start({ manual = true })
     SERVER = FAKE.last
   ]])
@@ -489,20 +504,27 @@ T["reversed menus preserve selection when candidates are prepended visually"] = 
     TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
     SERVER.progress(TOKEN, { {label='bb'}, {label='bc'}, {label='bz'} })
   ]])
-  wait_pum_items(3)
+  wait_menu_items(3)
   type_keys("<C-n>")
   child.lua([[SERVER.progress(TOKEN, { { label = 'ba' } })]])
-  wait_pum_items(4)
+  wait_menu_items(4)
   expect.equality(child.api.nvim_get_current_line(), "bb")
-  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
-  expect.equality(pum_labels(), { "bz", "ba", "bc", "bb" })
+  expect.equality(selected_label(), "bb")
+  expect.equality(menu_labels(), { "bb", "bc", "ba", "bz" })
+  expect.equality(
+    child.lua_get(
+      [[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(require('laser')._engine().ui.win()), 0, -1, false)]]
+    ),
+    { "bc ", "bb " }
+  )
 end
 
 T["command-line partial updates keep the inserted selection"] = function()
   child.lua([[
-    vim.fn['pum#set_option']({ max_height = 1, auto_select = false })
     vim.api.nvim_create_autocmd({ 'CmdlineEnter', 'CmdlineChanged' }, {
-      pattern = ':', callback = function() require('laser').complete({ language_id = 'stream-cmd' }) end,
+      pattern = ':', callback = function()
+        require('laser').complete({ language_id = 'stream-cmd', menu = { max_height = 1 } })
+      end,
     })
     vim.api.nvim_create_autocmd('FileType', {
       pattern = 'stream-cmd', callback = function(ev)
@@ -510,24 +532,24 @@ T["command-line partial updates keep the inserted selection"] = function()
         SERVER = FAKE.last
       end,
     })
-    vim.keymap.set('c', '<C-n>', function() vim.fn['pum#map#insert_relative'](1) end)
+    vim.keymap.set('c', '<C-n>', function() LASER.insert_relative(1) end)
   ]])
   type_keys(":e")
   child.lua([[
     TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
     SERVER.progress(TOKEN, { {label='echo'}, {label='edit'} })
   ]])
-  wait_pum_items(2)
+  wait_menu_items(2)
   type_keys("<C-n>")
   child.lua([[SERVER.progress(TOKEN, { {label='earlier'} })]])
-  wait_pum_items(3)
+  wait_menu_items(3)
   expect.equality(child.fn.getcmdline(), "echo")
-  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "echo")
+  expect.equality(selected_label(), "echo")
 end
 
 T["automatic highlighting does not freeze an untouched menu"] = function()
   child.lua([[
-    vim.fn['pum#set_option']({ auto_select = true })
+    OPTIONS = { menu = { auto_select = true } }
     FAKE.start({ manual = true })
     SERVER = FAKE.last
   ]])
@@ -536,18 +558,18 @@ T["automatic highlighting does not freeze an untouched menu"] = function()
     TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
     SERVER.progress(TOKEN, { {label='bb'} })
   ]])
-  wait_pum_items(1)
+  wait_menu_items(1)
   child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
-  wait_pum_items(2)
-  expect.equality(pum_labels(), { "bb", "ba" })
+  wait_menu_items(2)
+  expect.equality(menu_labels(), { "bb", "ba" })
   expect.equality(child.api.nvim_get_current_line(), "b")
 end
 
 T["mouse selection is retained when a partial batch arrives"] = function()
   child.o.mouse = "a"
   child.lua([[
-    vim.fn['pum#set_option']({ auto_select = false, max_height = 2 })
-    vim.keymap.set('i', '<LeftMouse>', function() vim.fn['pum#map#select_mouse']() end)
+    OPTIONS = { menu = { max_height = 2 } }
+    vim.keymap.set('i', '<LeftMouse>', function() LASER.select_mouse() end)
     FAKE.start({ manual = true })
     SERVER = FAKE.last
   ]])
@@ -556,22 +578,19 @@ T["mouse selection is retained when a partial batch arrives"] = function()
     TOKEN = SERVER.requests[#SERVER.requests].params.partialResultToken
     SERVER.progress(TOKEN, { {label='bb'}, {label='bc'}, {label='bz'} })
   ]])
-  wait_pum_items(3)
+  wait_menu_items(3)
   child.cmd("redraw")
-  local pos = child.lua_get([[vim.fn['pum#get_pos']()]])
-  child.api.nvim_input_mouse("left", "press", "", 0, pos.row, pos.col)
+  local pos = child.lua_get([[vim.fn.win_screenpos(require('laser')._engine().ui.win())]])
+  child.api.nvim_input_mouse("left", "press", "", 0, pos[1] - 1, pos[2] - 1)
   child.lua([[vim.wait(20)]])
-  expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected >= 0]]), true)
-  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
+  expect.equality(selected_label(), "bb")
   child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
-  wait_pum_items(4)
-  expect.equality(child.lua_get([[vim.fn['pum#complete_info']().selected >= 0]]), true)
-  expect.equality(child.lua_get([[vim.fn['pum#current_item']().abbr]]), "bb")
+  wait_menu_items(4)
+  expect.equality(selected_label(), "bb")
 end
 
 T["per-call client order rearranges cached candidates"] = function()
   child.lua([[
-    vim.fn["pum#set_option"]({ auto_select = false })
     FAKE.start({ name = "one", items = { { label = "bar" } } })
     FIRST = FAKE.last
     FAKE.start({ name = "two", items = { { label = "baz" } } })
@@ -582,10 +601,10 @@ T["per-call client order rearranges cached candidates"] = function()
     end)
   ]])
   type_keys("ib")
-  wait_pum_items(2)
-  expect.equality(pum_labels(), { "baz", "bar" })
+  wait_menu_items(2)
+  expect.equality(menu_labels(), { "baz", "bar" })
   type_keys("<F5>")
-  expect.equality(pum_labels(), { "bar", "baz" })
+  expect.equality(menu_labels(), { "bar", "baz" })
   expect.equality(
     child.lua_get("{ #FIRST.requests, #FAKE.last.requests }"),
     child.lua_get("BEFORE")
