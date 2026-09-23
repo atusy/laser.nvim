@@ -271,4 +271,12 @@ T["a failing confirmation still types the commit character and keeps input flowi
   expect.equality(child.api.nvim_get_mode().mode, "n")
 end
 
+T["a confirmation without edits does not skip the next completion"] = function()
+  -- Completion consumes the menu's own change on each text change.
+  child.lua([[vim.api.nvim_create_autocmd("TextChangedI", { callback = UI.skip_text_change })]])
+  type_keys("ib<F2><C-n><C-y><Esc>a")
+  expect.equality(line(), "bar")
+  expect.equality(child.lua_get("UI.skip_text_change()"), false)
+end
+
 return T

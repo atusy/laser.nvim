@@ -150,6 +150,12 @@ function M.new(opts)
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
   local dismiss, redraw
+  -- Typeahead can leave the mode before the menu's own change is observed.
+  vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave" }, {
+    callback = function()
+      expected = nil
+    end,
+  })
 
   function ui.configure(options)
     menu = options or {}
@@ -716,10 +722,15 @@ function M.new(opts)
     local function done()
       local ok, err = true, nil
       if opts.on_confirm then
+        local before = text_state(mode)
         ok, err = pcall(opts.on_confirm, item)
         -- Snippet expansion and additional edits are part of the confirmation,
-        -- not input that should start a new completion.
-        expected = { mode = mode, state = text_state(mode) }
+        -- not input that should start a new completion. Without such edits no
+        -- change is coming, and a recorded state would swallow a later one.
+        local state = text_state(mode)
+        if not vim.deep_equal(before, state) then
+          expected = { mode = mode, state = state }
+        end
       end
       if after then
         after()
