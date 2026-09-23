@@ -333,4 +333,25 @@ T["score_sorter invokes the custom tiebreak only for equal scores"] = function()
   expect.equality(called, true)
 end
 
+T["decorations added by converters do not accumulate across renders"] = function()
+  local input = { cand("a") }
+  input[1].highlights = { { name = "server", col = 1 } }
+  local original = vim.deepcopy(input)
+  local opts = {
+    filters = {
+      {
+        kind = "converter",
+        callback = function(candidate)
+          candidate.highlights[1].col = 9
+          table.insert(candidate.highlights, { name = "mine" })
+          return candidate
+        end,
+      },
+    },
+  }
+  filter.apply(input, "", opts)
+  expect.equality(#filter.apply(input, "", opts)[1].highlights, 2)
+  expect.equality(input, original)
+end
+
 return T

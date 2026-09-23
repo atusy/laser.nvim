@@ -9,6 +9,9 @@ local M = {}
 ---@alias laser.Matcher
 ---| fun(input: string, candidate: laser.Candidate): false, nil
 ---| fun(input: string, candidate: laser.Candidate): true, laser.MatchInfo
+---A converter owns the candidate, its user_data.laser, the LSP item's top-level
+---fields and highlights for this render. Replace nested item tables instead of
+---mutating them; they are shared with the cache.
 ---@alias laser.Converter fun(candidate: laser.Candidate, input: string): laser.Candidate
 ---@alias laser.LegacyMatcher fun(prefix: string, candidate: table): number?
 ---@alias laser.Sorter fun(a: table, b: table): boolean
@@ -117,6 +120,34 @@ end
 ---Compatibility name for the default score sorter.
 M.by_score = M.score_sorter()
 
+-- vim.tbl_extend validates its arguments, which is costly per candidate.
+---@param t table
+---@return table
+local function shallow_copy(t)
+  local copy = {}
+  for k, v in pairs(t) do
+    copy[k] = v
+  end
+  return copy
+end
+
+---Copy the parts filters may modify. Deep-copying whole LSP items (docs,
+---edits, data) dominated filtering time on large lists; nested item fields
+---are shared, so converters must replace them rather than mutate them.
+---@param candidate table
+---@return table
+local function own(candidate)
+  local copy = shallow_copy(candidate)
+  copy.user_data = shallow_copy(candidate.user_data)
+  local data = shallow_copy(candidate.user_data.laser)
+  copy.user_data.laser = data
+  data.item = shallow_copy(data.item)
+  if candidate.highlights then
+    copy.highlights = vim.deepcopy(candidate.highlights)
+  end
+  return copy
+end
+
 ---@param candidates table[]
 ---@param prefix string|fun(candidate: table): string
 ---@param opts laser.FilterOpts
@@ -141,7 +172,7 @@ function M.apply(candidates, prefix, opts)
     }
   end
   -- Each render starts from server candidates, never from a previous conversion.
-  local current = vim.deepcopy(candidates)
+  local current = vim.tbl_map(own, candidates)
   for _, filter in ipairs(filters) do
     if filter.kind == "sorter" then
       local ordered = {}
