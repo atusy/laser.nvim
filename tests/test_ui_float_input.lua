@@ -14,7 +14,9 @@ local T = MiniTest.new_set({
         end
         ITEMS = { candidate("bar"), candidate("baz") }
         CONFIRMED = {}
+        CLOSED = 0
         UI = require("laser.ui.float").new({
+          on_close = function() CLOSED = CLOSED + 1 end,
           on_confirm = function(item)
             table.insert(CONFIRMED, { word = item.word, line = vim.api.nvim_get_current_line() })
           end,
@@ -113,6 +115,33 @@ T["dot-repeat inserts the accepted candidate again"] = function()
   type_keys("ib<F2><C-n><Esc>")
   type_keys("j.")
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "bar", "bar" })
+end
+
+T["moving the cursor without editing closes the menu, but its own insertion does not"] = function()
+  type_keys("ib<F2><C-n>")
+  expect.equality(child.lua_get("UI.visible()"), true)
+  type_keys("<Left>")
+  expect.equality(child.lua_get("UI.visible()"), false)
+  expect.equality(child.lua_get("CLOSED"), 1)
+end
+
+T["resizing the editor closes the menu"] = function()
+  type_keys("ib<F2>")
+  child.o.columns = child.o.columns - 1
+  child.lua([[vim.wait(20)]])
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
+T["clicking a candidate selects it"] = function()
+  child.o.mouse = "a"
+  child.lua([[vim.keymap.set("i", "<LeftMouse>", function() UI.select_mouse() end)]])
+  type_keys("ib<F2>")
+  child.cmd("redraw")
+  local pos = child.lua_get([[vim.fn.win_screenpos(UI.win())]])
+  child.api.nvim_input_mouse("left", "press", "", 0, pos[1], pos[2] - 1)
+  child.lua([[vim.wait(20)]])
+  expect.equality(child.lua_get("UI.selected()"), 2)
+  expect.equality(line(), "b")
 end
 
 return T

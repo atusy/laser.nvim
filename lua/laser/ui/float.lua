@@ -139,6 +139,9 @@ function M.new(opts)
   local expected -- text state right after the menu's own edit
   local browsing, frozen, initial_cursor = false, 0, 0
   local layout = { height = 0, above = false, reversed = false, scrollbar = false }
+  local shown -- text state the menu was drawn for
+  local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
+  local dismiss
 
   function ui.configure(options)
     menu = options or {}
@@ -300,14 +303,47 @@ function M.new(opts)
     end
   end
 
+  ---Close when the user moves away from the completed text without editing it.
+  local function watch()
+    vim.api.nvim_clear_autocmds({ group = group })
+    vim.api.nvim_create_autocmd("CursorMovedI", {
+      group = group,
+      callback = function()
+        local state = text_state("i")
+        if expected and vim.deep_equal(state, expected.state) then
+          return
+        end
+        if state.row ~= shown.row or (state.line == shown.line and state.col ~= shown.col) then
+          dismiss()
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd("WinScrolled", {
+      group = group,
+      callback = function()
+        if vim.v.event[tostring(vim.api.nvim_get_current_win())] then
+          dismiss()
+        end
+      end,
+    })
+    vim.api.nvim_create_autocmd({ "VimResized", "WinLeave", "CmdwinEnter" }, {
+      group = group,
+      callback = function()
+        dismiss()
+      end,
+    })
+  end
+
   local function show(col, new_items, new_mode)
     startcol, mode, items = col, new_mode, new_items
+    shown = text_state(mode)
     widths = measure(items, menu.max_width or 80)
     compute_layout()
     top = math.max(1, math.min(top, #items - height() + 1))
     ensure_buf()
     place()
     render()
+    watch()
   end
 
   ---@param col integer 1-based
@@ -351,6 +387,7 @@ function M.new(opts)
   end
 
   function ui.close()
+    vim.api.nvim_clear_autocmds({ group = group })
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
     end
@@ -358,7 +395,7 @@ function M.new(opts)
   end
 
   -- Closing on the user's behalf also stops responses that would reopen it.
-  local function dismiss()
+  function dismiss()
     ui.close()
     if opts.on_close then
       opts.on_close()
@@ -389,6 +426,7 @@ function M.new(opts)
       mode = mode,
       state = vim.tbl_extend("force", state, { line = line, col = startcol - 1 + #word }),
     }
+    shown = expected.state
     inserted = word
     if mode == "c" then
       vim.fn.setcmdline(line, startcol + #word)
@@ -444,6 +482,25 @@ function M.new(opts)
     end
     select(delta)
     insert(cursor > 0 and items[cursor].word or typed)
+    return true
+  end
+
+  ---Select the candidate under the mouse pointer.
+  ---@return boolean handled
+  function ui.select_mouse()
+    if not ui.visible() then
+      return false
+    end
+    -- getmousepos() reports the window below a non-focusable float.
+    local pos = vim.fn.getmousepos()
+    local origin = vim.fn.win_screenpos(win)
+    local offset = border_rows() / 2
+    local row = pos.screenrow - origin[1] + 1 - offset
+    local col = pos.screencol - origin[2] + 1 - offset
+    if row < 1 or row > height() or col < 1 or col > vim.api.nvim_win_get_width(win) then
+      return false
+    end
+    select(index_at(row) - cursor)
     return true
   end
 
