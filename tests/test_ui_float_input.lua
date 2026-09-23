@@ -551,4 +551,20 @@ T["insertion can replace automatic indentation"] = function()
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "    x", "bar" })
 end
 
+T["InsertCharPre hooks do not transform inserted candidates"] = function()
+  child.lua([[
+    ITEMS = { { word = "bar(", abbr = "bar(", user_data = { laser = { client_id = 1, item = { label = "bar(" } } } } }
+    -- Like an auto-pairs plugin.
+    vim.api.nvim_create_autocmd("InsertCharPre", {
+      callback = function() if vim.v.char == "(" then vim.v.char = "()" end end,
+    })
+  ]])
+  type_keys("ib<F2><C-n>")
+  expect.equality(line(), "bar(")
+  expect.equality(child.o.eventignore, "")
+  -- Typing afterwards still reaches the hook.
+  type_keys("<Esc>A(")
+  expect.equality(line(), "bar(()")
+end
+
 return T

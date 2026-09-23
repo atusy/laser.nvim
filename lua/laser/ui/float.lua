@@ -849,8 +849,16 @@ function M.new(opts)
   local saved_options -- options to restore once fed insertion keys are done
   -- Options that change what one typed <BS> or character does, with the values
   -- that make fed keys behave like deleting and typing plain characters.
+  -- A function derives the value from the user's.
   local RELAXED = {
-    global = { backspace = "indent,start", smarttab = false },
+    global = {
+      backspace = "indent,start",
+      smarttab = false,
+      -- Hooks such as auto-pairs would rewrite the candidate's characters.
+      eventignore = function(value)
+        return value == "" and "InsertCharPre" or value .. ",InsertCharPre"
+      end,
+    },
     buffer = { cinkeys = "", indentkeys = "", softtabstop = 0, varsofttabstop = "" },
   }
 
@@ -870,7 +878,8 @@ function M.new(opts)
   end
 
   ---Let backspaces remove exactly one character each, including text typed
-  ---before this insertion, and keep typed candidates from reindenting.
+  ---before this insertion, and keep typed candidates from reindenting or
+  ---being rewritten.
   local function relax_options()
     local target = vim.api.nvim_get_current_buf()
     if not saved_options then
@@ -888,6 +897,9 @@ function M.new(opts)
       })
     end
     for name, value in pairs(RELAXED.global) do
+      if type(value) == "function" then
+        value = value(saved_options.global[name])
+      end
       vim.o[name] = value
     end
     for name, value in pairs(RELAXED.buffer) do
