@@ -793,7 +793,17 @@ function M.new(opts)
 
   ---@param delta integer
   local function select(delta)
-    cursor = (cursor + delta) % (#items + 1)
+    local target = cursor + delta
+    if target >= 1 and target <= #items then
+      cursor = target
+    elseif cursor ~= 0 then
+      -- Moving past either end returns to the typed input, as in pum.vim.
+      cursor = 0
+    else
+      -- The typed input sits past the last candidate, so moving on from it
+      -- counts from there and stops at the first or last candidate.
+      cursor = delta > 0 and #items or math.max(#items + 1 + delta, 1)
+    end
     local rows = height()
     if cursor > 0 and cursor < top then
       top = cursor
@@ -808,7 +818,7 @@ function M.new(opts)
   end
 
   ---Move the selection without editing text. Moving past either end selects
-  ---the typed input.
+  ---the typed input, which sits past the last candidate for further moves.
   ---@param delta integer
   ---@return boolean handled
   function ui.select_relative(delta)

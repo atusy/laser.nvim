@@ -495,4 +495,22 @@ T["resolved documentation is reused until the menu closes"] = function()
   expect.equality(#client.callbacks, 3)
 end
 
+T["moves past either end return to the typed input instead of wrapping"] = function()
+  set_line("b")
+  local ui = new()
+  ui.open(1, labels(5), "i")
+  ui.select_relative(3)
+  expect.equality(ui.selected(), 3)
+  ui.select_relative(10)
+  expect.equality(ui.selected(), 0)
+  ui.select_relative(10)
+  expect.equality(ui.selected(), 5)
+  ui.select_relative(-10)
+  expect.equality(ui.selected(), 0)
+  ui.select_relative(-1)
+  expect.equality(ui.selected(), 5)
+  ui.select_relative(1)
+  expect.equality(ui.selected(), 0)
+end
+
 return T
