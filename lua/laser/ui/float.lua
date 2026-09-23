@@ -157,7 +157,6 @@ local function measure(items, limit, cells)
   return widths
 end
 
----@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?, commit_characters?: fun(candidate: table): string[] }
 ---@class laser.FloatUI: laser.UI
 ---@field configure fun(options?: laser.MenuOpts)
 ---@field skip_text_change fun(): boolean
@@ -172,6 +171,7 @@ end
 ---@field scroll_preview fun(delta: integer): boolean
 ---@field toggle_preview fun(): boolean
 
+---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?, commit_characters?: fun(candidate: table): string[] }
 ---@return laser.FloatUI
 function M.new(opts)
   opts = opts or {}
