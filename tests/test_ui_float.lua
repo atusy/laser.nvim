@@ -880,4 +880,15 @@ T["the preview is tall enough for wrapped lines"] = function()
   expect.equality(vim.api.nvim_win_get_height(ui.preview_win()), 3)
 end
 
+T["the menu fits the screen width"] = function()
+  vim.o.columns = 40
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 1 })
+  ui.open(1, { candidate(string.rep("x", 70)), candidate("b2") }, "i")
+  expect.equality(vim.api.nvim_win_get_width(ui.win()), 40)
+  -- The scrollbar is the last visible column.
+  expect.equality(#rows(ui)[1], 40)
+end
+
 return T

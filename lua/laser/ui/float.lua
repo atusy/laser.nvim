@@ -752,8 +752,11 @@ function M.new(opts)
   ---Fit the menu to the room around the cursor and draw it there.
   function layout_and_draw()
     compute_layout()
-    -- The scrollbar takes a column of the width available to the fields.
-    widths = measure(items, (menu.max_width or 80) - (layout.scrollbar and 1 or 0), cells)
+    -- The fields share the screen width, within max_width, with the border
+    -- and the scrollbar.
+    local sides = border_sides(menu.border)
+    local limit = math.min(menu.max_width or 80, vim.o.columns - sides.left - sides.right)
+    widths = measure(items, limit - (layout.scrollbar and 1 or 0), cells)
     top = math.max(1, math.min(top, #items - height() + 1))
     -- A shorter menu keeps the selection in view.
     if cursor > 0 and cursor >= top + height() then
