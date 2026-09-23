@@ -414,4 +414,23 @@ T["the preview follows a menu widened by an update"] = function()
   expect.equality(preview.col, menu.col + menu.width)
 end
 
+T["closing the menu window from outside tears the menu down"] = function()
+  set_line("b")
+  local client = fake_client()
+  local ui = new({
+    preview_context = function()
+      return { client = client, bufnr = 0 }
+    end,
+  })
+  ui.configure({ preview = true })
+  ui.open(1, { documented("foo", "docs") }, "i")
+  ui.select_relative(1)
+  local preview = ui.preview_win()
+  vim.api.nvim_win_close(ui.win(), true)
+  expect.equality(vim.api.nvim_win_is_valid(preview), false)
+  expect.equality(client.cancelled, { 1 })
+  client.callbacks[1](nil, { documentation = "late" })
+  expect.equality(ui.preview_win(), nil)
+end
+
 return T

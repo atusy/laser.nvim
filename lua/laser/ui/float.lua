@@ -403,6 +403,9 @@ function M.new(opts)
   ---@param text string
   ---@param filetype string
   local function draw_preview(text, filetype)
+    if not ui.visible() then
+      return
+    end
     if text == "" then
       hide_preview()
       return
@@ -535,6 +538,15 @@ function M.new(opts)
         else
           dismiss()
         end
+      end,
+    })
+    -- Another command or plugin closed the menu; release what it owns.
+    vim.api.nvim_create_autocmd("WinClosed", {
+      group = group,
+      pattern = tostring(win),
+      callback = function()
+        win = nil
+        dismiss()
       end,
     })
     vim.api.nvim_create_autocmd({ "VimResized", "WinLeave", "CmdwinEnter" }, {
