@@ -513,6 +513,7 @@ T["single steps cycle through the typed input and larger moves stop at the ends"
     ui.select(delta, { insert = false })
     return ui.selected()
   end
+  expect.equality(ui.select(0), false)
   expect.equality(move(3), 3)
   expect.equality(move(10), 5)
   expect.equality(move(1), 0)

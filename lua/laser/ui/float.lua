@@ -889,9 +889,7 @@ function M.new(opts)
 
   ---@param delta integer
   local function move(delta)
-    if delta == 0 then
-      return
-    elseif delta == 1 or delta == -1 then
+    if delta == 1 or delta == -1 then
       -- Stepping cycles through the typed input, so it can be reached again.
       cursor = (cursor + delta) % (#items + 1)
     else
@@ -924,7 +922,7 @@ function M.new(opts)
   ---@param opts? { insert?: boolean }
   ---@return boolean handled
   function ui.select(delta, opts)
-    if not ui.visible() then
+    if delta == 0 or not ui.visible() then
       return false
     end
     move(delta)
