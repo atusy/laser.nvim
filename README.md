@@ -39,10 +39,28 @@ vim.keymap.set({ "i", "c" }, "<C-e>", function()
 end)
 ```
 
-Each action returns `false` when the menu is closed or has nothing to act on,
-so a mapping can fall back to the key's default behavior. Use
-`laser.select_relative(delta)` to move the selection without inserting, and
-map `<LeftMouse>` to `laser.select_mouse()` to select with the mouse.
+Use `laser.select_relative(delta)` to move the selection without inserting.
+
+Actions edit text and windows, so call them from regular mappings as above,
+not from `<expr>` mappings. Each returns `false` when it did nothing, so a
+mapping can fall back to the key's default behavior. `laser.confirm()` closes
+the menu even when nothing is selected.
+
+```lua
+vim.keymap.set("i", "<LeftMouse>", function()
+  if not laser.select_mouse() then
+    vim.api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "n", false)
+  end
+end)
+```
+
+In an `<expr>` mapping, check `laser.visible()` and return a `<Cmd>` mapping:
+
+```lua
+vim.keymap.set("i", "<Tab>", function()
+  return laser.visible() and "<Cmd>lua require('laser').insert_relative(1)<CR>" or "<Tab>"
+end, { expr = true })
+```
 
 For manual completion, replace the autocmd with a mapping:
 
