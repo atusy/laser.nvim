@@ -1,0 +1,118 @@
+local MiniTest = require("mini.test")
+local expect = MiniTest.expect
+
+local child = MiniTest.new_child_neovim()
+
+local T = MiniTest.new_set({
+  hooks = {
+    pre_case = function()
+      child.restart({ "-u", "scripts/minimal_init.lua" })
+      child.bo.readonly = false
+      child.lua([[
+        local function candidate(label)
+          return { word = label, abbr = label, user_data = { laser = { client_id = 1, item = { label = label } } } }
+        end
+        ITEMS = { candidate("bar"), candidate("baz") }
+        CONFIRMED = {}
+        UI = require("laser.ui.float").new({
+          on_confirm = function(item)
+            table.insert(CONFIRMED, { word = item.word, line = vim.api.nvim_get_current_line() })
+          end,
+        })
+        vim.keymap.set("i", "<F2>", function() UI.open(1, ITEMS, "i") end)
+        vim.keymap.set("i", "<C-n>", function() UI.insert_relative(1) end)
+        vim.keymap.set("i", "<C-p>", function() UI.insert_relative(-1) end)
+        vim.keymap.set("i", "<C-j>", function() UI.select_relative(1) end)
+        vim.keymap.set("i", "<C-y>", function() UI.confirm() end)
+        vim.keymap.set("i", "<C-e>", function() UI.cancel() end)
+      ]])
+    end,
+    post_case = child.stop,
+  },
+})
+
+local function type_keys(keys)
+  child.api.nvim_input(keys)
+  child.lua([[vim.wait(20)]])
+end
+
+local function line()
+  return child.api.nvim_get_current_line()
+end
+
+T["insert_relative inserts candidates and overflowing restores the typed input"] = function()
+  type_keys("ib<F2><C-n>")
+  expect.equality(line(), "bar")
+  expect.equality(child.api.nvim_win_get_cursor(0), { 1, 3 })
+  type_keys("<C-n>")
+  expect.equality(line(), "baz")
+  type_keys("<C-n>")
+  expect.equality(line(), "b")
+  expect.equality(child.lua_get("UI.selected()"), 0)
+  type_keys("<C-p>")
+  expect.equality(line(), "baz")
+end
+
+T["select_relative highlights without editing and scrolls the viewport"] = function()
+  child.lua([[
+    UI.configure({ max_height = 1 })
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
+  ]])
+  type_keys("ib<F2><C-j><C-j>")
+  expect.equality(line(), "b")
+  expect.equality(child.lua_get("UI.selected()"), 2)
+  expect.equality(
+    child.lua_get([[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(UI.win()), 0, -1, false)]]),
+    { "baz" }
+  )
+end
+
+T["confirm inserts a selected candidate before reporting it and closes"] = function()
+  type_keys("ib<F2><C-j><C-y>")
+  expect.equality(line(), "bar")
+  expect.equality(child.lua_get("CONFIRMED"), { { word = "bar", line = "bar" } })
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
+T["confirm without a selection closes without reporting"] = function()
+  type_keys("ib<F2><C-y>")
+  expect.equality(line(), "b")
+  expect.equality(child.lua_get("CONFIRMED"), {})
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
+T["cancel restores the typed input and closes"] = function()
+  type_keys("ib<F2><C-n><C-e>")
+  expect.equality(line(), "b")
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
+T["only the menu's own edit is skipped as a text change"] = function()
+  child.lua([[
+    SKIPPED = {}
+    vim.api.nvim_create_autocmd("TextChangedI", {
+      callback = function() table.insert(SKIPPED, UI.skip_text_change()) end,
+    })
+  ]])
+  type_keys("ib")
+  child.lua([[SKIPPED = {}]])
+  type_keys("<F2><C-n>")
+  type_keys("x")
+  expect.equality(child.lua_get("SKIPPED"), { true, false })
+end
+
+T["an inserted candidate is undone with the rest of the insertion"] = function()
+  type_keys("ib<F2><C-n><Esc>")
+  expect.equality(line(), "bar")
+  type_keys("u")
+  expect.equality(line(), "")
+end
+
+T["dot-repeat inserts the accepted candidate again"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "", "" })
+  type_keys("ib<F2><C-n><Esc>")
+  type_keys("j.")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "bar", "bar" })
+end
+
+return T
