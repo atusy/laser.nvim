@@ -522,6 +522,10 @@ T["single steps cycle through the typed input and larger moves stop at the ends"
   expect.equality(move(-1), 0)
   expect.equality(move(-10), 1)
   expect.equality(move(1), 2)
+  expect.equality(move(-1), 1)
+  expect.equality(move(-1), 0)
+  -- From the typed input, which sits past the last candidate.
+  expect.equality(move(-2), 4)
 end
 
 T["the menu and preview use pumblend"] = function()
