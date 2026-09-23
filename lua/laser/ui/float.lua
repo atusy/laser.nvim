@@ -617,6 +617,8 @@ function M.new(opts)
       })
       vim.wo[preview_win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
       vim.wo[preview_win].wrap = true
+      -- Windows inherit folding; documentation should be shown whole.
+      vim.wo[preview_win].foldenable = false
       vim.wo[preview_win].winblend = vim.o.pumblend
     end
     if not place_preview() then

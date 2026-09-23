@@ -910,4 +910,17 @@ T["the preview height counts rows as Neovim wraps them"] = function()
   )
 end
 
+T["the preview shows documentation unfolded"] = function()
+  set_line("b")
+  local method, level = vim.o.foldmethod, vim.o.foldlevel
+  vim.o.foldmethod, vim.o.foldlevel = "marker", 0
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, { documented("b1", "a {{{\nb\n}}}") }, "i")
+  ui.select(1, { insert = false })
+  local height = vim.api.nvim_win_get_height(ui.preview_win())
+  vim.o.foldmethod, vim.o.foldlevel = method, level
+  expect.equality(height, 3)
+end
+
 return T
