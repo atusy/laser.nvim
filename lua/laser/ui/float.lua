@@ -231,10 +231,14 @@ function M.new(opts)
   local dismiss, redraw, watch, layout_and_draw
   local closing = false -- the menu is closing its own window
   -- Typeahead can leave the mode before the menu's own change is observed.
-  -- Unlike the window watchers, this outlives each menu window.
-  vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave" }, {
+  -- Unlike the window watchers, this outlives each menu window. ModeChanged
+  -- also covers <C-c>, which skips InsertLeave.
+  vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave", "ModeChanged" }, {
     group = vim.api.nvim_create_augroup("laser.ui.float.state." .. tostring(ui), { clear = true }),
-    callback = function()
+    callback = function(args)
+      if args.event == "ModeChanged" and vim.v.event.new_mode:find("^[ic]") then
+        return
+      end
       expected = nil
     end,
   })
@@ -739,6 +743,15 @@ function M.new(opts)
         end
         win = nil
         dismiss()
+      end,
+    })
+    -- <C-c> leaves Insert mode without InsertLeave.
+    vim.api.nvim_create_autocmd("ModeChanged", {
+      group = group,
+      callback = function()
+        if not vim.v.event.new_mode:find("^[ic]") then
+          dismiss()
+        end
       end,
     })
     vim.api.nvim_create_autocmd({ "VimResized", "WinLeave", "CmdwinEnter" }, {

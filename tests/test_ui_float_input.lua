@@ -589,4 +589,16 @@ T["the command-line preview stays above the command line"] = function()
   expect.equality(preview.height, 3)
 end
 
+T["leaving Insert mode with Ctrl-C closes the menu"] = function()
+  child.lua(
+    [[UI.configure({ preview = true }); ITEMS[1].user_data.laser.item.documentation = "docs"]]
+  )
+  type_keys("ib<F2><C-j>")
+  type_keys("<C-c>")
+  expect.equality(child.api.nvim_get_mode().mode, "n")
+  expect.equality(child.lua_get("UI.visible()"), false)
+  expect.equality(child.lua_get("UI.preview_win()"), vim.NIL)
+  expect.equality(child.lua_get("CLOSED"), 1)
+end
+
 return T
