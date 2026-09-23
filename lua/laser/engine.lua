@@ -12,7 +12,8 @@ local Session = require("laser.session")
 ---@field col integer 0-based byte column of the cursor
 ---@field mode "i"|"c"
 
----@class laser.UI
+---@class laser.UI What the engine needs from a menu. The built-in menu,
+---laser.FloatUI, provides every field; tests use stubs with only the first three.
 ---@field open fun(startcol: integer, items: table[], mode: "i"|"c") startcol is 1-based like complete()
 ---@field close fun()
 ---@field visible fun(): boolean
@@ -87,7 +88,7 @@ function Engine:render()
   end
   session.startcol = startcol
   if #frozen > 0 then
-    -- Older adapters can freeze the entire menu until the next input.
+    -- A menu that cannot update in place keeps its entries until the next input.
     if not self.ui.update then
       return
     end

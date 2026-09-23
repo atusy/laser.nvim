@@ -15,7 +15,7 @@ local M = {}
 
 ---@type laser.Engine?
 local engine
----@type laser.UI?
+---@type laser.FloatUI?
 local menu
 local initialized = false
 

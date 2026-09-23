@@ -150,10 +150,25 @@ local function measure(items, limit, cells)
 end
 
 ---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?, commit_characters?: fun(candidate: table): string[] }
----@return laser.UI
+---@class laser.FloatUI: laser.UI
+---@field configure fun(options?: laser.MenuOpts)
+---@field skip_text_change fun(): boolean
+---@field items fun(): table[]
+---@field selected fun(): integer
+---@field win fun(): integer?
+---@field preview_win fun(): integer?
+---@field insert_relative fun(delta: integer): boolean
+---@field select_relative fun(delta: integer): boolean
+---@field select_mouse fun(): boolean
+---@field confirm fun(): boolean
+---@field cancel fun(): boolean
+---@field scroll_preview fun(delta: integer): boolean
+---@field toggle_preview fun(): boolean
+
+---@return laser.FloatUI
 function M.new(opts)
   opts = opts or {}
-  local ui = {}
+  local ui = {} ---@type laser.FloatUI
   local menu = {} ---@type laser.MenuOpts
   local buf, win
   local items, widths = {}, {}
