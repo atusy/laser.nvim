@@ -508,7 +508,8 @@ function M.new(opts)
   ---@param delta integer lines to scroll; negative scrolls up
   ---@return boolean handled
   function ui.scroll_preview(delta)
-    if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
+    -- A zero count would make the scroll command move one line.
+    if delta == 0 or not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
       return false
     end
     vim.api.nvim_win_call(preview_win, function()
