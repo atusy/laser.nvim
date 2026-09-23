@@ -634,4 +634,16 @@ T["options changed for insertion are restored when Ctrl-C leaves Insert mode"] =
   expect.equality(child.o.backspace, "indent,eol,start")
 end
 
+T["scrolling the preview from a mapping keeps the menu open"] = function()
+  child.lua([[
+    ITEMS[1].user_data.laser.item.documentation = "1\n2\n3\n4"
+    UI.configure({ preview = { max_height = 2 } })
+    vim.keymap.set("i", "<F9>", function() UI.scroll_preview(1) end)
+  ]])
+  type_keys("ib<F2><C-j><F9>")
+  expect.equality(child.lua_get("UI.visible()"), true)
+  expect.equality(child.lua_get([[vim.fn.line("w0", UI.preview_win())]]), 2)
+  expect.equality(child.lua_get("CLOSED"), 0)
+end
+
 return T

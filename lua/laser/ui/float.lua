@@ -678,7 +678,8 @@ function M.new(opts)
     end
     vim.api.nvim_win_call(preview_win, function()
       local key = delta > 0 and "\5" or "\25"
-      vim.cmd("normal! " .. math.abs(delta) .. key)
+      -- :normal passes through Normal mode; the menu must not see it leave.
+      vim.cmd("noautocmd normal! " .. math.abs(delta) .. key)
     end)
     return true
   end
