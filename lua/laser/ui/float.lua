@@ -54,6 +54,8 @@ end
 ---@field max_width? integer columns shown at once; defaults to 80
 ---@field border? string|string[] nvim_open_win() border
 ---@field auto_select? boolean highlight the first candidate without inserting it
+---@field direction? "auto"|"below"|"above" "auto" prefers below unless above has more room
+---@field reversed? boolean list candidates bottom-up when the menu opens above
 
 ---@param opts laser.MenuOpts
 ---@return integer
@@ -136,6 +138,7 @@ function M.new(opts)
   local inserted = "" -- text the menu currently holds between startcol and the cursor
   local expected -- text state right after the menu's own edit
   local browsing, frozen, initial_cursor = false, 0, 0
+  local layout = { height = 0, above = false, reversed = false, scrollbar = false }
 
   function ui.configure(options)
     menu = options or {}
@@ -155,7 +158,45 @@ function M.new(opts)
   end
 
   local function height()
-    return math.min(#items, max_height(menu))
+    return layout.height
+  end
+
+  local function border_rows()
+    return (menu.border == nil or menu.border == "none") and 0 or 2
+  end
+
+  local function compute_layout()
+    local want = math.min(#items, max_height(menu))
+    local row = vim.fn.win_screenpos(0)[1] + vim.fn.winline() - 1
+    local below = vim.o.lines - vim.o.cmdheight - row - border_rows()
+    local above = row - 1 - border_rows()
+    local direction = menu.direction or "auto"
+    local up = direction == "above" or (direction == "auto" and below < want and above > below)
+    local rows = math.max(1, math.min(want, up and above or below))
+    layout = {
+      height = rows,
+      above = up,
+      reversed = up and menu.reversed == true,
+      scrollbar = #items > rows,
+    }
+  end
+
+  ---@param row integer 1-based window row
+  ---@return integer index into items
+  local function index_at(row)
+    return layout.reversed and (top + layout.height - row) or (top + row - 1)
+  end
+
+  ---0-based window rows holding the scrollbar thumb.
+  ---@return integer first, integer last
+  local function thumb()
+    local rows, total = layout.height, #items
+    local size = math.max(1, math.floor(rows * rows / total + 0.5))
+    local first = math.min(math.floor((top - 1) * rows / total + 0.5), rows - size)
+    if layout.reversed then
+      first = rows - size - first
+    end
+    return first, first + size - 1
   end
 
   ---@param item table
@@ -180,15 +221,28 @@ function M.new(opts)
   local function render()
     local lines, decorations = {}, {}
     for row = 1, height() do
-      local item = items[top + row - 1]
-      local line, spans = format(item)
+      local index = index_at(row)
+      local line, spans = format(items[index])
+      if layout.scrollbar then
+        line = line .. " "
+      end
       lines[row] = line
-      decorations[row] = { item = item, spans = spans }
+      decorations[row] = { index = index, spans = spans, width = #line }
     end
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+    local thumb_first, thumb_last = thumb()
     for row, decoration in ipairs(decorations) do
-      local selected = top + row - 1 == cursor
+      if layout.scrollbar then
+        local in_thumb = row - 1 >= thumb_first and row - 1 <= thumb_last
+        vim.api.nvim_buf_set_extmark(buf, ns, row - 1, decoration.width - 1, {
+          end_col = decoration.width,
+          hl_group = in_thumb and "PmenuThumb" or "PmenuSbar",
+          priority = 300,
+        })
+      end
+      decoration.item = items[decoration.index]
+      local selected = decoration.index == cursor
       if selected then
         vim.api.nvim_buf_set_extmark(buf, ns, row - 1, 0, {
           line_hl_group = "PmenuSel",
@@ -220,9 +274,12 @@ function M.new(opts)
         total = total + widths[name] + (total > 0 and 1 or 0)
       end
     end
+    if layout.scrollbar then
+      total = total + 1
+    end
     local config = {
       width = math.max(total, 1),
-      height = math.max(height(), 1),
+      height = height(),
       style = "minimal",
       focusable = false,
       zindex = 200,
@@ -231,7 +288,7 @@ function M.new(opts)
     local col = vim.api.nvim_win_get_cursor(0)[2]
     local line = vim.api.nvim_get_current_line()
     config.relative = "cursor"
-    config.row = 1
+    config.row = layout.above and -(height() + border_rows()) or 1
     config.col = -vim.api.nvim_strwidth(line:sub(startcol, col))
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_config(win, config)
@@ -246,6 +303,7 @@ function M.new(opts)
   local function show(col, new_items, new_mode)
     startcol, mode, items = col, new_mode, new_items
     widths = measure(items, menu.max_width or 80)
+    compute_layout()
     top = math.max(1, math.min(top, #items - height() + 1))
     ensure_buf()
     place()

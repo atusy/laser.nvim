@@ -38,6 +38,11 @@ local function set_line(line)
   vim.api.nvim_win_set_cursor(0, { 1, #line })
 end
 
+local function marks(ui)
+  local buf = vim.api.nvim_win_get_buf(ui.win())
+  return vim.api.nvim_buf_get_extmarks(buf, -1, 0, -1, { details = true })
+end
+
 local function rows(ui)
   return vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(ui.win()), 0, -1, false)
 end
@@ -70,7 +75,7 @@ T["only visible rows are rendered for long lists"] = function()
   local ui = new()
   ui.configure({ max_height = 3 })
   ui.open(1, items, "i")
-  expect.equality(rows(ui), { "b1   ", "b2   ", "b3   " })
+  expect.equality(rows(ui), { "b1    ", "b2    ", "b3    " })
   expect.equality(vim.api.nvim_win_get_height(ui.win()), 3)
 end
 
@@ -96,8 +101,7 @@ T["item highlights are drawn in their columns"] = function()
       },
     }),
   }, "i")
-  local marks =
-    vim.api.nvim_buf_get_extmarks(vim.api.nvim_win_get_buf(ui.win()), -1, 0, -1, { details = true })
+  local marks = marks(ui)
   local got = {}
   for _, mark in ipairs(marks) do
     local details = mark[4]
@@ -145,7 +149,7 @@ T["update keeps the selection and viewport of a frozen prefix"] = function()
   table.insert(items, 3, candidate("b0"))
   ui.update(1, items, "i")
   expect.equality(ui.selected(), 2)
-  expect.equality(rows(ui), { "b1", "b2" })
+  expect.equality(rows(ui), { "b1 ", "b2 " })
 end
 
 T["auto_select highlights the first candidate without freezing the menu"] = function()
@@ -156,6 +160,73 @@ T["auto_select highlights the first candidate without freezing the menu"] = func
   expect.equality(ui.selected(), 1)
   expect.equality(ui.frozen_count(), 0)
   expect.equality(vim.api.nvim_get_current_line(), "b")
+end
+
+---Put the cursor on the last screen row of a long buffer.
+local function cursor_at_bottom()
+  local lines = {}
+  for i = 1, 200 do
+    lines[i] = ""
+  end
+  lines[200] = "b"
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  vim.api.nvim_win_set_cursor(0, { 200, 1 })
+  vim.cmd("normal! zb")
+end
+
+local function cursor_row()
+  return vim.fn.win_screenpos(0)[1] + vim.fn.winline() - 1
+end
+
+T["the menu opens above the cursor when there is more room there"] = function()
+  cursor_at_bottom()
+  local ui = new()
+  ui.open(1, labels(3), "i")
+  expect.equality(vim.fn.win_screenpos(ui.win())[1], cursor_row() - 3)
+  expect.equality(rows(ui), { "b1", "b2", "b3" })
+end
+
+T["reversed menus above the cursor put the first candidate nearest to it"] = function()
+  cursor_at_bottom()
+  local ui = new()
+  ui.configure({ reversed = true })
+  ui.open(1, labels(3), "i")
+  expect.equality(rows(ui), { "b3", "b2", "b1" })
+  ui.select_relative(1)
+  local sel = marks(ui)
+  sel = vim.tbl_filter(function(mark)
+    return mark[4].line_hl_group == "PmenuSel"
+  end, sel)
+  expect.equality(sel[1][2], 2)
+end
+
+T["an explicit direction limits the height to the room on that side"] = function()
+  cursor_at_bottom()
+  local ui = new()
+  ui.configure({ direction = "below", max_height = 20 })
+  ui.open(1, labels(20), "i")
+  local room = vim.o.lines - vim.o.cmdheight - cursor_row()
+  expect.equality(vim.api.nvim_win_get_height(ui.win()), math.max(room, 1))
+end
+
+T["a scrollbar marks the viewport when candidates overflow"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 2 })
+  ui.open(1, labels(4), "i")
+  expect.equality(rows(ui), { "b1 ", "b2 " })
+  local function thumb()
+    local found = {}
+    for _, mark in ipairs(marks(ui)) do
+      if mark[4].hl_group == "PmenuThumb" then
+        found[#found + 1] = mark[2]
+      end
+    end
+    return found
+  end
+  expect.equality(thumb(), { 0 })
+  ui.select_relative(4)
+  expect.equality(thumb(), { 1 })
 end
 
 return T

@@ -63,7 +63,7 @@ T["select_relative highlights without editing and scrolls the viewport"] = funct
   expect.equality(child.lua_get("UI.selected()"), 2)
   expect.equality(
     child.lua_get([[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(UI.win()), 0, -1, false)]]),
-    { "baz" }
+    { "baz " }
   )
 end
 
