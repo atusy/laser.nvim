@@ -23,7 +23,7 @@ local T = MiniTest.new_set({
             table.insert(CONFIRMED, { word = item.word, line = vim.api.nvim_get_current_line() })
           end,
         })
-        vim.keymap.set("i", "<F2>", function() UI.open(1, ITEMS, "i") end)
+        vim.keymap.set("i", "<F2>", function() UI.open(START or 1, ITEMS, "i") end)
         vim.keymap.set("c", "<F2>", function() UI.open(1, ITEMS, "c") end)
         vim.keymap.set("c", "<C-n>", function() UI.insert_relative(1) end)
         vim.keymap.set("c", "<C-j>", function() UI.select_relative(1) end)
@@ -277,6 +277,14 @@ T["a confirmation without edits does not skip the next completion"] = function()
   type_keys("ib<F2><C-n><C-y><Esc>a")
   expect.equality(line(), "bar")
   expect.equality(child.lua_get("UI.skip_text_change()"), false)
+end
+
+T["insertion replaces spaces one by one despite softtabstop"] = function()
+  child.bo.softtabstop, child.bo.expandtab = 4, true
+  child.lua([[START = 4]])
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "ab.x    y" })
+  type_keys("A<F2><C-n>")
+  expect.equality(line(), "ab.bar")
 end
 
 return T

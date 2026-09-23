@@ -576,32 +576,52 @@ function M.new(opts)
   end
 
   local saved_options -- options to restore once fed insertion keys are done
+  -- Options that change what one typed <BS> or character does, with the values
+  -- that make fed keys behave like deleting and typing plain characters.
+  local RELAXED = {
+    global = { backspace = "start", smarttab = false },
+    buffer = { indentkeys = "", softtabstop = 0, varsofttabstop = "" },
+  }
 
   local function restore_options()
     if not saved_options then
       return
     end
-    vim.o.backspace = saved_options.backspace
+    for name, value in pairs(saved_options.global) do
+      vim.o[name] = value
+    end
     if vim.api.nvim_buf_is_valid(saved_options.buf) then
-      vim.bo[saved_options.buf].indentkeys = saved_options.indentkeys
+      for name, value in pairs(saved_options.buffer) do
+        vim.bo[saved_options.buf][name] = value
+      end
     end
     saved_options = nil
   end
 
-  ---Let backspaces remove text typed before this insertion and keep typed
-  ---candidates from reindenting the line.
+  ---Let backspaces remove exactly one character each, including text typed
+  ---before this insertion, and keep typed candidates from reindenting.
   local function relax_options()
+    local target = vim.api.nvim_get_current_buf()
     if not saved_options then
-      local buf = vim.api.nvim_get_current_buf()
-      saved_options =
-        { backspace = vim.o.backspace, buf = buf, indentkeys = vim.bo[buf].indentkeys }
+      saved_options = { buf = target, global = {}, buffer = {} }
+      for name in pairs(RELAXED.global) do
+        saved_options.global[name] = vim.o[name]
+      end
+      for name in pairs(RELAXED.buffer) do
+        saved_options.buffer[name] = vim.bo[target][name]
+      end
       -- The fed keys, and the restore queued behind them, can be discarded.
       vim.api.nvim_create_autocmd({ "TextChangedI", "InsertLeave" }, {
         once = true,
         callback = restore_options,
       })
     end
-    vim.o.backspace, vim.bo.indentkeys = "start", ""
+    for name, value in pairs(RELAXED.global) do
+      vim.o[name] = value
+    end
+    for name, value in pairs(RELAXED.buffer) do
+      vim.bo[target][name] = value
+    end
   end
 
   ---Replace the text between startcol and the cursor with `word`.
