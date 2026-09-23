@@ -19,6 +19,7 @@ local T = MiniTest.new_set({
           on_close = function() CLOSED = CLOSED + 1 end,
           commit_characters = function(item) return COMMIT and COMMIT[item.word] or {} end,
           on_confirm = function(item)
+            if THROW then error("boom") end
             table.insert(CONFIRMED, { word = item.word, line = vim.api.nvim_get_current_line() })
           end,
         })
@@ -256,6 +257,18 @@ T["options changed for insertion are restored when the fed keys are discarded"] 
   child.lua([[vim.wait(50)]])
   expect.equality(child.o.backspace, "indent,eol,start")
   expect.equality(child.bo.indentkeys, "0{,0}")
+end
+
+T["a failing confirmation still types the commit character and keeps input flowing"] = function()
+  child.lua([[COMMIT = { bar = { "." } }; THROW = true]])
+  type_keys("ib<F2><C-j>")
+  child.api.nvim_input(".")
+  child.lua([[vim.wait(50)]])
+  child.lua([[THROW = false]])
+  type_keys("xyz<Esc>")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "bar.xyz")
+  expect.equality(child.api.nvim_get_mode().mode, "n")
 end
 
 return T

@@ -714,14 +714,21 @@ function M.new(opts)
       return false
     end
     local function done()
+      local ok, err = true, nil
       if opts.on_confirm then
-        opts.on_confirm(item)
+        ok, err = pcall(opts.on_confirm, item)
         -- Snippet expansion and additional edits are part of the confirmation,
         -- not input that should start a new completion.
         expected = { mode = mode, state = text_state(mode) }
       end
       if after then
         after()
+      end
+      if not ok then
+        -- Raising here would abort the keys `after` just queued.
+        vim.schedule(function()
+          error(err, 0)
+        end)
       end
     end
     if inserted == item.word then
@@ -739,14 +746,12 @@ function M.new(opts)
   end
 
   if opts.commit_characters and opts.on_confirm then
-    local pending_commit -- commit character plus input typed while confirming
-    vim.on_key(function(key, typed)
-      if pending_commit and typed ~= "" then
-        pending_commit = pending_commit .. key
-        return ""
+    vim.on_key(function(key, typed_key)
+      if typed_key == "" or not ui.visible() then
+        return
       end
       local current = vim.api.nvim_get_mode().mode
-      if typed == "" or (current ~= "i" and current ~= "c") or not ui.visible() then
+      if current ~= "i" and current ~= "c" then
         return
       end
       local item = items[cursor]
@@ -757,18 +762,15 @@ function M.new(opts)
       then
         return
       end
-      -- Confirmation edits the text, which is not allowed inside on_key.
-      pending_commit = key
-      local function release()
-        local keys = pending_commit
-        pending_commit = nil
-        -- on_key reports special keys in their internal form, as fed keys expect.
-        vim.api.nvim_feedkeys(keys, "ni", false)
+      -- Confirmation edits the text, which is not allowed inside on_key. The
+      -- queued command runs ahead of input typed after the commit character,
+      -- and so do the keys it feeds, so that input needs no holding back.
+      local function type_key()
+        vim.api.nvim_feedkeys(key, "ni", false)
       end
       feed({}, function()
-        -- The menu may have closed meanwhile; never keep swallowing input.
-        if not confirm(release) then
-          release()
+        if not confirm(type_key) then
+          type_key()
         end
       end)
       return ""
