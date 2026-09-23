@@ -373,6 +373,7 @@ function M.new(opts)
       win = vim.api.nvim_open_win(ensure_buf(), false, config)
       vim.wo[win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
       vim.wo[win].wrap = false
+      vim.wo[win].winblend = vim.o.pumblend
       -- Watchers read the current state, so one set serves the window's life.
       watch()
     end
@@ -462,6 +463,7 @@ function M.new(opts)
       })
       vim.wo[preview_win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
       vim.wo[preview_win].wrap = true
+      vim.wo[preview_win].winblend = vim.o.pumblend
     end
     place_preview()
     vim.api.nvim_win_call(preview_win, function()

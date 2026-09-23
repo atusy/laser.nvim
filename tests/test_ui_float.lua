@@ -529,4 +529,17 @@ T["auto_select follows noinsert in completeopt unless configured"] = function()
   expect.equality({ implicit, explicit }, { 1, 0 })
 end
 
+T["the menu and preview use pumblend"] = function()
+  set_line("b")
+  local blend = vim.o.pumblend
+  vim.o.pumblend = 20
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, { documented("b1", "docs") }, "i")
+  ui.select_relative(1)
+  local got = { vim.wo[ui.win()].winblend, vim.wo[ui.preview_win()].winblend }
+  vim.o.pumblend = blend
+  expect.equality(got, { 20, 20 })
+end
+
 return T
