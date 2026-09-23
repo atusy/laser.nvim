@@ -837,7 +837,7 @@ function M.new(opts)
   -- that make fed keys behave like deleting and typing plain characters.
   local RELAXED = {
     global = { backspace = "start", smarttab = false },
-    buffer = { indentkeys = "", softtabstop = 0, varsofttabstop = "" },
+    buffer = { cinkeys = "", indentkeys = "", softtabstop = 0, varsofttabstop = "" },
   }
 
   local function restore_options()

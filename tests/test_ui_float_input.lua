@@ -493,4 +493,18 @@ T["a window shrunk under the menu lays it out again within its limits"] = functi
   expect.equality(rows[#rows], "6barbaz ")
 end
 
+T["inserting into a cindent buffer does not reindent the line"] = function()
+  child.bo.cindent = true
+  child.lua([[
+    ITEMS = { { word = "}", abbr = "}", user_data = { laser = { client_id = 1, item = { label = "}" } } } } }
+    START = 5
+  ]])
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "{", "    b" })
+  child.api.nvim_win_set_cursor(0, { 2, 4 })
+  type_keys("A<F2><C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "{", "    }" })
+  type_keys("<C-e>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "{", "    b" })
+end
+
 return T
