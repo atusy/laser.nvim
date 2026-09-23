@@ -231,14 +231,25 @@ function M.new(opts)
     return (menu.border == nil or menu.border == "none") and 0 or 2
   end
 
+  ---1-based screen row and column where the current window's rows begin:
+  ---below its winbar and, for a floating window, inside its border.
+  ---@return integer row, integer col
+  local function window_origin()
+    local win_id = vim.api.nvim_get_current_win()
+    local origin = vim.fn.win_screenpos(win_id)
+    local border = drawn_border(vim.api.nvim_win_get_config(win_id))
+    local winbar = vim.fn.getwininfo(win_id)[1].winbar
+    return origin[1] + border + winbar, origin[2] + border
+  end
+
   ---1-based screen row and column of the cursor in the edited text.
   ---@return integer row, integer col
   local function cursor_screenpos()
     if mode == "c" then
       return vim.o.lines - vim.o.cmdheight + 1, vim.fn.getcmdscreenpos()
     end
-    local origin = vim.fn.win_screenpos(0)
-    return origin[1] + vim.fn.winline() - 1, origin[2] + vim.fn.wincol() - 1
+    local row, col = window_origin()
+    return row + vim.fn.winline() - 1, col + vim.fn.wincol() - 1
   end
 
   ---1-based screen column where the completed text starts, measured back from
@@ -251,8 +262,11 @@ function M.new(opts)
     local typed_width = vim.fn.strdisplaywidth(state.line:sub(1, state.col))
       - vim.fn.strdisplaywidth(state.line:sub(1, startcol - 1))
     -- Text wrapped in from the previous screen line starts at the left edge.
-    local left = mode == "c" and 1
-      or vim.fn.win_screenpos(0)[2] + vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+    local left = 1
+    if mode ~= "c" then
+      local _, origin_col = window_origin()
+      left = origin_col + vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+    end
     return math.max(col - typed_width, left)
   end
 

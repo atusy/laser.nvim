@@ -726,4 +726,32 @@ T["matches are redone against the typed input after the menu inserts a candidate
   expect.equality(match_ranges(ui, 1), { { 2, 3 }, { 3, 4 } })
 end
 
+T["the menu opens below the cursor line under a winbar"] = function()
+  vim.wo.winbar = "WINBAR"
+  set_line("b")
+  local ui = new()
+  ui.open(1, { candidate("bar") }, "i")
+  local cursor_row = vim.fn.win_screenpos(0)[1] + vim.fn.winline() -- winbar row above the text
+  vim.wo.winbar = ""
+  expect.equality(vim.api.nvim_win_get_config(ui.win()).row, cursor_row)
+end
+
+T["the menu lines up with text in a bordered floating window"] = function()
+  local host = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true, {
+    relative = "editor",
+    row = 5,
+    col = 10,
+    width = 30,
+    height = 5,
+    border = "single",
+  })
+  set_line("foo.ba")
+  local ui = new()
+  ui.open(5, { candidate("bar") }, "i")
+  local config = vim.api.nvim_win_get_config(ui.win())
+  vim.api.nvim_win_close(host, true)
+  -- Text starts inside the border: row 6 and column 11 on screen, 0-based.
+  expect.equality({ config.row, config.col }, { 7, 11 + 4 })
+end
+
 return T
