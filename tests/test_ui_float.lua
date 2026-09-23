@@ -763,4 +763,13 @@ T["truncation keeps composing characters with their base"] = function()
   expect.equality(rows(ui), { "abc\u{0301}" })
 end
 
+T["the scrollbar fits within max_width"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_width = 6, max_height = 1 })
+  ui.open(1, { candidate("barbazqux"), candidate("b2") }, "i")
+  expect.equality(vim.api.nvim_win_get_width(ui.win()), 6)
+  expect.equality(rows(ui), { "barba " })
+end
+
 return T

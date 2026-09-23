@@ -693,8 +693,9 @@ function M.new(opts)
   local function show(col, new_items, new_mode)
     startcol, mode, items = col, new_mode, new_items
     shown = text_state(mode)
-    widths = measure(items, menu.max_width or 80, cells)
     compute_layout()
+    -- The scrollbar takes a column of the width available to the fields.
+    widths = measure(items, (menu.max_width or 80) - (layout.scrollbar and 1 or 0), cells)
     top = math.max(1, math.min(top, #items - height() + 1))
     ensure_buf()
     place()
