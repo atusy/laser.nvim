@@ -93,7 +93,8 @@ end
 ---Cut `text` to at most `width` display cells and pad it to exactly `width`.
 ---@param text string
 ---@param width integer
----@return string
+---@return string padded
+---@return integer kept byte length of the text before the padding
 local function fit(text, width)
   local cells = vim.api.nvim_strwidth(text)
   if cells > width then
@@ -104,7 +105,7 @@ local function fit(text, width)
       cells = vim.api.nvim_strwidth(text)
     end
   end
-  return text .. string.rep(" ", width - cells)
+  return text .. string.rep(" ", width - cells), #text
 end
 
 ---Column widths over every candidate, so the menu does not jitter on scroll.
@@ -252,16 +253,16 @@ function M.new(opts)
 
   ---@param item table
   ---@return string line
-  ---@return table<string, { [1]: integer, [2]: integer }> spans 0-based byte range of each field
+  ---@return table<string, { [1]: integer, [2]: integer }> spans 0-based byte range of each field's text, without padding
   local function format(item)
     local parts, spans, offset = {}, {}, 0
     for _, name in ipairs(COLUMNS) do
       if widths[name] > 0 then
-        local text = fit(field(item, name), widths[name])
+        local text, kept = fit(field(item, name), widths[name])
         if #parts > 0 then
           offset = offset + 1
         end
-        spans[name] = { offset, offset + #text }
+        spans[name] = { offset, offset + kept }
         parts[#parts + 1] = text
         offset = offset + #text
       end

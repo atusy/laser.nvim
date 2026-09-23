@@ -454,4 +454,20 @@ T["wide fields are truncated by display width, dropping minor columns first"] = 
   expect.equality({ match[3], match[4].end_col }, { 3, 9 })
 end
 
+T["highlights on truncated text do not spill onto padding"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_width = 11 })
+  ui.open(1, {
+    candidate("日本語テキスト", {
+      highlights = { { type = "abbr", col = 16, width = 3, hl_group = "PmenuMatch" } },
+    }),
+  }, "i")
+  expect.equality(rows(ui), { "日本語テキ " })
+  local match = vim.tbl_filter(function(mark)
+    return mark[4].hl_group == "PmenuMatch"
+  end, marks(ui))
+  expect.equality(match, {})
+end
+
 return T
