@@ -846,4 +846,27 @@ T["border lists offset the sides whose edge characters are drawn"] = function()
   end
 end
 
+T["the preview narrows to the room beside the menu"] = function()
+  vim.o.columns = 40
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, { documented(string.rep("x", 30), string.rep("d", 50)) }, "i")
+  ui.select(1, { insert = false })
+  local menu = vim.api.nvim_win_get_config(ui.win())
+  local preview = vim.api.nvim_win_get_config(ui.preview_win())
+  expect.equality(preview.col, menu.col + menu.width)
+  expect.equality(preview.col + preview.width, 40)
+end
+
+T["the preview is hidden when no side has room"] = function()
+  vim.o.columns = 30
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, { documented(string.rep("x", 30), "docs") }, "i")
+  ui.select(1, { insert = false })
+  expect.equality(ui.preview_win(), nil)
+end
+
 return T

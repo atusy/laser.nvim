@@ -519,19 +519,30 @@ function M.new(opts)
 
   ---Put the preview beside the menu, or on its left when the right is too
   ---narrow. The menu's configured position is where it is drawn.
+  ---@return boolean placed false when there is no room and it was hidden
   local function place_preview()
     if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
-      return
+      return false
     end
     local options = type(menu.preview) == "table" and menu.preview or {}
     local own = border_sides(options.border)
     local border = own.left + own.right
     local anchor = vim.api.nvim_win_get_config(win)
     local sides = drawn_border(win)
-    local width = preview_size.width
-    local col = anchor.col + sides.left + anchor.width + sides.right
-    if col + width + border > vim.o.columns then
-      col = math.max(anchor.col - width - border, 0)
+    local right = anchor.col + sides.left + anchor.width + sides.right
+    local right_room = vim.o.columns - right - border
+    local left_room = anchor.col - border
+    -- Never cover the menu: narrow the preview to the side it goes on.
+    local width, col = preview_size.width, right
+    if width > right_room and left_room > right_room then
+      width = math.min(width, left_room)
+      col = anchor.col - width - border
+    else
+      width = math.min(width, right_room)
+    end
+    if width < 1 then
+      hide_preview()
+      return false
     end
     vim.api.nvim_win_set_config(preview_win, {
       relative = "editor",
@@ -541,6 +552,7 @@ function M.new(opts)
       height = preview_size.height,
       border = options.border or "none",
     })
+    return true
   end
 
   ---@param text string
@@ -588,7 +600,9 @@ function M.new(opts)
       vim.wo[preview_win].wrap = true
       vim.wo[preview_win].winblend = vim.o.pumblend
     end
-    place_preview()
+    if not place_preview() then
+      return
+    end
     vim.api.nvim_win_call(preview_win, function()
       -- Scrolling moved the cursor too; Neovim would keep it in view.
       vim.fn.winrestview({ topline = 1, lnum = 1 })
