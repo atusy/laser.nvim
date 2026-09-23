@@ -826,4 +826,24 @@ T["borders drawn on some sides only offset just those sides"] = function()
   expect.equality({ config.row, config.col }, { 6, 14 })
 end
 
+T["border lists offset the sides whose edge characters are drawn"] = function()
+  set_line("foo.ba")
+  local ui = new()
+  local cases = {
+    -- Vertical edges only: shifted left, not down.
+    { border = { "", "", "", ">", "", "", "", "<" }, left = 1 },
+    -- One highlighted part repeats to every edge.
+    { border = { { "x", "Error" } }, left = 1 },
+    -- Four parts repeat to eight: the top and bottom edges only.
+    { border = { "", "-", "", "" }, left = 0 },
+  }
+  for _, case in ipairs(cases) do
+    ui.configure({ border = case.border })
+    ui.open(5, { candidate("bar") }, "i")
+    local config = vim.api.nvim_win_get_config(ui.win())
+    expect.equality(config.col, screen_col(5) - case.left)
+    ui.close()
+  end
+end
+
 return T
