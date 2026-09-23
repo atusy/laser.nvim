@@ -120,6 +120,30 @@ end
 ---Compatibility name for the default score sorter.
 M.by_score = M.score_sorter()
 
+---@param opts laser.FilterOpts
+---@return laser.Filter[]
+local function resolve_filters(opts)
+  local filters = opts.filters
+  if filters == nil then
+    local function matcher(input, candidate)
+      local matched, info
+      if opts.matcher and opts.matcher ~= fuzzy then
+        local score = opts.matcher(input, candidate)
+        matched, info = score ~= nil and score ~= false, { score = score }
+      else
+        matched, info = fuzzy(input, candidate)
+      end
+      candidate.score = info and info.score or nil -- Legacy sorter callbacks.
+      return matched, matched and info or nil
+    end
+    filters = {
+      { kind = "matcher", callback = matcher },
+      { kind = "sorter", callback = opts.sorter or M.by_score },
+    }
+  end
+  return filters
+end
+
 -- vim.tbl_extend validates its arguments, which is costly per candidate.
 ---@param t table
 ---@return table
@@ -148,29 +172,51 @@ local function own(candidate)
   return copy
 end
 
+---Run one candidate through the matchers and converters, skipping sorters.
+---@param candidate table owned copy
+---@param input string
+---@param filters laser.Filter[]
+---@return table? candidate nil when a matcher rejects it
+local function pass(candidate, input, filters)
+  for _, filter in ipairs(filters) do
+    if filter.kind == "matcher" then
+      local matched, info = filter.callback(input, candidate)
+      if not matched then
+        return nil
+      end
+      candidate.user_data.laser.match_info = info
+    elseif filter.kind == "converter" then
+      candidate = filter.callback(candidate, input)
+    elseif filter.kind ~= "sorter" then
+      error("Unknown filter kind: " .. tostring(filter.kind))
+    end
+  end
+  return candidate
+end
+
+---Whether any candidate survives the filters. Sorters cannot change the
+---answer, so they are skipped, and the scan stops at the first survivor.
+---@param candidates table[]
+---@param prefix string|fun(candidate: table): string
+---@param opts laser.FilterOpts
+---@return boolean
+function M.any(candidates, prefix, opts)
+  local filters = resolve_filters(opts)
+  for _, candidate in ipairs(candidates) do
+    local input = type(prefix) == "function" and prefix(candidate) or prefix
+    if pass(own(candidate), input, filters) then
+      return true
+    end
+  end
+  return false
+end
+
 ---@param candidates table[]
 ---@param prefix string|fun(candidate: table): string
 ---@param opts laser.FilterOpts
 ---@return table[]
 function M.apply(candidates, prefix, opts)
-  local filters = opts.filters
-  if filters == nil then
-    local function matcher(input, candidate)
-      local matched, info
-      if opts.matcher and opts.matcher ~= fuzzy then
-        local score = opts.matcher(input, candidate)
-        matched, info = score ~= nil and score ~= false, { score = score }
-      else
-        matched, info = fuzzy(input, candidate)
-      end
-      candidate.score = info and info.score or nil -- Legacy sorter callbacks.
-      return matched, matched and info or nil
-    end
-    filters = {
-      { kind = "matcher", callback = matcher },
-      { kind = "sorter", callback = opts.sorter or M.by_score },
-    }
-  end
+  local filters = resolve_filters(opts)
   -- Each render starts from server candidates, never from a previous conversion.
   local current = vim.tbl_map(own, candidates)
   for _, filter in ipairs(filters) do

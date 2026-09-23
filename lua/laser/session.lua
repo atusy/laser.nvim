@@ -106,7 +106,7 @@ function Session:refresh_context(client_id, doc, char, pending, previous_doc)
     trigger_characters = vim.list_slice(client.trigger_chars or {}),
     is_incomplete = result and result.incomplete,
     pending = pending,
-    has_candidate = #self:client_candidates(client_id, "", doc) > 0,
+    has_candidate = self:has_candidate(client_id, doc),
     timed_out = client.timed_out == true,
   }
 end
@@ -131,6 +131,27 @@ function Session:on_char(char, doc, pending, previous_doc)
   return requests
 end
 
+---Each candidate matches the text between its own edit start and the cursor.
+---@param doc laser.Doc
+---@return fun(candidate: table): string
+local function input_at(doc)
+  return function(candidate)
+    return doc.line:sub(candidate.user_data.laser.startcol + 1, doc.col)
+  end
+end
+
+---@param client_id integer
+---@param doc laser.Doc
+---@return boolean
+function Session:has_candidate(client_id, doc)
+  local result = self.results[client_id]
+  return filter.any(
+    result and result.candidates or {},
+    input_at(doc),
+    self.clients[client_id].opts or {}
+  )
+end
+
 ---Filter one client's cached items without consulting other clients or the UI.
 ---@param client_id integer
 ---@param prefix string
@@ -139,11 +160,7 @@ end
 ---@return table[]
 function Session:client_candidates(client_id, prefix, doc, projection)
   local opts = self.clients[client_id].opts or {}
-  local input = doc
-      and function(candidate)
-        return doc.line:sub(candidate.user_data.laser.startcol + 1, doc.col)
-      end
-    or prefix
+  local input = doc and input_at(doc) or prefix
   local result = self.results[client_id]
   local candidates = result and result.candidates or {}
   if projection then

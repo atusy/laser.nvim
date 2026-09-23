@@ -206,4 +206,25 @@ T["shared labels shift abbreviation highlights by UTF-8 bytes without accumulati
   expect.equality(s.results[1].candidates[1].highlights[1].col, 1)
 end
 
+T["refresh contexts detect candidates without sorting them"] = function()
+  local sorted = false
+  local s = Session.new({
+    startcol = 4,
+    clients = {
+      [1] = {
+        name = "lua_ls",
+        opts = {
+          sorter = function()
+            sorted = true
+            return false
+          end,
+        },
+      },
+    },
+  })
+  s:set_result(1, { { label = "bar" }, { label = "barn" } }, ctx(1))
+  expect.equality(s:refresh_context(1, doc, "r", false).has_candidate, true)
+  expect.equality(sorted, false)
+end
+
 return T

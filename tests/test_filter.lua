@@ -354,4 +354,81 @@ T["decorations added by converters do not accumulate across renders"] = function
   expect.equality(input, original)
 end
 
+T["any stops at the first surviving candidate without sorting"] = function()
+  local matched, sorted = {}, false
+  local opts = {
+    filters = {
+      {
+        kind = "matcher",
+        callback = function(_, candidate)
+          matched[#matched + 1] = candidate.abbr
+          return candidate.abbr ~= "skip", { score = 0 }
+        end,
+      },
+      {
+        kind = "sorter",
+        callback = function()
+          sorted = true
+          return false
+        end,
+      },
+    },
+  }
+  expect.equality(filter.any({ cand("skip"), cand("hit"), cand("rest") }, "", opts), true)
+  expect.equality(matched, { "skip", "hit" })
+  expect.equality(sorted, false)
+  expect.equality(filter.any({ cand("skip") }, "", opts), false)
+end
+
+T["any applies converters before later matchers without changing the input"] = function()
+  local input = { cand("a") }
+  local original = vim.deepcopy(input)
+  local opts = {
+    filters = {
+      {
+        kind = "converter",
+        callback = function(candidate)
+          candidate.user_data.laser.item.filterText = "converted"
+          return candidate
+        end,
+      },
+      { kind = "matcher", callback = filter.fuzzy_matcher() },
+    },
+  }
+  expect.equality(filter.any(input, "conv", opts), true)
+  expect.equality(filter.any(input, "a", opts), false)
+  expect.equality(input, original)
+end
+
+T["any uses each candidate's input and the legacy defaults"] = function()
+  local input = function(candidate)
+    return candidate.abbr == "bar" and "ba" or "zz"
+  end
+  expect.equality(filter.any({ cand("foo"), cand("bar") }, input, {}), true)
+  expect.equality(filter.any({ cand("foo") }, input, {}), false)
+  expect.equality(filter.any({}, "", {}), false)
+end
+
+T["decorations added by converters do not accumulate across renders"] = function()
+  local input = { cand("a") }
+  input[1].highlights = { { name = "server", col = 1 } }
+  local original = vim.deepcopy(input)
+  local opts = {
+    filters = {
+      {
+        kind = "converter",
+        callback = function(candidate)
+          candidate.highlights[1].col = 9
+          table.insert(candidate.highlights, { name = "mine" })
+          return candidate
+        end,
+      },
+    },
+  }
+  filter.apply(input, "", opts)
+  expect.equality(#filter.apply(input, "", opts)[1].highlights, 2)
+  expect.equality(filter.any(input, "", opts), true)
+  expect.equality(input, original)
+end
+
 return T
