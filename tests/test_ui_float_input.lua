@@ -337,4 +337,18 @@ T["scrolling the window without editing closes the menu"] = function()
   expect.equality(child.lua_get("UI.visible()"), false)
 end
 
+T["a close refused under textlock leaves a working menu"] = function()
+  child.lua([[
+    vim.keymap.set("i", "<F4>", function()
+      pcall(UI.cancel)
+      return ""
+    end, { expr = true })
+  ]])
+  type_keys("ib<F2><F4>")
+  expect.equality(child.lua_get("UI.visible()"), true)
+  expect.equality(child.lua_get("CLOSED"), 0)
+  type_keys("<Left>")
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
 return T

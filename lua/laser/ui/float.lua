@@ -176,6 +176,7 @@ function M.new(opts)
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
   local dismiss, redraw, watch
+  local closing = false -- the menu is closing its own window
   -- Typeahead can leave the mode before the menu's own change is observed.
   vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave" }, {
     callback = function()
@@ -578,6 +579,9 @@ function M.new(opts)
       group = group,
       pattern = tostring(win),
       callback = function()
+        if closing then
+          return
+        end
         win = nil
         dismiss()
       end,
@@ -647,14 +651,22 @@ function M.new(opts)
   end
 
   function ui.close()
-    close_preview()
-    resolved, cells = {}, {}
-    vim.api.nvim_clear_autocmds({ group = group })
+    -- Closing windows is refused under textlock, e.g. from an <expr> mapping.
+    -- Do it before any teardown so a refusal leaves the menu fully working.
+    hide_preview()
     if win and vim.api.nvim_win_is_valid(win) then
-      vim.api.nvim_win_close(win, true)
+      closing = true
+      local ok, err = pcall(vim.api.nvim_win_close, win, true)
+      closing = false
+      if not ok then
+        error(err, 0)
+      end
       redraw()
     end
     win = nil
+    close_preview()
+    resolved, cells = {}, {}
+    vim.api.nvim_clear_autocmds({ group = group })
   end
 
   -- Closing on the user's behalf also stops responses that would reopen it.
