@@ -850,7 +850,7 @@ function M.new(opts)
   -- Options that change what one typed <BS> or character does, with the values
   -- that make fed keys behave like deleting and typing plain characters.
   local RELAXED = {
-    global = { backspace = "start", smarttab = false },
+    global = { backspace = "indent,start", smarttab = false },
     buffer = { cinkeys = "", indentkeys = "", softtabstop = 0, varsofttabstop = "" },
   }
 

@@ -542,4 +542,13 @@ T["candidates that would split the line are only selected"] = function()
   expect.equality(child.lua_get("UI.visible()"), true)
 end
 
+T["insertion can replace automatic indentation"] = function()
+  child.bo.autoindent = true
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "    x" })
+  -- A server edit that replaces the new line's indentation as well.
+  type_keys("o")
+  type_keys("b<F2><C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "    x", "bar" })
+end
+
 return T
