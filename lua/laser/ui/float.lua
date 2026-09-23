@@ -715,10 +715,25 @@ function M.new(opts)
         if (args.event == "CursorMovedC") ~= (mode == "c") then
           return
         end
-        -- The menu's own insertion updates `shown`, so it never counts as a move.
+        -- The menu's own insertion updates `shown`, so it never counts here.
         local state = text_state(mode)
         if state.row ~= shown.row or (state.line == shown.line and state.col ~= shown.col) then
           dismiss()
+        elseif state.line ~= shown.line then
+          if state.col < startcol - 1 then
+            dismiss()
+            return
+          end
+          -- The user edited the completed text. Unless completion redraws the
+          -- menu, what they typed is now the input to restore and to match.
+          typed = state.line:sub(startcol, state.col)
+          inserted = typed
+          cursor = 0
+          ui.reset()
+          shown = state
+          render()
+          update_preview()
+          redraw()
         end
       end,
     })

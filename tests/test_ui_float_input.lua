@@ -646,4 +646,14 @@ T["scrolling the preview from a mapping keeps the menu open"] = function()
   expect.equality(child.lua_get("CLOSED"), 0)
 end
 
+T["typing after a selection makes the typed text the input to restore"] = function()
+  -- Manual completion: nothing redraws the menu on text changes.
+  type_keys("ib<F2><C-n>")
+  type_keys("x")
+  expect.equality(line(), "barx")
+  expect.equality(child.lua_get("UI.selected()"), 0)
+  type_keys("<C-e>")
+  expect.equality(line(), "barx")
+end
+
 return T
