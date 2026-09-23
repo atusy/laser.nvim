@@ -940,6 +940,10 @@ function M.new(opts)
     local typed_word = text:gsub("[\1-\9\11-\31\127]", "\22%0")
     feed({ { bs:rep(chars), false }, { typed_word, true } }, function()
       restore_options()
+      -- The keys are in; record what they produced, which a prediction can
+      -- miss when a confirmed candidate spans lines.
+      expected = { mode = mode, state = text_state(mode) }
+      shown = expected.state
       if callback then
         callback()
       end

@@ -612,6 +612,7 @@ T["per-call client order rearranges cached candidates"] = function()
 end
 
 for name, item in pairs({
+  multiline = { label = "bar", insertText = "bar\nbaz" },
   snippet = { label = "bar", insertText = "bar($1)$0", insertTextFormat = 2 },
   ["additional edits"] = {
     label = "bar",
