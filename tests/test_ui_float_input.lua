@@ -668,4 +668,11 @@ T["automatic paragraph formatting waits until the candidate is inserted"] = func
   expect.equality(child.bo.formatoptions, "a")
 end
 
+T["cancelling in the same input as typing keeps the typed text"] = function()
+  type_keys("ib<F2><C-n>")
+  -- One batch, so no watcher runs between the typing and the cancellation.
+  type_keys("x<C-e>")
+  expect.equality(line(), "barx")
+end
+
 return T

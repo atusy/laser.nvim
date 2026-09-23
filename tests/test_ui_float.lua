@@ -707,7 +707,7 @@ T["the menu starts under the completion start when typed text is wide"] = functi
   expect.equality(vim.api.nvim_win_get_config(ui.win()).col, screen_col(3))
 end
 
-T["matches are redone against the typed input after the menu inserts a candidate"] = function()
+T["matches are redone against the typed input when rows are redrawn after insertion"] = function()
   set_line("x.fo ")
   vim.api.nvim_win_set_cursor(0, { 1, 4 })
   local ui = new()
@@ -722,10 +722,12 @@ T["matches are redone against the typed input after the menu inserts a candidate
   padded.user_data.laser.item.filterText = "other"
   padded.user_data.laser.startcol = 2
   ui.open(1, { shown, padded }, "i")
-  -- What inserting the first candidate leaves in the buffer.
+  ui.select(1, { insert = false })
+  -- What inserting the first candidate leaves in the buffer, then a batch of
+  -- results streaming in while browsing redraws the rows.
   set_line("x.fo_b ")
   vim.api.nvim_win_set_cursor(0, { 1, 6 })
-  ui.select(1, { insert = false })
+  ui.update(1, { shown, padded }, "i")
   local typed = { { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 4 } }
   expect.equality(match_ranges(ui, 0, "PmenuMatchSel"), typed)
   expect.equality(match_ranges(ui, 1), { { 2, 3 }, { 3, 4 } })

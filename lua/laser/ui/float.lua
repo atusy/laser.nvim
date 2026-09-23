@@ -233,7 +233,7 @@ function M.new(opts)
   local cells = {}
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
-  local dismiss, redraw, watch, layout_and_draw
+  local dismiss, redraw, watch, layout_and_draw, reconcile
   local closing = false -- the menu is closing its own window
   -- Typeahead can leave the mode before the menu's own change is observed.
   -- Unlike the window watchers, this outlives each menu window. ModeChanged
@@ -706,6 +706,37 @@ function M.new(opts)
     end
   end
 
+  ---Bring the menu up to date with what the user did to the text since it
+  ---was drawn. Moving away closes it. Editing the completed text makes what
+  ---they typed the input to restore and match, unless completion redraws the
+  ---menu first. The menu's own insertion updates `shown`, so it never counts.
+  ---@return boolean open
+  function reconcile()
+    if pending_insertions > 0 then
+      -- The menu's own keys are still queued; the text is not final yet.
+      return true
+    end
+    local state = text_state(mode)
+    if state.row ~= shown.row or (state.line == shown.line and state.col ~= shown.col) then
+      dismiss()
+      return false
+    elseif state.line == shown.line then
+      return true
+    elseif state.col < startcol - 1 then
+      dismiss()
+      return false
+    end
+    typed = state.line:sub(startcol, state.col)
+    inserted = typed
+    cursor = 0
+    ui.reset()
+    shown = state
+    render()
+    update_preview()
+    redraw()
+    return true
+  end
+
   ---Close when the user moves away from the completed text without editing it.
   function watch()
     vim.api.nvim_clear_autocmds({ group = group })
@@ -715,26 +746,7 @@ function M.new(opts)
         if (args.event == "CursorMovedC") ~= (mode == "c") then
           return
         end
-        -- The menu's own insertion updates `shown`, so it never counts here.
-        local state = text_state(mode)
-        if state.row ~= shown.row or (state.line == shown.line and state.col ~= shown.col) then
-          dismiss()
-        elseif state.line ~= shown.line then
-          if state.col < startcol - 1 then
-            dismiss()
-            return
-          end
-          -- The user edited the completed text. Unless completion redraws the
-          -- menu, what they typed is now the input to restore and to match.
-          typed = state.line:sub(startcol, state.col)
-          inserted = typed
-          cursor = 0
-          ui.reset()
-          shown = state
-          render()
-          update_preview()
-          redraw()
-        end
+        reconcile()
       end,
     })
     vim.api.nvim_create_autocmd("WinScrolled", {
@@ -1107,7 +1119,8 @@ function M.new(opts)
   ---@param opts? { insert?: boolean }
   ---@return boolean handled
   function ui.select(delta, opts)
-    if delta == 0 or not ui.visible() then
+    -- Keys typed in the same batch have not reached the watchers yet.
+    if delta == 0 or not ui.visible() or not reconcile() then
       return false
     end
     move(delta)
@@ -1143,7 +1156,7 @@ function M.new(opts)
   ---@param after? fun() runs once the confirmation edits are applied
   ---@return boolean confirmed
   local function confirm(after)
-    if not ui.visible() then
+    if not ui.visible() or not reconcile() then
       return false
     end
     local item = items[cursor]
@@ -1226,6 +1239,9 @@ function M.new(opts)
   function ui.cancel()
     if not ui.visible() then
       return false
+    elseif not reconcile() then
+      -- The cursor had moved away; the menu is closed and nothing to restore.
+      return true
     end
     if inserted ~= typed then
       insert(typed)
