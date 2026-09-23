@@ -787,4 +787,14 @@ T["the preview starts after a bordered menu's right border"] = function()
   expect.equality(preview.col, menu.col + menu.width + 2)
 end
 
+T["rows seen while moving stay frozen without being queried in between"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 3 })
+  ui.open(1, labels(9), "i")
+  ui.select(5, { insert = false })
+  ui.select(-4, { insert = false })
+  expect.equality(ui.frozen_count(), 5)
+end
+
 return T
