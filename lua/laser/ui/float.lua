@@ -190,11 +190,35 @@ function M.new(opts)
     return (menu.border == nil or menu.border == "none") and 0 or 2
   end
 
+  ---1-based screen row and column of the cursor in the edited text.
+  ---@return integer row, integer col
+  local function cursor_screenpos()
+    if mode == "c" then
+      return vim.o.lines - vim.o.cmdheight + 1, vim.fn.getcmdscreenpos()
+    end
+    local origin = vim.fn.win_screenpos(0)
+    return origin[1] + vim.fn.winline() - 1, origin[2] + vim.fn.wincol() - 1
+  end
+
+  ---1-based screen column where the completed text starts, measured back from
+  ---the cursor so tabs, wide and control characters, 'number' and horizontal
+  ---scrolling are accounted for.
+  ---@return integer
+  local function start_screencol()
+    local _, col = cursor_screenpos()
+    local state = text_state(mode)
+    local typed_width = vim.fn.strdisplaywidth(state.line:sub(1, state.col))
+      - vim.fn.strdisplaywidth(state.line:sub(1, startcol - 1))
+    -- Text wrapped in from the previous screen line starts at the left edge.
+    local left = mode == "c" and 1
+      or vim.fn.win_screenpos(0)[2] + vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+    return math.max(col - typed_width, left)
+  end
+
   local function compute_layout()
     local want = math.min(#items, max_height(menu))
     -- The command line sits on the last rows, so its menu always opens above.
-    local row = mode == "c" and vim.o.lines - vim.o.cmdheight + 1
-      or vim.fn.win_screenpos(0)[1] + vim.fn.winline() - 1
+    local row = cursor_screenpos()
     local below = vim.o.lines - vim.o.cmdheight - row - border_rows()
     local above = row - 1 - border_rows()
     local direction = mode == "c" and "above" or menu.direction or "auto"
@@ -313,18 +337,14 @@ function M.new(opts)
       zindex = 200,
       border = menu.border or "none",
     }
-    if mode == "c" then
-      local prompt = vim.fn.getcmdtype() .. vim.fn.getcmdprompt()
-      config.relative = "editor"
-      config.row = vim.o.lines - vim.o.cmdheight - height() - border_rows()
-      config.col = vim.api.nvim_strwidth(prompt .. vim.fn.getcmdline():sub(1, startcol - 1))
-    else
-      local col = vim.api.nvim_win_get_cursor(0)[2]
-      local line = vim.api.nvim_get_current_line()
-      config.relative = "cursor"
-      config.row = layout.above and -(height() + border_rows()) or 1
-      config.col = -vim.api.nvim_strwidth(line:sub(startcol, col))
-    end
+    -- Position against the editor so the menu stays where it is computed
+    -- here; Neovim would otherwise shift a window that does not fit.
+    local side = border_rows() / 2
+    local row = cursor_screenpos()
+    local outer_width = config.width + 2 * side
+    config.relative = "editor"
+    config.row = layout.above and row - 1 - height() - 2 * side or row
+    config.col = math.max(0, math.min(start_screencol() - 1 - side, vim.o.columns - outer_width))
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_config(win, config)
     else

@@ -306,4 +306,11 @@ T["candidates ending exactly at textwidth are inserted"] = function()
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "barbazquxq" })
 end
 
+T["the menu lines up with input() text after its prompt"] = function()
+  child.lua([[vim.keymap.set("c", "<F2>", function() UI.open(1, ITEMS, "c") end)]])
+  type_keys(":call input('N: ')<CR>b<F2>")
+  expect.equality(child.fn.getcmdtype(), "@")
+  expect.equality(child.lua_get([[vim.api.nvim_win_get_config(UI.win()).col]]), 3)
+end
+
 return T

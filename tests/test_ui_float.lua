@@ -348,4 +348,37 @@ T["control characters in fields are shown as spaces"] = function()
   expect.equality(vim.api.nvim_win_get_width(ui.win()), 7)
 end
 
+---Display column of byte `col` (1-based) in the current line, 0-based on screen.
+local function screen_col(col)
+  local line = vim.api.nvim_get_current_line()
+  return vim.fn.win_screenpos(0)[2] - 1 + vim.fn.strdisplaywidth(line:sub(1, col - 1))
+end
+
+T["the menu starts under the completion start across tabs"] = function()
+  set_line("x.a\tb")
+  vim.api.nvim_win_set_cursor(0, { 1, 4 })
+  local ui = new()
+  ui.open(3, { candidate("a\tbc") }, "i")
+  local config = vim.api.nvim_win_get_config(ui.win())
+  expect.equality(config.col, screen_col(3))
+end
+
+T["a menu near the right edge stays on screen"] = function()
+  vim.o.columns = 20
+  set_line(string.rep("x", 18) .. "b")
+  local ui = new()
+  ui.open(19, { candidate("barbazqux") }, "i")
+  local config = vim.api.nvim_win_get_config(ui.win())
+  expect.equality(config.col + config.width, 20)
+end
+
+T["a bordered menu aligns its text with the completion start"] = function()
+  set_line("foo.ba")
+  local ui = new()
+  ui.configure({ border = "single" })
+  ui.open(5, { candidate("bar") }, "i")
+  local config = vim.api.nvim_win_get_config(ui.win())
+  expect.equality(config.col + 1, screen_col(5))
+end
+
 return T
