@@ -433,4 +433,25 @@ T["closing the menu window from outside tears the menu down"] = function()
   expect.equality(ui.preview_win(), nil)
 end
 
+T["wide fields are truncated by display width, dropping minor columns first"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_width = 12 })
+  ui.open(1, {
+    candidate("日本語テキスト", {
+      kind = "Kind",
+      menu = "説明",
+      highlights = { { type = "abbr", col = 4, width = 6, hl_group = "PmenuMatch" } },
+    }),
+  }, "i")
+  local got = rows(ui)
+  expect.equality(got, { "日本語テキス" })
+  expect.equality(vim.api.nvim_strwidth(got[1]), 12)
+  expect.equality(vim.api.nvim_win_get_width(ui.win()), 12)
+  local match = vim.tbl_filter(function(mark)
+    return mark[4].hl_group == "PmenuMatch"
+  end, marks(ui))[1]
+  expect.equality({ match[3], match[4].end_col }, { 3, 9 })
+end
+
 return T
