@@ -156,9 +156,13 @@ require("laser").complete({ enable_commit_characters = true })
 Fuzzy matching and score sorting are enabled by default, and the menu
 highlights the matched characters with `PmenuMatch` (`PmenuMatchSel` on the
 selected row). Custom matchers get the same highlighting when they return
-match positions; for other decorations, add a converter such as
-`require("laser.filter").highlight_converter()` to your filters, and the
-menu keeps the highlights it sets.
+match positions. Link `PmenuMatch` and `PmenuMatchSel` to `Pmenu` and
+`PmenuSel` to turn it off.
+
+Converters in your filters may add their own `highlights`, and the menu draws
+them. `require("laser.filter").highlight_converter()` computes the match
+highlights for every displayed candidate in advance; the menu then uses those
+instead of its own.
 
 For custom matching, sorting, or refresh behavior, see the API details in [filters](lua/laser/filter.lua), [refresh helpers](lua/laser/refresh.lua), and [completion options](lua/laser/init.lua).
 
