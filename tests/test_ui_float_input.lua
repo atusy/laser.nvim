@@ -296,4 +296,14 @@ T["insertion replaces spaces one by one despite softtabstop"] = function()
   expect.equality(line(), "ab.bar")
 end
 
+T["candidates ending exactly at textwidth are inserted"] = function()
+  child.lua([[
+    ITEMS = { { word = "barbazquxq", abbr = "barbazquxq", user_data = { laser = { client_id = 1, item = { label = "barbazquxq" } } } } }
+    vim.bo.textwidth = 10
+    vim.bo.formatoptions = "t"
+  ]])
+  type_keys("ib<F2><C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "barbazquxq" })
+end
+
 return T

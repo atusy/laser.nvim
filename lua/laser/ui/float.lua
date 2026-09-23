@@ -667,7 +667,8 @@ function M.new(opts)
       return false
     end
     local before = vim.api.nvim_get_current_line():sub(1, startcol - 1)
-    return vim.fn.strdisplaywidth(before .. word) >= vim.bo.textwidth
+    -- Auto-wrap starts only once the text goes past 'textwidth'.
+    return vim.fn.strdisplaywidth(before .. word) > vim.bo.textwidth
   end
 
   ---@param delta integer
