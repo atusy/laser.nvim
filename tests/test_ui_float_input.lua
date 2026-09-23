@@ -318,14 +318,18 @@ T["scrolling caused by the menu's own insertion keeps it open"] = function()
   child.wo.wrap = false
   child.o.sidescroll = 1
   child.lua([[
-    ITEMS = { { word = "0123456789bar_very_long", abbr = "x", user_data = { laser = { client_id = 1, item = { label = "x" } } } } }
-    START = 1
+    ITEMS = { { word = "bar_very_long", abbr = "x", user_data = { laser = { client_id = 1, item = { label = "x" } } } } }
+    START = 11
   ]])
   type_keys("i0123456789b<F2><C-n>")
   child.cmd("redraw")
   expect.equality(line(), "0123456789bar_very_long")
   expect.equality(child.lua_get("UI.visible()"), true)
   expect.equality(child.lua_get("CLOSED"), 0)
+  -- The menu moved with the scrolled text.
+  local leftcol = child.fn.winsaveview().leftcol
+  expect.equality(leftcol > 0, true)
+  expect.equality(child.lua_get([[vim.api.nvim_win_get_config(UI.win()).col]]), 10 - leftcol)
 end
 
 T["scrolling the window without editing closes the menu"] = function()
@@ -415,18 +419,22 @@ T["typing that scrolls the window sideways keeps the menu open"] = function()
     -- Like completion, redraw the menu from the current input on every change.
     vim.api.nvim_create_autocmd("TextChangedI", {
       callback = function()
-        if not UI.skip_text_change() then UI.open(1, ITEMS, "i") end
+        if not UI.skip_text_change() then UI.open(START or 1, ITEMS, "i") end
       end,
     })
   ]])
+  child.lua([[START = 11]])
   type_keys("i0123456789<F2>")
   for _ = 1, 12 do
     type_keys("x")
     child.cmd("redraw")
   end
-  expect.equality(child.fn.winsaveview().leftcol > 0, true)
+  local leftcol = child.fn.winsaveview().leftcol
+  expect.equality(leftcol > 0, true)
   expect.equality(child.lua_get("UI.visible()"), true)
   expect.equality(child.lua_get("CLOSED"), 0)
+  -- The menu moved with the text: its start is on screen column 10 - leftcol.
+  expect.equality(child.lua_get([[vim.api.nvim_win_get_config(UI.win()).col]]), 10 - leftcol)
 end
 
 T["the command-line menu stays above the command line with cmdheight=0"] = function()
