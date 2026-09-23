@@ -716,7 +716,8 @@ function M.new(opts)
       local function release()
         local keys = pending_commit
         pending_commit = nil
-        vim.api.nvim_feedkeys(keys, "ni", true)
+        -- on_key reports special keys in their internal form, as fed keys expect.
+        vim.api.nvim_feedkeys(keys, "ni", false)
       end
       feed({}, function()
         -- The menu may have closed meanwhile; never keep swallowing input.

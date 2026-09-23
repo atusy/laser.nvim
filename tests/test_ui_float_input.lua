@@ -222,4 +222,12 @@ T["command-line selection without insertion is repainted"] = function()
   expect.no_equality(after[8][2], after[9][2])
 end
 
+T["keys typed while a commit is pending are replayed unchanged"] = function()
+  child.lua([[COMMIT = { bar = { "." } }]])
+  type_keys("ib<F2><C-j>")
+  child.api.nvim_input(".<BS>x、")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "barx、")
+end
+
 return T
