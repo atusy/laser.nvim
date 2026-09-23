@@ -28,7 +28,10 @@ function M.with_defaults(item, defaults)
   if not defaults then
     return item
   end
-  local result = vim.tbl_extend("keep", {}, item)
+  local result = {}
+  for key, value in pairs(item) do
+    result[key] = value
+  end
   for _, key in ipairs({ "insertTextFormat", "insertTextMode", "data", "commitCharacters" }) do
     if result[key] == nil then
       result[key] = defaults[key]

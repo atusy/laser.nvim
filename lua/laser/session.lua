@@ -54,10 +54,12 @@ function Session:set_result(client_id, result, ctx, append)
   if previous and not (result and result.items) then
     incomplete = previous.incomplete
   end
+  -- Reused per item: conversion reads the context but does not retain it.
+  local item_ctx = vim.tbl_extend("force", {}, ctx)
   for _, item in ipairs(lsp_items) do
     item = items.with_defaults(item, defaults)
     local startcol = items.start_col(item, ctx)
-    local item_ctx = vim.tbl_extend("force", ctx, { startcol = startcol })
+    item_ctx.startcol = startcol
     local candidate = items.convert(item, item_ctx)
     candidate.user_data.laser.startcol = startcol
     self.next_id = self.next_id + 1
