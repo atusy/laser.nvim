@@ -400,4 +400,11 @@ T["insertion replaces input typed before this insertion even with a strict backs
   expect.equality(child.o.backspace, "")
 end
 
+T["the command-line menu starts under the completion start when typed text is wide"] = function()
+  child.lua([[vim.keymap.set("c", "<F2>", function() UI.open(3, ITEMS, "c") end)]])
+  type_keys(":x.日本<F2>")
+  -- ":" and "x." take three cells before the typed "日本".
+  expect.equality(child.lua_get([[vim.api.nvim_win_get_config(UI.win()).col]]), 3)
+end
+
 return T

@@ -683,4 +683,12 @@ T["resolved plain text replaces the filetype of initial markdown"] = function()
   expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "docs" })
 end
 
+T["the menu starts under the completion start when typed text is wide"] = function()
+  set_line("x.日本 ")
+  vim.api.nvim_win_set_cursor(0, { 1, #"x.日本" })
+  local ui = new()
+  ui.open(3, { candidate("日本語") }, "i")
+  expect.equality(vim.api.nvim_win_get_config(ui.win()).col, screen_col(3))
+end
+
 return T
