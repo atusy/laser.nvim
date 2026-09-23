@@ -392,4 +392,12 @@ T["the menu's own change is recognized once, not when later input returns to it"
   expect.equality(child.lua_get("SKIPPED"), { true, false, false })
 end
 
+T["insertion replaces input typed before this insertion even with a strict backspace"] = function()
+  child.o.backspace = ""
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "b" })
+  type_keys("A<F2><C-n>")
+  expect.equality(line(), "bar")
+  expect.equality(child.o.backspace, "")
+end
+
 return T
