@@ -869,4 +869,15 @@ T["the preview is hidden when no side has room"] = function()
   expect.equality(ui.preview_win(), nil)
 end
 
+T["the preview is tall enough for wrapped lines"] = function()
+  vim.o.columns = 120
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = { max_width = 60 } })
+  ui.open(1, { documented("b1", string.rep("a", 120) .. "\nend") }, "i")
+  ui.select(1, { insert = false })
+  expect.equality(vim.api.nvim_win_get_width(ui.preview_win()), 60)
+  expect.equality(vim.api.nvim_win_get_height(ui.preview_win()), 3)
+end
+
 return T

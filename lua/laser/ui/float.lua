@@ -515,7 +515,8 @@ function M.new(opts)
     hide_preview()
   end
 
-  local preview_size -- width and height of the drawn documentation
+  ---@type { width: integer, max_height: integer, line_widths: integer[] }
+  local preview_size -- natural size of the drawn documentation
 
   ---Put the preview beside the menu, or on its left when the right is too
   ---narrow. The menu's configured position is where it is drawn.
@@ -544,12 +545,18 @@ function M.new(opts)
       hide_preview()
       return false
     end
+    -- The preview wraps, so long lines take several rows at this width.
+    local height = 0
+    for _, cells in ipairs(preview_size.line_widths) do
+      height = height + math.max(1, math.ceil(cells / width))
+    end
+    height = math.min(height, preview_size.max_height)
     vim.api.nvim_win_set_config(preview_win, {
       relative = "editor",
       row = anchor.row,
       col = col,
       width = width,
-      height = preview_size.height,
+      height = height,
       border = options.border or "none",
     })
     return true
@@ -576,13 +583,15 @@ function M.new(opts)
     if vim.bo[preview_buf].filetype ~= filetype then
       vim.bo[preview_buf].filetype = filetype
     end
-    local width = 1
-    for _, line in ipairs(lines) do
-      width = math.max(width, vim.api.nvim_strwidth(line))
+    local width, line_widths = 1, {}
+    for i, line in ipairs(lines) do
+      line_widths[i] = vim.api.nvim_strwidth(line)
+      width = math.max(width, line_widths[i])
     end
     preview_size = {
       width = math.min(width, options.max_width or 60),
-      height = math.min(#lines, options.max_height or 20),
+      max_height = options.max_height or 20,
+      line_widths = line_widths,
     }
     if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
       preview_win = vim.api.nvim_open_win(preview_buf, false, {
@@ -590,7 +599,7 @@ function M.new(opts)
         row = 0,
         col = 0,
         width = preview_size.width,
-        height = preview_size.height,
+        height = 1,
         style = "minimal",
         focusable = false,
         zindex = 201,
