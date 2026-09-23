@@ -456,4 +456,18 @@ T["a confirmation without edits leaves no change to skip within Insert mode"] = 
   expect.equality(child.lua_get("UI.skip_text_change()"), false)
 end
 
+T["clicking right of the menu selects nothing"] = function()
+  child.o.mouse = "a"
+  child.lua([[vim.keymap.set("i", "<LeftMouse>", function() RESULT = UI.select_mouse() end)]])
+  type_keys("ib<F2>")
+  child.cmd("redraw")
+  local pos = child.lua_get([[vim.fn.win_screenpos(UI.win())]])
+  local width = child.lua_get([[vim.api.nvim_win_get_width(UI.win())]])
+  -- One cell past the last column, on the first row.
+  child.api.nvim_input_mouse("left", "press", "", 0, pos[1] - 1, pos[2] - 1 + width)
+  child.lua([[vim.wait(20)]])
+  expect.equality(child.lua_get("RESULT"), false)
+  expect.equality(child.lua_get("UI.selected()"), 0)
+end
+
 return T
