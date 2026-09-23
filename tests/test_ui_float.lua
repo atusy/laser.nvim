@@ -923,4 +923,18 @@ T["the preview shows documentation unfolded"] = function()
   expect.equality(height, 3)
 end
 
+T["search highlighting does not reach the menu or its preview"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, { documented("b1", "docs") }, "i")
+  ui.select(1, { insert = false })
+  for _, win in ipairs({ ui.win(), ui.preview_win() }) do
+    local mapping = vim.wo[win].winhighlight
+    expect.equality(mapping:find("Search:None", 1, true) ~= nil, true)
+    expect.equality(mapping:find("CurSearch:None", 1, true) ~= nil, true)
+    expect.equality(mapping:find("IncSearch:None", 1, true) ~= nil, true)
+  end
+end
+
 return T

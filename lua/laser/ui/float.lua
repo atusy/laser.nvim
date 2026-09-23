@@ -4,6 +4,8 @@ local M = {}
 
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
 local COLUMNS = { "abbr", "kind", "menu" }
+-- Search matches in candidates or documentation are unrelated to completion.
+local WINHIGHLIGHT = "Normal:Pmenu,FloatBorder:Pmenu,Search:None,CurSearch:None,IncSearch:None"
 local SELECTED =
   { PmenuMatch = "PmenuMatchSel", PmenuKind = "PmenuKindSel", PmenuExtra = "PmenuExtraSel" }
 
@@ -503,7 +505,7 @@ function M.new(opts)
     else
       config.noautocmd = true
       win = vim.api.nvim_open_win(ensure_buf(), false, config)
-      vim.wo[win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
+      vim.wo[win].winhighlight = WINHIGHLIGHT
       vim.wo[win].wrap = false
       vim.wo[win].winblend = vim.o.pumblend
       -- Watchers read the current state, so one set serves the window's life.
@@ -618,7 +620,7 @@ function M.new(opts)
         zindex = 201,
         noautocmd = true,
       })
-      vim.wo[preview_win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
+      vim.wo[preview_win].winhighlight = WINHIGHLIGHT
       vim.wo[preview_win].wrap = true
       -- Windows inherit folding; documentation should be shown whole.
       vim.wo[preview_win].foldenable = false
