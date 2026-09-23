@@ -609,4 +609,19 @@ T["confirming right after selecting waits for the insertion"] = function()
   expect.equality(child.lua_get("CONFIRMED"), { { word = "bar", line = "bar" } })
 end
 
+T["several actions in one mapping apply in order"] = function()
+  child.lua([[
+    vim.keymap.set("i", "<F7>", function() UI.select(1); UI.select(1); UI.confirm() end)
+    vim.keymap.set("i", "<F8>", function() UI.select(1); UI.cancel() end)
+  ]])
+  type_keys("ib<F2><F7>")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "baz")
+  expect.equality(child.lua_get("CONFIRMED"), { { word = "baz", line = "baz" } })
+  type_keys("<Esc>o")
+  type_keys("b<F2><F8>")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "b")
+end
+
 return T

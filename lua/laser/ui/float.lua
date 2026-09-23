@@ -943,8 +943,34 @@ function M.new(opts)
   ---Replace the text between startcol and the cursor with `word`.
   ---@param word string
   ---@param callback? fun() runs once the edit is in place
-  local function insert(word, callback)
+  local insert
+
+  ---Run `step` once no insertion's keys are pending, in call order.
+  ---@param step fun()
+  local function after_pending(step)
+    if pending_insertions > 0 then
+      table.insert(after_insertions, step)
+    else
+      step()
+    end
+  end
+
+  ---Run steps that waited for insertions, stopping when one feeds keys again.
+  local function run_waiting()
+    while pending_insertions == 0 and #after_insertions > 0 do
+      table.remove(after_insertions, 1)()
+    end
+  end
+
+  function insert(word, callback)
     inserted = word
+    if mode == "i" and pending_insertions > 0 then
+      -- Earlier keys are still queued, so the text is not final yet.
+      table.insert(after_insertions, function()
+        insert(word, callback)
+      end)
+      return
+    end
     -- Keys cannot carry a NUL byte, so it is left out of the inserted text.
     local text = word:gsub("%z", "")
     local state = text_state(mode)
@@ -982,13 +1008,7 @@ function M.new(opts)
       if callback then
         callback()
       end
-      if pending_insertions == 0 then
-        local waiting = after_insertions
-        after_insertions = {}
-        for _, run in ipairs(waiting) do
-          run()
-        end
-      end
+      run_waiting()
     end)
   end
 
@@ -1123,11 +1143,9 @@ function M.new(opts)
     end
     if inserted ~= item.word then
       insert(item.word, done)
-    elseif pending_insertions > 0 then
-      -- The candidate's keys are still queued; confirmation edits need them.
-      table.insert(after_insertions, done)
     else
-      done()
+      -- The candidate's keys may still be queued; confirmation edits need them.
+      after_pending(done)
     end
     return true
   end
