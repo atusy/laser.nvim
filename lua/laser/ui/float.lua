@@ -56,6 +56,12 @@ end
 ---@field auto_select? boolean highlight the first candidate without inserting it
 ---@field direction? "auto"|"below"|"above" "auto" prefers below unless above has more room
 ---@field reversed? boolean list candidates bottom-up when the menu opens above
+---@field preview? boolean|laser.PreviewOpts show documentation of the selected candidate
+
+---@class laser.PreviewOpts
+---@field max_width? integer defaults to 60
+---@field max_height? integer defaults to 20
+---@field border? string|string[] nvim_open_win() border
 
 ---@param opts laser.MenuOpts
 ---@return integer
@@ -123,7 +129,7 @@ local function measure(items, limit)
   return widths
 end
 
----@param opts? { on_confirm?: fun(candidate: table), on_close?: fun() }
+---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }? }
 ---@return laser.UI
 function M.new(opts)
   opts = opts or {}
@@ -140,6 +146,8 @@ function M.new(opts)
   local browsing, frozen, initial_cursor = false, 0, 0
   local layout = { height = 0, above = false, reversed = false, scrollbar = false }
   local shown -- text state the menu was drawn for
+  local preview_buf, preview_win, cancel_resolve
+  local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
   local dismiss
 
@@ -303,6 +311,120 @@ function M.new(opts)
     end
   end
 
+  local function hide_preview()
+    if preview_win and vim.api.nvim_win_is_valid(preview_win) then
+      vim.api.nvim_win_close(preview_win, true)
+    end
+    preview_win = nil
+  end
+
+  local function close_preview()
+    if cancel_resolve then
+      cancel_resolve()
+      cancel_resolve = nil
+    end
+    hide_preview()
+  end
+
+  ---@param text string
+  ---@param filetype string
+  local function draw_preview(text, filetype)
+    if text == "" then
+      hide_preview()
+      return
+    end
+    local options = type(menu.preview) == "table" and menu.preview or {}
+    if not (preview_buf and vim.api.nvim_buf_is_valid(preview_buf)) then
+      preview_buf = vim.api.nvim_create_buf(false, true)
+      vim.bo[preview_buf].bufhidden = "hide"
+    end
+    local lines = vim.split(text, "\n", { plain = true })
+    vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
+    vim.bo[preview_buf].filetype = filetype
+    local width = 1
+    for _, line in ipairs(lines) do
+      width = math.max(width, vim.api.nvim_strwidth(line))
+    end
+    width = math.min(width, options.max_width or 60)
+    local border = (options.border == nil or options.border == "none") and 0 or 2
+    local origin = vim.fn.win_screenpos(win)
+    local menu_width = vim.api.nvim_win_get_width(win) + border_rows()
+    local col = origin[2] - 1 + menu_width
+    if col + width + border > vim.o.columns then
+      col = math.max(origin[2] - 1 - width - border, 0)
+    end
+    local config = {
+      relative = "editor",
+      row = origin[1] - 1,
+      col = col,
+      width = width,
+      height = math.min(#lines, options.max_height or 20),
+      style = "minimal",
+      focusable = false,
+      zindex = 201,
+      border = options.border or "none",
+    }
+    if preview_win and vim.api.nvim_win_is_valid(preview_win) then
+      vim.api.nvim_win_set_config(preview_win, config)
+    else
+      config.noautocmd = true
+      preview_win = vim.api.nvim_open_win(preview_buf, false, config)
+      vim.wo[preview_win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
+      vim.wo[preview_win].wrap = true
+    end
+    vim.api.nvim_win_call(preview_win, function()
+      vim.fn.winrestview({ topline = 1 })
+    end)
+  end
+
+  ---Show the selected candidate's documentation, then its resolved version.
+  local function update_preview()
+    if cancel_resolve then
+      cancel_resolve()
+      cancel_resolve = nil
+    end
+    local item = items[cursor]
+    if not menu.preview or preview_hidden or not item or not ui.visible() then
+      close_preview()
+      return
+    end
+    local preview = require("laser.preview")
+    local lsp_item = item.user_data.laser.item
+    draw_preview(preview.info(lsp_item))
+    local context = opts.preview_context and opts.preview_context(item)
+    if context and context.client then
+      cancel_resolve = preview.resolve(lsp_item, context.client, context.bufnr, draw_preview)
+    end
+  end
+
+  ---@return integer?
+  function ui.preview_win()
+    return preview_win
+  end
+
+  ---@param delta integer lines to scroll; negative scrolls up
+  ---@return boolean handled
+  function ui.scroll_preview(delta)
+    if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
+      return false
+    end
+    vim.api.nvim_win_call(preview_win, function()
+      local key = delta > 0 and "\5" or "\25"
+      vim.cmd("normal! " .. math.abs(delta) .. key)
+    end)
+    return true
+  end
+
+  ---@return boolean handled
+  function ui.toggle_preview()
+    if not ui.visible() or not menu.preview then
+      return false
+    end
+    preview_hidden = not preview_hidden
+    update_preview()
+    return true
+  end
+
   ---Close when the user moves away from the completed text without editing it.
   local function watch()
     vim.api.nvim_clear_autocmds({ group = group })
@@ -356,7 +478,9 @@ function M.new(opts)
     local state = text_state(new_mode)
     typed = state.line:sub(col, state.col)
     inserted = typed
+    preview_hidden = false
     show(col, new_items, new_mode)
+    update_preview()
   end
 
   ---Release the frozen prefix after actual user input.
@@ -387,6 +511,7 @@ function M.new(opts)
   end
 
   function ui.close()
+    close_preview()
     vim.api.nvim_clear_autocmds({ group = group })
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
@@ -459,6 +584,7 @@ function M.new(opts)
     browsing = true
     ui.frozen_count()
     render()
+    update_preview()
   end
 
   ---Move the selection without editing text. Moving past either end selects

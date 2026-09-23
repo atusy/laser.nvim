@@ -229,4 +229,94 @@ T["a scrollbar marks the viewport when candidates overflow"] = function()
   expect.equality(thumb(), { 1 })
 end
 
+local function fake_client()
+  local client = { callbacks = {}, cancelled = {} }
+  function client.supports_method()
+    return true
+  end
+  function client.request(_, _, _, callback)
+    client.callbacks[#client.callbacks + 1] = callback
+    return true, #client.callbacks
+  end
+  function client.cancel_request(_, id)
+    client.cancelled[#client.cancelled + 1] = id
+  end
+  return client
+end
+
+local function documented(label, documentation)
+  local item = candidate(label)
+  item.user_data.laser.item.documentation = documentation
+  return item
+end
+
+T["preview shows the selected documentation beside the menu"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, {
+    documented("markdown", { kind = "markdown", value = "**bold**" }),
+    documented("plain", { kind = "plaintext", value = "text" }),
+    candidate("none"),
+  }, "i")
+  expect.equality(ui.preview_win(), nil)
+  ui.select_relative(1)
+  local preview = ui.preview_win()
+  local buf = vim.api.nvim_win_get_buf(preview)
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "**bold**" })
+  expect.equality(vim.bo[buf].filetype, "markdown")
+  local menu_pos = vim.fn.win_screenpos(ui.win())
+  expect.equality(
+    vim.fn.win_screenpos(preview),
+    { menu_pos[1], menu_pos[2] + vim.api.nvim_win_get_width(ui.win()) }
+  )
+  ui.select_relative(1)
+  expect.equality(vim.bo[vim.api.nvim_win_get_buf(ui.preview_win())].filetype, "")
+  ui.select_relative(1)
+  expect.equality(ui.preview_win(), nil)
+end
+
+T["preview resolves the selection and ignores answers after switching or closing"] = function()
+  set_line("b")
+  local client = fake_client()
+  local ui = new({
+    preview_context = function()
+      return { client = client, bufnr = 0 }
+    end,
+  })
+  ui.configure({ preview = true })
+  ui.open(1, { candidate("foo"), candidate("bar") }, "i")
+  ui.select_relative(1)
+  ui.select_relative(1)
+  expect.equality(client.cancelled, { 1 })
+  client.callbacks[1](nil, { documentation = "stale" })
+  client.callbacks[2](nil, {
+    detail = "bar()",
+    documentation = { kind = "markdown", value = "Current docs" },
+  })
+  local buf = vim.api.nvim_win_get_buf(ui.preview_win())
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "bar()", "", "Current docs" })
+  expect.equality(vim.bo[buf].filetype, "markdown")
+  ui.select_relative(-1)
+  ui.close()
+  client.callbacks[3](nil, { documentation = "late" })
+  expect.equality(client.cancelled, { 1, 3 })
+  expect.equality(ui.preview_win(), nil)
+end
+
+T["preview can be toggled and scrolled"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = { max_height = 2 } })
+  ui.open(1, { documented("long", "1\n2\n3\n4") }, "i")
+  ui.select_relative(1)
+  expect.equality(vim.api.nvim_win_get_height(ui.preview_win()), 2)
+  expect.equality(ui.scroll_preview(2), true)
+  expect.equality(vim.fn.line("w0", ui.preview_win()), 3)
+  expect.equality(ui.toggle_preview(), true)
+  expect.equality(ui.preview_win(), nil)
+  ui.toggle_preview()
+  expect.equality(vim.fn.line("w0", ui.preview_win()), 1)
+end
+
 return T
