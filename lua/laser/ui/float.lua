@@ -617,10 +617,8 @@ function M.new(opts)
         if (args.event == "CursorMovedC") ~= (mode == "c") then
           return
         end
+        -- The menu's own insertion updates `shown`, so it never counts as a move.
         local state = text_state(mode)
-        if expected and vim.deep_equal(state, expected.state) then
-          return
-        end
         if state.row ~= shown.row or (state.line == shown.line and state.col ~= shown.col) then
           dismiss()
         end
