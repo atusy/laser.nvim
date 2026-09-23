@@ -918,17 +918,31 @@ function M.new(opts)
     end)
   end
 
-  ---Auto-wrap would move the text being typed to another line midway through
-  ---the fed keys, so such candidates are only selected.
+  ---While browsing, the menu must be able to replace its insertion with the
+  ---next candidate and restore the typed input, which it tracks on one line.
+  ---Candidates with newlines, or that auto-wrap would move to another line
+  ---midway through the fed keys, are therefore only selected.
   ---@param word string
   ---@return boolean
-  local function wraps(word)
-    if mode ~= "i" or vim.bo.textwidth <= 0 or not vim.bo.formatoptions:find("[tca]") then
+  local function splits_line(word)
+    if mode ~= "i" then
+      return false
+    elseif word:find("\n", 1, true) then
+      return true
+    elseif not vim.bo.formatoptions:find("[tca]") then
+      return false
+    end
+    local width = vim.bo.textwidth
+    if width <= 0 and vim.bo.wrapmargin > 0 then
+      local info = vim.fn.getwininfo(vim.api.nvim_get_current_win())[1]
+      width = info.width - info.textoff - vim.bo.wrapmargin
+    end
+    if width <= 0 then
       return false
     end
     local before = vim.api.nvim_get_current_line():sub(1, startcol - 1)
-    -- Auto-wrap starts only once the text goes past 'textwidth'.
-    return vim.fn.strdisplaywidth(before .. word) > vim.bo.textwidth
+    -- Auto-wrap starts only once the text goes past the limit.
+    return vim.fn.strdisplaywidth(before .. word) > width
   end
 
   ---@param delta integer
@@ -974,7 +988,7 @@ function M.new(opts)
       return true
     end
     local word = cursor > 0 and items[cursor].word or typed
-    if not wraps(word) then
+    if not splits_line(word) then
       insert(word)
     end
     return true

@@ -523,4 +523,23 @@ T["control characters in candidates are inserted literally"] = function()
   expect.equality(child.lua_get("SKIPPED"), { true })
 end
 
+T["candidates that would split the line are only selected"] = function()
+  child.lua([[
+    local function item(word)
+      return { word = word, abbr = "x", user_data = { laser = { client_id = 1, item = { label = "x" } } } }
+    end
+    ITEMS = { item("bar\nbaz"), item("bar baz quux") }
+  ]])
+  -- 'wrapmargin' wraps a window 20 columns wide at 10 when 'textwidth' is 0.
+  child.o.columns = 20
+  child.bo.textwidth, child.bo.wrapmargin, child.bo.formatoptions = 0, 10, "t"
+  type_keys("ib<F2><C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "b" })
+  expect.equality(child.lua_get("UI.selected()"), 1)
+  type_keys("<C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "b" })
+  expect.equality(child.lua_get("UI.selected()"), 2)
+  expect.equality(child.lua_get("UI.visible()"), true)
+end
+
 return T
