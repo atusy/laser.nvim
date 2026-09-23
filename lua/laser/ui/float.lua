@@ -598,6 +598,18 @@ function M.new(opts)
     end)
   end
 
+  ---Auto-wrap would move the text being typed to another line midway through
+  ---the fed keys, so such candidates are only selected.
+  ---@param word string
+  ---@return boolean
+  local function wraps(word)
+    if mode ~= "i" or vim.bo.textwidth <= 0 or not vim.bo.formatoptions:find("[tca]") then
+      return false
+    end
+    local before = vim.api.nvim_get_current_line():sub(1, startcol - 1)
+    return vim.fn.strdisplaywidth(before .. word) >= vim.bo.textwidth
+  end
+
   ---@param delta integer
   local function select(delta)
     cursor = (cursor + delta) % (#items + 1)
@@ -633,7 +645,10 @@ function M.new(opts)
       return false
     end
     select(delta)
-    insert(cursor > 0 and items[cursor].word or typed)
+    local word = cursor > 0 and items[cursor].word or typed
+    if not wraps(word) then
+      insert(word)
+    end
     return true
   end
 

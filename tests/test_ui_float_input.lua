@@ -230,4 +230,16 @@ T["keys typed while a commit is pending are replayed unchanged"] = function()
   expect.equality(line(), "barx、")
 end
 
+T["candidates that would be auto-wrapped are selected without insertion"] = function()
+  child.lua([[
+    ITEMS = { { word = "barbazquxquux", abbr = "barbazquxquux", user_data = { laser = { client_id = 1, item = { label = "barbazquxquux" } } } } }
+    vim.bo.textwidth = 10
+    vim.bo.formatoptions = "t"
+  ]])
+  type_keys("ib<F2><C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "b" })
+  expect.equality(child.lua_get("UI.selected()"), 1)
+  expect.equality(child.lua_get("UI.visible()"), true)
+end
+
 return T
