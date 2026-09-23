@@ -534,7 +534,8 @@ function M.new(opts)
     end
     place_preview()
     vim.api.nvim_win_call(preview_win, function()
-      vim.fn.winrestview({ topline = 1 })
+      -- Scrolling moved the cursor too; Neovim would keep it in view.
+      vim.fn.winrestview({ topline = 1, lnum = 1 })
     end)
   end
 

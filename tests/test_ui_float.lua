@@ -649,4 +649,20 @@ T["updates keep a scrolled viewport in place"] = function()
   expect.equality(ui.selected(), 4)
 end
 
+T["the preview opens on the left without room and starts at the top"] = function()
+  vim.o.columns = 25
+  set_line(string.rep("x", 20) .. "b")
+  local ui = new()
+  ui.configure({ preview = { max_width = 8, max_height = 2 } })
+  local docs = "1234567\n2\n3\n4"
+  ui.open(21, { documented("b1", docs), documented("b2", docs) }, "i")
+  ui.select(1, { insert = false })
+  local menu = vim.api.nvim_win_get_config(ui.win())
+  local preview = vim.api.nvim_win_get_config(ui.preview_win())
+  expect.equality(preview.col + preview.width <= menu.col, true)
+  ui.scroll_preview(2)
+  ui.select(1, { insert = false })
+  expect.equality(vim.fn.line("w0", ui.preview_win()), 1)
+end
+
 return T
