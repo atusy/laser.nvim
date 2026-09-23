@@ -14,7 +14,7 @@ local T = MiniTest.new_set({
           callback = function() require("laser").complete(OPTIONS) end,
         })
         LASER = require("laser")
-        vim.keymap.set("i", "<C-n>", function() LASER.insert_relative(1) end)
+        vim.keymap.set("i", "<C-n>", function() LASER.select(1) end)
       ]])
     end,
     post_case = child.stop,
@@ -74,7 +74,7 @@ T["commit characters opt in confirms the selected item before typing"] = functio
     FAKE.start({ items = { { label = "bar", commitCharacters = { "." },
       command = { title = "test", command = "test.commit" } } } })
     vim.lsp.commands["test.commit"] = function() COMMITTED = true end
-    vim.keymap.set("i", "<C-n>", function() LASER.select_relative(1) end)
+    vim.keymap.set("i", "<C-n>", function() LASER.select(1, { insert = false }) end)
   ]])
   type_keys("ib")
   wait_menu_items(1)
@@ -115,7 +115,7 @@ for name, case in pairs({
       else
         c.server_capabilities.completionProvider.allCommitCharacters = { "." }
       end
-      vim.keymap.set("i", "<C-n>", function() LASER.select_relative(1) end)
+      vim.keymap.set("i", "<C-n>", function() LASER.select(1, { insert = false }) end)
     ]])
     type_keys("ib")
     wait_menu_items(1)
@@ -168,7 +168,7 @@ T["commit characters confirm command-line candidates"] = function()
         FAKE.start({ items = { { label = "echo", commitCharacters = { " " } } } }, ev.buf)
       end,
     })
-    vim.keymap.set("c", "<C-n>", function() LASER.select_relative(1) end)
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1, { insert = false }) end)
   ]])
   type_keys(":e")
   wait_menu_items(1)
@@ -406,7 +406,7 @@ T["command-line textEdit sets the menu position and accepted text"] = function()
         } } }
       end }, ev.buf) end,
     })
-    vim.keymap.set("c", "<C-n>", function() LASER.insert_relative(1) end)
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1) end)
     vim.keymap.set("c", "<C-y>", function() LASER.confirm() end)
   ]])
   type_keys(":foo.ba")
@@ -453,7 +453,7 @@ T["scrolling expands the frozen prefix and returning does not shrink it"] = func
     }
     FAKE.start({ manual = true })
     SERVER = FAKE.last
-    vim.keymap.set('i', '<C-p>', function() LASER.insert_relative(-1) end)
+    vim.keymap.set('i', '<C-p>', function() LASER.select(-1) end)
   ]])
   type_keys("ib")
   child.lua([[
@@ -532,7 +532,7 @@ T["command-line partial updates keep the inserted selection"] = function()
         SERVER = FAKE.last
       end,
     })
-    vim.keymap.set('c', '<C-n>', function() LASER.insert_relative(1) end)
+    vim.keymap.set('c', '<C-n>', function() LASER.select(1) end)
   ]])
   type_keys(":e")
   child.lua([[

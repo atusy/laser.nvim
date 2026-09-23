@@ -124,12 +124,12 @@ local function action(name)
   end
 end
 
----Move the selection by `delta` and insert the selected candidate, unless
----auto-wrap would split it across lines. Moving past either end restores the
----typed input.
-M.insert_relative = action("insert_relative")
----Move the selection by `delta` without inserting.
-M.select_relative = action("select_relative")
+---Move the selection by `delta` and put the selected candidate in place of the
+---typed input, unless `opts.insert` is false or auto-wrap would split it across
+---lines. Single steps cycle through the typed input; larger moves stop at the
+---first or last candidate.
+---@type fun(delta: integer, opts?: { insert?: boolean }): boolean
+M.select = action("select")
 ---Accept the selected candidate; returns false when nothing was selected.
 ---Closes the menu either way.
 M.confirm = action("confirm")

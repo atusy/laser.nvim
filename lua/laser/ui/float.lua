@@ -165,8 +165,7 @@ end
 ---@field selected fun(): integer
 ---@field win fun(): integer?
 ---@field preview_win fun(): integer?
----@field insert_relative fun(delta: integer): boolean
----@field select_relative fun(delta: integer): boolean
+---@field select fun(delta: integer, opts?: { insert?: boolean }): boolean
 ---@field select_mouse fun(): boolean
 ---@field confirm fun(): boolean
 ---@field cancel fun(): boolean
@@ -818,17 +817,21 @@ function M.new(opts)
   end
 
   ---@param delta integer
-  local function select(delta)
-    local target = cursor + delta
-    if target >= 1 and target <= #items then
-      cursor = target
-    elseif cursor ~= 0 then
-      -- Moving past either end returns to the typed input, as in pum.vim.
-      cursor = 0
+  local function move(delta)
+    if delta == 0 then
+      return
+    elseif delta == 1 or delta == -1 then
+      -- Stepping cycles through the typed input, so it can be reached again.
+      cursor = (cursor + delta) % (#items + 1)
     else
-      -- The typed input sits past the last candidate, so moving on from it
-      -- counts from there and stops at the first or last candidate.
-      cursor = delta > 0 and #items or math.max(#items + 1 + delta, 1)
+      -- Larger moves, such as paging, stop at the first or last candidate
+      -- instead of leaving the list. The typed input counts as past the end
+      -- that is moved away from.
+      local from = cursor
+      if from == 0 then
+        from = delta > 0 and 0 or #items + 1
+      end
+      cursor = math.max(1, math.min(#items, from + delta))
     end
     local rows = height()
     if cursor > 0 and cursor < top then
@@ -843,26 +846,20 @@ function M.new(opts)
     redraw()
   end
 
-  ---Move the selection without editing text. Moving past either end selects
-  ---the typed input, which sits past the last candidate for further moves.
+  ---Move the selection by `delta` and, unless `opts.insert` is false, put the
+  ---selected text in place of the input. Single steps cycle through the typed
+  ---input; larger moves stop at the first or last candidate.
   ---@param delta integer
+  ---@param opts? { insert?: boolean }
   ---@return boolean handled
-  function ui.select_relative(delta)
+  function ui.select(delta, opts)
     if not ui.visible() then
       return false
     end
-    select(delta)
-    return true
-  end
-
-  ---Move the selection and put the selected text in place of the input.
-  ---@param delta integer
-  ---@return boolean handled
-  function ui.insert_relative(delta)
-    if not ui.visible() then
-      return false
+    move(delta)
+    if opts and opts.insert == false then
+      return true
     end
-    select(delta)
     local word = cursor > 0 and items[cursor].word or typed
     if not wraps(word) then
       insert(word)
@@ -885,7 +882,7 @@ function M.new(opts)
     if row < 1 or row > height() or col < 1 or col > vim.api.nvim_win_get_width(win) then
       return false
     end
-    select(index_at(row) - cursor)
+    move(index_at(row) - cursor)
     return true
   end
 

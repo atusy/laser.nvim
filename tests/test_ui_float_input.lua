@@ -25,13 +25,13 @@ local T = MiniTest.new_set({
         })
         vim.keymap.set("i", "<F2>", function() UI.open(START or 1, ITEMS, "i") end)
         vim.keymap.set("c", "<F2>", function() UI.open(1, ITEMS, "c") end)
-        vim.keymap.set("c", "<C-n>", function() UI.insert_relative(1) end)
-        vim.keymap.set("c", "<C-j>", function() UI.select_relative(1) end)
+        vim.keymap.set("c", "<C-n>", function() UI.select(1) end)
+        vim.keymap.set("c", "<C-j>", function() UI.select(1, { insert = false }) end)
         vim.keymap.set("c", "<C-y>", function() UI.confirm() end)
         vim.keymap.set("c", "<C-e>", function() UI.cancel() end)
-        vim.keymap.set("i", "<C-n>", function() UI.insert_relative(1) end)
-        vim.keymap.set("i", "<C-p>", function() UI.insert_relative(-1) end)
-        vim.keymap.set("i", "<C-j>", function() UI.select_relative(1) end)
+        vim.keymap.set("i", "<C-n>", function() UI.select(1) end)
+        vim.keymap.set("i", "<C-p>", function() UI.select(-1) end)
+        vim.keymap.set("i", "<C-j>", function() UI.select(1, { insert = false }) end)
         vim.keymap.set("i", "<C-y>", function() UI.confirm() end)
         vim.keymap.set("i", "<C-e>", function() UI.cancel() end)
       ]])
@@ -49,7 +49,7 @@ local function line()
   return child.api.nvim_get_current_line()
 end
 
-T["insert_relative inserts candidates and overflowing restores the typed input"] = function()
+T["select inserts candidates and stepping past the end restores the typed input"] = function()
   type_keys("ib<F2><C-n>")
   expect.equality(line(), "bar")
   expect.equality(child.api.nvim_win_get_cursor(0), { 1, 3 })
@@ -62,7 +62,7 @@ T["insert_relative inserts candidates and overflowing restores the typed input"]
   expect.equality(line(), "baz")
 end
 
-T["select_relative highlights without editing and scrolls the viewport"] = function()
+T["select without insertion highlights and scrolls the viewport"] = function()
   child.lua([[
     UI.configure({ max_height = 1 })
     vim.api.nvim_buf_set_lines(0, 0, -1, false, { "" })
@@ -248,7 +248,7 @@ T["options changed for insertion are restored when the fed keys are discarded"] 
     vim.o.backspace = "indent,eol,start"
     vim.bo.indentkeys = "0{,0}"
     vim.keymap.set("i", "<F3>", function()
-      UI.insert_relative(1)
+      UI.select(1)
       -- Discard the keys the menu fed, as an interrupt would.
       vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
     end)

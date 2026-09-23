@@ -26,10 +26,10 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
 
 local laser = require("laser")
 vim.keymap.set({ "i", "c" }, "<C-n>", function()
-  laser.insert_relative(1)
+  laser.select(1)
 end)
 vim.keymap.set({ "i", "c" }, "<C-p>", function()
-  laser.insert_relative(-1)
+  laser.select(-1)
 end)
 vim.keymap.set({ "i", "c" }, "<C-y>", function()
   laser.confirm()
@@ -39,7 +39,10 @@ vim.keymap.set({ "i", "c" }, "<C-e>", function()
 end)
 ```
 
-Use `laser.select_relative(delta)` to move the selection without inserting.
+`laser.select(delta)` inserts the selected candidate as you move; pass
+`{ insert = false }` to only highlight it. Single steps cycle back to what you
+typed, and larger steps, such as paging with `laser.select(10)`, stop at the
+first or last candidate.
 
 Actions edit text and windows, so call them from regular mappings as above,
 not from `<expr>` mappings. Each returns `false` when it did nothing, so a
@@ -58,7 +61,7 @@ In an `<expr>` mapping, check `laser.visible()` and return a `<Cmd>` mapping:
 
 ```lua
 vim.keymap.set("i", "<Tab>", function()
-  return laser.visible() and "<Cmd>lua require('laser').insert_relative(1)<CR>" or "<Tab>"
+  return laser.visible() and "<Cmd>lua require('laser').select(1)<CR>" or "<Tab>"
 end, { expr = true })
 ```
 
