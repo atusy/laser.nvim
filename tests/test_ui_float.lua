@@ -340,4 +340,12 @@ T["preview reapplies a filetype only when it changes"] = function()
   expect.equality(count, 1)
 end
 
+T["control characters in fields are shown as spaces"] = function()
+  set_line("b")
+  local ui = new()
+  ui.open(1, { candidate("a\nb", { kind = "x\ty" }) }, "i")
+  expect.equality(rows(ui), { "a b x y" })
+  expect.equality(vim.api.nvim_win_get_width(ui.win()), 7)
+end
+
 return T

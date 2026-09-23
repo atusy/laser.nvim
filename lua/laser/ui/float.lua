@@ -76,10 +76,18 @@ end
 ---@param name string
 ---@return string
 local function field(item, name)
+  local text
   if name == "abbr" then
-    return item.abbr or item.word or ""
+    text = item.abbr or item.word or ""
+  else
+    text = item[name] or ""
   end
-  return item[name] or ""
+  -- A newline cannot be drawn in a row and a tab is wider than one cell.
+  -- Replace each control byte with one space so highlight offsets still hold.
+  if text:find("%c") then
+    text = text:gsub("%c", " ")
+  end
+  return text
 end
 
 ---Cut `text` to at most `width` display cells and pad it to exactly `width`.
