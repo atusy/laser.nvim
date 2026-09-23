@@ -53,6 +53,7 @@ end
 ---@field max_height? integer rows shown at once; defaults to 'pumheight' or 10
 ---@field max_width? integer columns shown at once; defaults to 80
 ---@field border? string|string[] nvim_open_win() border
+---@field auto_select? boolean highlight the first candidate without inserting it
 
 ---@param opts laser.MenuOpts
 ---@return integer
@@ -134,6 +135,7 @@ function M.new(opts)
   local typed = "" -- input between startcol and the cursor when the menu opened
   local inserted = "" -- text the menu currently holds between startcol and the cursor
   local expected -- text state right after the menu's own edit
+  local browsing, frozen, initial_cursor = false, 0, 0
 
   function ui.configure(options)
     menu = options or {}
@@ -254,11 +256,33 @@ function M.new(opts)
   ---@param new_items table[]
   ---@param new_mode "i"|"c"
   function ui.open(col, new_items, new_mode)
-    top, cursor = 1, 0
+    top = 1
+    cursor = menu.auto_select and #new_items > 0 and 1 or 0
+    browsing, frozen, initial_cursor = false, 0, cursor
     local state = text_state(new_mode)
     typed = state.line:sub(col, state.col)
     inserted = typed
     show(col, new_items, new_mode)
+  end
+
+  ---Release the frozen prefix after actual user input.
+  function ui.reset()
+    browsing, frozen, initial_cursor = false, 0, cursor
+  end
+
+  ---Once the user moves the selection, rows up to the bottom of the viewport
+  ---they have seen stay in place while further candidates arrive.
+  ---@return integer
+  function ui.frozen_count()
+    if not ui.visible() then
+      return 0
+    end
+    browsing = browsing or (cursor > 0 and cursor ~= initial_cursor)
+    if not browsing then
+      return 0
+    end
+    frozen = math.min(#items, math.max(frozen, top + height() - 1))
+    return frozen
   end
 
   function ui.update(col, new_items, new_mode)
@@ -336,6 +360,8 @@ function M.new(opts)
     elseif cursor >= top + rows then
       top = cursor - rows + 1
     end
+    browsing = true
+    ui.frozen_count()
     render()
   end
 

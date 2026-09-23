@@ -111,4 +111,51 @@ T["item highlights are drawn in their columns"] = function()
   expect.equality(got, { { "PmenuMatch", 0, 1 }, { "Special", 5, 8 } })
 end
 
+local function labels(n)
+  local items = {}
+  for i = 1, n do
+    items[i] = candidate("b" .. i)
+  end
+  return items
+end
+
+T["browsing freezes the seen rows, grows on scroll and reset releases it"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 3 })
+  ui.open(1, labels(9), "i")
+  expect.equality(ui.frozen_count(), 0)
+  ui.select_relative(1)
+  expect.equality(ui.frozen_count(), 3)
+  ui.select_relative(4)
+  expect.equality(ui.frozen_count(), 5)
+  ui.select_relative(-4)
+  expect.equality(ui.frozen_count(), 5)
+  ui.reset()
+  expect.equality(ui.frozen_count(), 0)
+end
+
+T["update keeps the selection and viewport of a frozen prefix"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 2 })
+  local items = labels(3)
+  ui.open(1, items, "i")
+  ui.select_relative(2)
+  table.insert(items, 3, candidate("b0"))
+  ui.update(1, items, "i")
+  expect.equality(ui.selected(), 2)
+  expect.equality(rows(ui), { "b1", "b2" })
+end
+
+T["auto_select highlights the first candidate without freezing the menu"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ auto_select = true })
+  ui.open(1, labels(2), "i")
+  expect.equality(ui.selected(), 1)
+  expect.equality(ui.frozen_count(), 0)
+  expect.equality(vim.api.nvim_get_current_line(), "b")
+end
+
 return T
