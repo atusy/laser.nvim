@@ -973,7 +973,7 @@ function M.new(opts)
       local ok, err = true, nil
       if opts.on_confirm then
         local before = text_state(mode)
-        ok, err = pcall(opts.on_confirm, item)
+        ok, err = xpcall(opts.on_confirm, debug.traceback, item)
         -- Snippet expansion and additional edits are part of the confirmation,
         -- not input that should start a new completion. Without such edits no
         -- change is coming, and a recorded state would swallow a later one.
