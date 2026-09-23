@@ -907,7 +907,10 @@ function M.new(opts)
     -- One <BS> removes a character with its composing characters unless
     -- 'delcombine' makes it remove them one at a time.
     local chars = vim.fn.strchars(current, vim.o.delcombine and 0 or 1)
-    feed({ { bs:rep(chars), false }, { word, true } }, function()
+    -- Typed control characters act as keys, such as <Tab> under 'expandtab';
+    -- <C-v> inserts them as they are. Newlines are meant to split the line.
+    local typed_word = word:gsub("[%z\1-\9\11-\31\127]", "\22%0")
+    feed({ { bs:rep(chars), false }, { typed_word, true } }, function()
       restore_options()
       if callback then
         callback()

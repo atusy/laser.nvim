@@ -507,4 +507,20 @@ T["inserting into a cindent buffer does not reindent the line"] = function()
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "{", "    b" })
 end
 
+T["control characters in candidates are inserted literally"] = function()
+  child.bo.expandtab = true
+  child.lua([[
+    ITEMS = { { word = "bar\tbaz", abbr = "bar", user_data = { laser = { client_id = 1, item = { label = "bar" } } } } }
+    SKIPPED = {}
+    vim.api.nvim_create_autocmd("TextChangedI", {
+      callback = function() table.insert(SKIPPED, UI.skip_text_change()) end,
+    })
+  ]])
+  type_keys("ib")
+  child.lua([[SKIPPED = {}]])
+  type_keys("<F2><C-n>")
+  expect.equality(line(), "bar\tbaz")
+  expect.equality(child.lua_get("SKIPPED"), { true })
+end
+
 return T
