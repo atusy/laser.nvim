@@ -438,4 +438,14 @@ T["the command-line menu stays above the command line with cmdheight=0"] = funct
   expect.equality(config.row + config.height, 9)
 end
 
+T["a confirmation without edits leaves no change to skip within Insert mode"] = function()
+  child.lua([[vim.api.nvim_create_autocmd("TextChangedI", { callback = UI.skip_text_change })]])
+  type_keys("ib<F2>")
+  type_keys("<C-n>")
+  type_keys("<C-y>")
+  type_keys("<Left><Right>")
+  expect.equality(child.api.nvim_get_mode().mode, "i")
+  expect.equality(child.lua_get("UI.skip_text_change()"), false)
+end
+
 return T
