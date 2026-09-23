@@ -566,6 +566,35 @@ function M.new(opts)
     return want ~= nil and vim.deep_equal(text_state(want.mode), want.state)
   end
 
+  local saved_options -- options to restore once fed insertion keys are done
+
+  local function restore_options()
+    if not saved_options then
+      return
+    end
+    vim.o.backspace = saved_options.backspace
+    if vim.api.nvim_buf_is_valid(saved_options.buf) then
+      vim.bo[saved_options.buf].indentkeys = saved_options.indentkeys
+    end
+    saved_options = nil
+  end
+
+  ---Let backspaces remove text typed before this insertion and keep typed
+  ---candidates from reindenting the line.
+  local function relax_options()
+    if not saved_options then
+      local buf = vim.api.nvim_get_current_buf()
+      saved_options =
+        { backspace = vim.o.backspace, buf = buf, indentkeys = vim.bo[buf].indentkeys }
+      -- The fed keys, and the restore queued behind them, can be discarded.
+      vim.api.nvim_create_autocmd({ "TextChangedI", "InsertLeave" }, {
+        once = true,
+        callback = restore_options,
+      })
+    end
+    vim.o.backspace, vim.bo.indentkeys = "start", ""
+  end
+
   ---Replace the text between startcol and the cursor with `word`.
   ---@param word string
   ---@param callback? fun() runs once the edit is in place
@@ -587,11 +616,10 @@ function M.new(opts)
       return
     end
     -- Typed keys keep undo and dot-repeat intact, unlike direct buffer edits.
-    local backspace, indentkeys = vim.o.backspace, vim.bo.indentkeys
-    vim.o.backspace, vim.bo.indentkeys = "start", ""
+    relax_options()
     local bs = vim.keycode("<BS>")
     feed({ { bs:rep(vim.fn.strchars(current)), false }, { word, true } }, function()
-      vim.o.backspace, vim.bo.indentkeys = backspace, indentkeys
+      restore_options()
       if callback then
         callback()
       end

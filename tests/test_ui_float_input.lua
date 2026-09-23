@@ -242,4 +242,20 @@ T["candidates that would be auto-wrapped are selected without insertion"] = func
   expect.equality(child.lua_get("UI.visible()"), true)
 end
 
+T["options changed for insertion are restored when the fed keys are discarded"] = function()
+  child.lua([[
+    vim.o.backspace = "indent,eol,start"
+    vim.bo.indentkeys = "0{,0}"
+    vim.keymap.set("i", "<F3>", function()
+      UI.insert_relative(1)
+      -- Discard the keys the menu fed, as an interrupt would.
+      vim.api.nvim_feedkeys(vim.keycode("<Esc>"), "nx", false)
+    end)
+  ]])
+  type_keys("ib<F2><F3>")
+  child.lua([[vim.wait(50)]])
+  expect.equality(child.o.backspace, "indent,eol,start")
+  expect.equality(child.bo.indentkeys, "0{,0}")
+end
+
 return T
