@@ -36,7 +36,7 @@ local function replace_start(item, line, opts)
   return math.min(edit_start, opts.startcol)
 end
 
----Drop the word pum.vim inserted (from the menu start to the cursor) and
+---Drop the word the menu inserted (from the menu start to the cursor) and
 ---expand the snippet in its place.
 ---@param body string
 ---@param item lsp.CompletionItem

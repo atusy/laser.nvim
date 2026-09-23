@@ -11,12 +11,12 @@ local M = {}
 ---@field clientOptions? table<string, laser.ClientOpts> per-client options; "*" holds defaults
 ---@field enable_commit_characters? boolean accept selected candidates on LSP commit characters; default false
 ---@field menu? laser.MenuOpts appearance and behavior of the built-in menu
----@field ui? "float"|"pum"|laser.UI
 ---@field language_id? string filetype of the scratch document in command-line mode
 
 ---@type laser.Engine?
 local engine
-local adapters = {}
+---@type laser.UI?
+local menu
 local initialized = false
 
 function M.close()
@@ -71,13 +71,9 @@ local function on_confirm(candidate)
   M.close()
 end
 
-local function make_ui(ui)
-  if type(ui) == "table" then
-    return ui
-  end
-  ui = ui or "float"
-  if not adapters[ui] then
-    adapters[ui] = require("laser.ui." .. ui).new({
+local function make_ui()
+  if not menu then
+    menu = require("laser.ui.float").new({
       on_confirm = on_confirm,
       preview_context = function(candidate)
         if engine and engine.doc then
@@ -104,8 +100,7 @@ local function make_ui(ui)
             )
           or {}
       end,
-      -- PumCompleteDone follows PumClose asynchronously. Preserve the session
-      -- until confirmation can apply its edits, but stop any more responses now.
+      -- The user closed the menu; stop responses that would reopen it.
       on_close = function()
         if engine then
           engine:cancel_pending()
@@ -113,7 +108,7 @@ local function make_ui(ui)
       end,
     })
   end
-  return adapters[ui]
+  return menu
 end
 
 ---Run a menu action when the active menu supports it.
@@ -199,17 +194,14 @@ local function inserted_char(old, doc)
 end
 
 ---Start or update completion at the current cursor. Options belong to this
----call; changing client options invalidates that client, changing UI resets
----the session. No setup is required.
+---call; changing client options invalidates that client. No setup is required.
 ---@param opts? laser.CompleteOpts
 function M.complete(opts)
   opts = opts or {}
   initialize()
-  local ui = make_ui(opts.ui)
-  if ui.configure then
-    ui.configure(opts.menu)
-  end
-  if ui.skip_text_change and ui.skip_text_change() then
+  local ui = make_ui()
+  ui.configure(opts.menu)
+  if ui.skip_text_change() then
     return
   end
   local doc = document(opts)
@@ -217,8 +209,7 @@ function M.complete(opts)
     M.close()
     return
   end
-  if not engine or engine.ui ~= ui then
-    M.close()
+  if not engine then
     engine = require("laser.engine").new({ ui = ui })
   end
   engine.enable_commit_characters = opts.enable_commit_characters == true

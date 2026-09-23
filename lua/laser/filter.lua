@@ -64,7 +64,7 @@ function M.fuzzy_matcher()
   return fuzzy
 end
 
----Highlight matching characters in abbr using pum.vim item decorations.
+---Highlight matching characters in abbr using menu item decorations.
 ---@param candidate laser.Candidate
 ---@param input? string Candidate-specific input, used when abbr differs from the matched text.
 ---@return laser.Candidate

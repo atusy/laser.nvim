@@ -1,7 +1,7 @@
 local MiniTest = require("mini.test")
 local expect = MiniTest.expect
 -- Headless tests cannot sit in Insert mode; 'virtualedit=onemore' lets the
--- cursor rest after the last character the way it does after pum.vim inserts.
+-- cursor rest after the last character the way it does after the menu inserts.
 local T = MiniTest.new_set({
   hooks = {
     pre_case = function()
@@ -30,7 +30,7 @@ local function client(overrides)
 end
 
 ---Buffer whose line already contains the inserted word, cursor after it,
----as it is when pum.vim reports a confirm.
+---as it is when the menu reports a confirm.
 local function buffer_after_insert(line, col)
   local buf = vim.api.nvim_create_buf(false, true)
   vim.api.nvim_set_current_buf(buf)
