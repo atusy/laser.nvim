@@ -367,4 +367,13 @@ T["clicking a bordered menu selects by its drawn border"] = function()
   expect.equality(child.lua_get("UI.selected()"), 1)
 end
 
+T["leaving the window closes the menu"] = function()
+  -- Another buffer's window, so the cursor watcher alone would not close it.
+  child.cmd("vnew | wincmd p")
+  type_keys("ib<F2>")
+  type_keys("<Cmd>wincmd p<CR>")
+  expect.equality(child.lua_get("UI.visible()"), false)
+  expect.equality(child.lua_get("CLOSED"), 1)
+end
+
 return T
