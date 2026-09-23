@@ -567,4 +567,13 @@ T["InsertCharPre hooks do not transform inserted candidates"] = function()
   expect.equality(line(), "bar(()")
 end
 
+T["NUL bytes in candidates are dropped instead of corrupting the input"] = function()
+  child.lua([[
+    ITEMS = { { word = "a\0z", abbr = "az", user_data = { laser = { client_id = 1, item = { label = "az" } } } } }
+  ]])
+  type_keys("ib<F2><C-n>")
+  expect.equality(line(), "az")
+  expect.equality(child.api.nvim_buf_line_count(0), 1)
+end
+
 return T

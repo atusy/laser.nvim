@@ -911,17 +911,19 @@ function M.new(opts)
   ---@param word string
   ---@param callback? fun() runs once the edit is in place
   local function insert(word, callback)
+    inserted = word
+    -- Keys cannot carry a NUL byte, so it is left out of the inserted text.
+    local text = word:gsub("%z", "")
     local state = text_state(mode)
     local current = state.line:sub(startcol, state.col)
-    local line = state.line:sub(1, startcol - 1) .. word .. state.line:sub(state.col + 1)
+    local line = state.line:sub(1, startcol - 1) .. text .. state.line:sub(state.col + 1)
     expected = {
       mode = mode,
-      state = vim.tbl_extend("force", state, { line = line, col = startcol - 1 + #word }),
+      state = vim.tbl_extend("force", state, { line = line, col = startcol - 1 + #text }),
     }
     shown = expected.state
-    inserted = word
     if mode == "c" then
-      vim.fn.setcmdline(line, startcol + #word)
+      vim.fn.setcmdline(line, startcol + #text)
       if callback then
         callback()
       end
@@ -935,7 +937,7 @@ function M.new(opts)
     local chars = vim.fn.strchars(current, vim.o.delcombine and 0 or 1)
     -- Typed control characters act as keys, such as <Tab> under 'expandtab';
     -- <C-v> inserts them as they are. Newlines are meant to split the line.
-    local typed_word = word:gsub("[%z\1-\9\11-\31\127]", "\22%0")
+    local typed_word = text:gsub("[\1-\9\11-\31\127]", "\22%0")
     feed({ { bs:rep(chars), false }, { typed_word, true } }, function()
       restore_options()
       if callback then
