@@ -576,7 +576,8 @@ T["labels shown differently from the matched text are matched again"] = function
   set_line("ba ")
   vim.api.nvim_win_set_cursor(0, { 1, 2 })
   local ui = new()
-  local item = matched("bar()", { 0, 1 })
+  -- Positions into "xbar" differ from what "bar()" matches, so they must not be used.
+  local item = matched("bar()", { 1, 2 })
   item.user_data.laser.item.filterText = "xbar"
   ui.open(1, { item }, "i")
   expect.equality(match_ranges(ui, 0), { { 0, 1 }, { 1, 2 } })
@@ -585,7 +586,9 @@ end
 T["padding added for earlier edit starts shifts the highlights"] = function()
   set_line("x.b")
   local ui = new()
-  local item = matched("x.bar", { 0 }, {
+  -- The stored position 2 is not what matching "b" would find, so it pins
+  -- that stored positions are used and shifted past the padding.
+  local item = matched("x.bar", { 2 }, {
     highlights = {
       { name = "laser_prefix", type = "abbr", col = 1, width = 2, hl_group = "Comment" },
     },
@@ -593,7 +596,7 @@ T["padding added for earlier edit starts shifts the highlights"] = function()
   item.user_data.laser.item.label = "bar"
   item.user_data.laser.startcol = 2
   ui.open(1, { item }, "i")
-  expect.equality(match_ranges(ui, 0), { { 2, 3 } })
+  expect.equality(match_ranges(ui, 0), { { 4, 5 } })
 end
 
 T["candidates without positions or with their own match highlights are left alone"] = function()
@@ -697,6 +700,30 @@ T["the menu starts under the completion start when typed text is wide"] = functi
   local ui = new()
   ui.open(3, { candidate("日本語") }, "i")
   expect.equality(vim.api.nvim_win_get_config(ui.win()).col, screen_col(3))
+end
+
+T["matches are redone against the typed input after the menu inserts a candidate"] = function()
+  set_line("x.fo ")
+  vim.api.nvim_win_set_cursor(0, { 1, 4 })
+  local ui = new()
+  local shown = matched("x.fo_b", { 0 })
+  shown.user_data.laser.item.filterText = "x.fob"
+  -- Starts after the menu start, so the menu pads it with "x.".
+  local padded = matched("x.fo(y)", { 0 }, {
+    highlights = {
+      { name = "laser_prefix", type = "abbr", col = 1, width = 2, hl_group = "Comment" },
+    },
+  })
+  padded.user_data.laser.item.filterText = "other"
+  padded.user_data.laser.startcol = 2
+  ui.open(1, { shown, padded }, "i")
+  -- What inserting the first candidate leaves in the buffer.
+  set_line("x.fo_b ")
+  vim.api.nvim_win_set_cursor(0, { 1, 6 })
+  ui.select(1, { insert = false })
+  local typed = { { 0, 1 }, { 1, 2 }, { 2, 3 }, { 3, 4 } }
+  expect.equality(match_ranges(ui, 0, "PmenuMatchSel"), typed)
+  expect.equality(match_ranges(ui, 1), { { 2, 3 }, { 3, 4 } })
 end
 
 return T

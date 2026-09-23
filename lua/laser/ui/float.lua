@@ -332,8 +332,10 @@ function M.new(opts)
     -- not part of it, and a label shown differently must be matched again.
     local shown = field(item, "abbr"):sub(pad + 1)
     if shown ~= (data.item.filterText or data.item.label) then
-      local state = text_state(mode)
-      local input = state.line:sub((data.startcol or 0) + 1, state.col)
+      -- Match what the user typed, not a candidate the menu inserted. A
+      -- candidate starts at or after the menu start, so its input is the
+      -- part of the typed text from its own start.
+      local input = typed:sub(math.max((data.startcol or 0) - (startcol - 1), 0) + 1)
       positions = input ~= "" and vim.fn.matchfuzzypos({ shown }, input)[2][1] or {}
     end
     local highlights = {}
