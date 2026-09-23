@@ -376,4 +376,20 @@ T["leaving the window closes the menu"] = function()
   expect.equality(child.lua_get("CLOSED"), 1)
 end
 
+T["the menu's own change is recognized once, not when later input returns to it"] = function()
+  child.lua([[
+    SKIPPED = {}
+    vim.api.nvim_create_autocmd("TextChangedI", {
+      callback = function() table.insert(SKIPPED, UI.skip_text_change()) end,
+    })
+  ]])
+  type_keys("ib<F2>")
+  child.lua([[SKIPPED = {}]])
+  type_keys("<C-n>")
+  type_keys("x")
+  type_keys("<BS>")
+  expect.equality(line(), "bar")
+  expect.equality(child.lua_get("SKIPPED"), { true, false, false })
+end
+
 return T
