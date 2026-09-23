@@ -400,4 +400,18 @@ T["the preview does not cover a menu shifted from the right edge"] = function()
   expect.equality(overlaps, false)
 end
 
+T["the preview follows a menu widened by an update"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = true })
+  local items = { documented("b1", "docs") }
+  ui.open(1, items, "i")
+  ui.select_relative(1)
+  items[2] = candidate("b" .. string.rep("x", 20))
+  ui.update(1, items, "i")
+  local menu = vim.api.nvim_win_get_config(ui.win())
+  local preview = vim.api.nvim_win_get_config(ui.preview_win())
+  expect.equality(preview.col, menu.col + menu.width)
+end
+
 return T

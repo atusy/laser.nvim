@@ -371,6 +371,32 @@ function M.new(opts)
     hide_preview()
   end
 
+  local preview_size -- width and height of the drawn documentation
+
+  ---Put the preview beside the menu, or on its left when the right is too
+  ---narrow. The menu's configured position is where it is drawn.
+  local function place_preview()
+    if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
+      return
+    end
+    local options = type(menu.preview) == "table" and menu.preview or {}
+    local border = (options.border == nil or options.border == "none") and 0 or 2
+    local anchor = vim.api.nvim_win_get_config(win)
+    local width = preview_size.width
+    local col = anchor.col + anchor.width + border_rows()
+    if col + width + border > vim.o.columns then
+      col = math.max(anchor.col - width - border, 0)
+    end
+    vim.api.nvim_win_set_config(preview_win, {
+      relative = "editor",
+      row = anchor.row,
+      col = col,
+      width = width,
+      height = preview_size.height,
+      border = options.border or "none",
+    })
+  end
+
   ---@param text string
   ---@param filetype string
   local function draw_preview(text, filetype)
@@ -393,33 +419,26 @@ function M.new(opts)
     for _, line in ipairs(lines) do
       width = math.max(width, vim.api.nvim_strwidth(line))
     end
-    width = math.min(width, options.max_width or 60)
-    local border = (options.border == nil or options.border == "none") and 0 or 2
-    local origin = vim.fn.win_screenpos(win)
-    local menu_width = vim.api.nvim_win_get_width(win) + border_rows()
-    local col = origin[2] - 1 + menu_width
-    if col + width + border > vim.o.columns then
-      col = math.max(origin[2] - 1 - width - border, 0)
-    end
-    local config = {
-      relative = "editor",
-      row = origin[1] - 1,
-      col = col,
-      width = width,
+    preview_size = {
+      width = math.min(width, options.max_width or 60),
       height = math.min(#lines, options.max_height or 20),
-      style = "minimal",
-      focusable = false,
-      zindex = 201,
-      border = options.border or "none",
     }
-    if preview_win and vim.api.nvim_win_is_valid(preview_win) then
-      vim.api.nvim_win_set_config(preview_win, config)
-    else
-      config.noautocmd = true
-      preview_win = vim.api.nvim_open_win(preview_buf, false, config)
+    if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
+      preview_win = vim.api.nvim_open_win(preview_buf, false, {
+        relative = "editor",
+        row = 0,
+        col = 0,
+        width = preview_size.width,
+        height = preview_size.height,
+        style = "minimal",
+        focusable = false,
+        zindex = 201,
+        noautocmd = true,
+      })
       vim.wo[preview_win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
       vim.wo[preview_win].wrap = true
     end
+    place_preview()
     vim.api.nvim_win_call(preview_win, function()
       vim.fn.winrestview({ topline = 1 })
     end)
@@ -521,6 +540,7 @@ function M.new(opts)
     top = math.max(1, math.min(top, #items - height() + 1))
     ensure_buf()
     place()
+    place_preview()
     render()
     watch()
   end
