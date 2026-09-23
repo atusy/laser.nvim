@@ -351,7 +351,10 @@ function M.new(opts)
     end
     local lines = vim.split(text, "\n", { plain = true })
     vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
-    vim.bo[preview_buf].filetype = filetype
+    -- Setting 'filetype' reruns FileType handlers even for the same value.
+    if vim.bo[preview_buf].filetype ~= filetype then
+      vim.bo[preview_buf].filetype = filetype
+    end
     local width = 1
     for _, line in ipairs(lines) do
       width = math.max(width, vim.api.nvim_strwidth(line))

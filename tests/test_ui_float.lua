@@ -319,4 +319,25 @@ T["preview can be toggled and scrolled"] = function()
   expect.equality(vim.fn.line("w0", ui.preview_win()), 1)
 end
 
+T["preview reapplies a filetype only when it changes"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ preview = true })
+  ui.open(1, {
+    documented("a", { kind = "markdown", value = "a" }),
+    documented("b", { kind = "markdown", value = "b" }),
+  }, "i")
+  local count = 0
+  local id = vim.api.nvim_create_autocmd("FileType", {
+    pattern = "markdown",
+    callback = function()
+      count = count + 1
+    end,
+  })
+  ui.select_relative(1)
+  ui.select_relative(1)
+  vim.api.nvim_del_autocmd(id)
+  expect.equality(count, 1)
+end
+
 return T
