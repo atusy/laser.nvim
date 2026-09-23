@@ -160,6 +160,9 @@ function M.new(opts)
   local layout = { height = 0, above = false, reversed = false, scrollbar = false }
   local shown -- text state the menu was drawn for
   local preview_buf, preview_win, cancel_resolve
+  -- Resolved documentation by candidate id. Ids restart with each completion
+  -- session, so the cache lives only while the menu is open.
+  local resolved = {}
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
   local dismiss, redraw
@@ -467,12 +470,22 @@ function M.new(opts)
       close_preview()
       return
     end
+    local id = item.user_data.laser.id
+    if id and resolved[id] then
+      draw_preview(unpack(resolved[id]))
+      return
+    end
     local preview = require("laser.preview")
     local lsp_item = item.user_data.laser.item
     draw_preview(preview.info(lsp_item))
     local context = opts.preview_context and opts.preview_context(item)
     if context and context.client then
-      cancel_resolve = preview.resolve(lsp_item, context.client, context.bufnr, draw_preview)
+      cancel_resolve = preview.resolve(lsp_item, context.client, context.bufnr, function(info, ft)
+        if id then
+          resolved[id] = { info, ft }
+        end
+        draw_preview(info, ft)
+      end)
     end
   end
 
@@ -619,6 +632,7 @@ function M.new(opts)
 
   function ui.close()
     close_preview()
+    resolved = {}
     vim.api.nvim_clear_autocmds({ group = group })
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)

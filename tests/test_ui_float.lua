@@ -470,4 +470,29 @@ T["highlights on truncated text do not spill onto padding"] = function()
   expect.equality(match, {})
 end
 
+T["resolved documentation is reused until the menu closes"] = function()
+  set_line("b")
+  local client = fake_client()
+  local ui = new({
+    preview_context = function()
+      return { client = client, bufnr = 0 }
+    end,
+  })
+  ui.configure({ preview = true })
+  local items = { candidate("foo"), candidate("bar") }
+  items[1].user_data.laser.id, items[2].user_data.laser.id = 1, 2
+  ui.open(1, items, "i")
+  ui.select_relative(1)
+  client.callbacks[1](nil, { documentation = "foo docs" })
+  ui.select_relative(1)
+  ui.select_relative(-1)
+  expect.equality(#client.callbacks, 2)
+  local buf = vim.api.nvim_win_get_buf(ui.preview_win())
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "foo docs" })
+  ui.close()
+  ui.open(1, items, "i")
+  ui.select_relative(1)
+  expect.equality(#client.callbacks, 3)
+end
+
 return T
