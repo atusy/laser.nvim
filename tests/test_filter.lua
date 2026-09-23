@@ -333,27 +333,6 @@ T["score_sorter invokes the custom tiebreak only for equal scores"] = function()
   expect.equality(called, true)
 end
 
-T["decorations added by converters do not accumulate across renders"] = function()
-  local input = { cand("a") }
-  input[1].highlights = { { name = "server", col = 1 } }
-  local original = vim.deepcopy(input)
-  local opts = {
-    filters = {
-      {
-        kind = "converter",
-        callback = function(candidate)
-          candidate.highlights[1].col = 9
-          table.insert(candidate.highlights, { name = "mine" })
-          return candidate
-        end,
-      },
-    },
-  }
-  filter.apply(input, "", opts)
-  expect.equality(#filter.apply(input, "", opts)[1].highlights, 2)
-  expect.equality(input, original)
-end
-
 T["any stops at the first surviving candidate without sorting"] = function()
   local matched, sorted = {}, false
   local opts = {
@@ -407,6 +386,39 @@ T["any uses each candidate's input and the legacy defaults"] = function()
   expect.equality(filter.any({ cand("foo"), cand("bar") }, input, {}), true)
   expect.equality(filter.any({ cand("foo") }, input, {}), false)
   expect.equality(filter.any({}, "", {}), false)
+end
+
+T["a limit truncates after the last reordering filter so trailing converters skip dropped candidates"] = function()
+  local converted = {}
+  local opts = {
+    filters = {
+      {
+        kind = "converter",
+        callback = function(candidate)
+          candidate.abbr = candidate.abbr:upper()
+          return candidate
+        end,
+      },
+      { kind = "matcher", callback = filter.fuzzy_matcher() },
+      { kind = "sorter", callback = filter.score_sorter() },
+      {
+        kind = "converter",
+        callback = function(candidate)
+          converted[#converted + 1] = candidate.abbr
+          return candidate
+        end,
+      },
+    },
+  }
+  local input = { cand("axb"), cand("zzz"), cand("ab"), cand("abc") }
+  local all = labels(filter.apply(input, "ab", opts))
+  expect.equality(#all, 3)
+  expect.equality(#filter.apply(input, "ab", opts, 0), 3)
+  converted = {}
+  local top = labels(filter.apply(input, "ab", opts, 2))
+  expect.equality(top, { all[1], all[2] })
+  expect.equality(converted, top)
+  expect.equality(labels(filter.apply(input, "", { filters = {} }, 1)), { "axb" })
 end
 
 T["decorations added by converters do not accumulate across renders"] = function()

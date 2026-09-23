@@ -214,12 +214,26 @@ end
 ---@param candidates table[]
 ---@param prefix string|fun(candidate: table): string
 ---@param opts laser.FilterOpts
+---@param limit? integer keep at most this many candidates; nil or 0 keeps all
 ---@return table[]
-function M.apply(candidates, prefix, opts)
+function M.apply(candidates, prefix, opts, limit)
   local filters = resolve_filters(opts)
+  -- Later converters are one-to-one, so the kept candidates are known once the
+  -- last filter that can drop or reorder them has run.
+  local truncate_after = 0
+  if limit and limit > 0 then
+    for i, filter in ipairs(filters) do
+      if filter.kind ~= "converter" then
+        truncate_after = i
+      end
+    end
+  end
+  if truncate_after == 0 and limit and limit > 0 then
+    candidates = vim.list_slice(candidates, 1, limit)
+  end
   -- Each render starts from server candidates, never from a previous conversion.
   local current = vim.tbl_map(own, candidates)
-  for _, filter in ipairs(filters) do
+  for i, filter in ipairs(filters) do
     if filter.kind == "sorter" then
       local ordered = {}
       for i, candidate in ipairs(current) do
@@ -255,6 +269,9 @@ function M.apply(candidates, prefix, opts)
         end
       end
       current = next_candidates
+    end
+    if i == truncate_after then
+      current = vim.list_slice(current, 1, limit)
     end
   end
   return current

@@ -227,4 +227,60 @@ T["refresh contexts detect candidates without sorting them"] = function()
   expect.equality(sorted, false)
 end
 
+T["candidates convert only the items each client can display"] = function()
+  local converted = 0
+  local s = Session.new({
+    startcol = 4,
+    clients = {
+      [1] = {
+        name = "lua_ls",
+        opts = {
+          max_items = 1,
+          filters = {
+            {
+              kind = "converter",
+              callback = function(candidate)
+                converted = converted + 1
+                return candidate
+              end,
+            },
+          },
+        },
+      },
+    },
+  })
+  s:set_result(1, { { label = "bar" }, { label = "barn" } }, ctx(1))
+  expect.equality(labels(s:candidates("", doc)), { "bar" })
+  expect.equality(converted, 1)
+end
+
+T["candidates hidden by max_items do not widen the menu"] = function()
+  local s = Session.new({
+    startcol = 3,
+    clients = { [1] = { name = "wide", opts = { max_items = 1, filters = {} } } },
+  })
+  local doc = { bufnr = 1, line = "é.ba", col = 5, line_nr = 0, mode = "i" }
+  s:set_result(1, {
+    { label = "bar" },
+    {
+      label = "é.bar",
+      textEdit = {
+        newText = "é.bar",
+        range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 4 } },
+      },
+    },
+  }, {
+    line = doc.line,
+    line_nr = 0,
+    startcol = 3,
+    cursor_col = 5,
+    encoding = "utf-16",
+    client_id = 1,
+  })
+  local got, startcol = s:candidates("ba", doc)
+  expect.equality(startcol, 3)
+  expect.equality(labels(got), { "bar" })
+  expect.equality(got[1].word, "bar")
+end
+
 return T

@@ -153,6 +153,7 @@ function Session:has_candidate(client_id, doc)
 end
 
 ---Filter one client's cached items without consulting other clients or the UI.
+---Only the first max_items survivors are converted and returned.
 ---@param client_id integer
 ---@param prefix string
 ---@param doc? laser.Doc
@@ -169,7 +170,7 @@ function Session:client_candidates(client_id, prefix, doc, projection)
       return not projection.exclude[data.id] and data.startcol >= projection.startcol
     end, candidates)
   end
-  return filter.apply(candidates, input, opts)
+  return filter.apply(candidates, input, opts, opts.max_items)
 end
 
 ---@param prefix string
