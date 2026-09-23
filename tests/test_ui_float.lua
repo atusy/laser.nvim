@@ -797,4 +797,13 @@ T["rows seen while moving stay frozen without being queried in between"] = funct
   expect.equality(ui.frozen_count(), 5)
 end
 
+T["column separators count toward max_width"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_width = 10 })
+  ui.open(1, { candidate("aaaa", { kind = "bbbb", menu = "cccc" }) }, "i")
+  -- 4 + 1 + 4 + 1 + 4 exceeds 10, so the menu column gives way entirely.
+  expect.equality(rows(ui), { "aaaa bbbb" })
+end
+
 return T
