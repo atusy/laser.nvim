@@ -891,4 +891,23 @@ T["the menu fits the screen width"] = function()
   expect.equality(#rows(ui)[1], 40)
 end
 
+T["the preview height counts rows as Neovim wraps them"] = function()
+  set_line("b")
+  local ui = new()
+  -- Width 3 fits one double-width character per row.
+  ui.configure({ preview = { max_width = 3 } })
+  ui.open(1, { documented("b1", "界界界界界界\nend") }, "i")
+  ui.select(1, { insert = false })
+  expect.equality(vim.api.nvim_win_get_height(ui.preview_win()), 7)
+  ui.close()
+  ui.configure({ preview = { max_width = 12 } })
+  ui.open(1, { documented("b1", "\tfoo\tbar\tbaz\nend") }, "i")
+  ui.select(1, { insert = false })
+  local preview = ui.preview_win()
+  expect.equality(
+    vim.api.nvim_win_get_height(preview),
+    vim.api.nvim_win_text_height(preview, {}).all
+  )
+end
+
 return T

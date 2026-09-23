@@ -519,7 +519,7 @@ function M.new(opts)
     hide_preview()
   end
 
-  ---@type { width: integer, max_height: integer, line_widths: integer[] }
+  ---@type { width: integer, max_height: integer }
   local preview_size -- natural size of the drawn documentation
 
   ---Put the preview beside the menu, or on its left when the right is too
@@ -549,11 +549,10 @@ function M.new(opts)
       hide_preview()
       return false
     end
-    -- The preview wraps, so long lines take several rows at this width.
-    local height = 0
-    for _, cells in ipairs(preview_size.line_widths) do
-      height = height + math.max(1, math.ceil(cells / width))
-    end
+    -- The preview wraps; let Neovim count the rows at this width, including
+    -- tabs and wide characters that do not split across rows.
+    vim.api.nvim_win_set_config(preview_win, { width = width })
+    local height = vim.api.nvim_win_text_height(preview_win, {}).all
     height = math.min(height, preview_size.max_height)
     -- Stay above the command line: move up first, then shorten.
     local cmdline = mode == "c" and math.max(vim.o.cmdheight, 1) or vim.o.cmdheight
@@ -592,15 +591,13 @@ function M.new(opts)
     if vim.bo[preview_buf].filetype ~= filetype then
       vim.bo[preview_buf].filetype = filetype
     end
-    local width, line_widths = 1, {}
-    for i, line in ipairs(lines) do
-      line_widths[i] = vim.api.nvim_strwidth(line)
-      width = math.max(width, line_widths[i])
+    local width = 1
+    for _, line in ipairs(lines) do
+      width = math.max(width, vim.fn.strdisplaywidth(line))
     end
     preview_size = {
       width = math.min(width, options.max_width or 60),
       max_height = options.max_height or 20,
-      line_widths = line_widths,
     }
     if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
       preview_win = vim.api.nvim_open_win(preview_buf, false, {
