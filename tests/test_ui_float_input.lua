@@ -429,4 +429,13 @@ T["typing that scrolls the window sideways keeps the menu open"] = function()
   expect.equality(child.lua_get("CLOSED"), 0)
 end
 
+T["the command-line menu stays above the command line with cmdheight=0"] = function()
+  child.o.lines, child.o.columns = 10, 30
+  child.o.cmdheight = 0
+  type_keys(":b<F2>")
+  -- The command line takes the last row while it is being edited.
+  local config = child.lua_get([[vim.api.nvim_win_get_config(UI.win())]])
+  expect.equality(config.row + config.height, 9)
+end
+
 return T

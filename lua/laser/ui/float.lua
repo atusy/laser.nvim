@@ -248,7 +248,8 @@ function M.new(opts)
   ---@return integer row, integer col
   local function cursor_screenpos()
     if mode == "c" then
-      return vim.o.lines - vim.o.cmdheight + 1, vim.fn.getcmdscreenpos()
+      -- With 'cmdheight' 0 the command line still takes a row while edited.
+      return vim.o.lines - math.max(vim.o.cmdheight, 1) + 1, vim.fn.getcmdscreenpos()
     end
     local row, col = window_origin()
     return row + vim.fn.winline() - 1, col + vim.fn.wincol() - 1
