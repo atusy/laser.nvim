@@ -12,14 +12,13 @@ local Session = require("laser.session")
 ---@field col integer 0-based byte column of the cursor
 ---@field mode "i"|"c"
 
----@class laser.UI What the engine needs from a menu. The built-in menu,
----laser.FloatUI, provides every field; tests use stubs with only the first three.
+---@class laser.UI What the engine needs from the menu, laser.FloatUI.
 ---@field open fun(startcol: integer, items: table[], mode: "i"|"c") startcol is 1-based like complete()
 ---@field close fun()
 ---@field visible fun(): boolean
----@field frozen_count? fun(): integer prefix length to preserve, in input item order
----@field update? fun(startcol: integer, items: table[], mode: "i"|"c") preserve selection and inserted text
----@field reset? fun() release the frozen prefix after actual user input
+---@field frozen_count fun(): integer prefix length to preserve, in input item order
+---@field update fun(startcol: integer, items: table[], mode: "i"|"c") preserve selection and inserted text
+---@field reset fun() release the frozen prefix after actual user input
 
 ---@class laser.Engine
 ---@field ui laser.UI
@@ -60,7 +59,7 @@ function Engine:render()
     return
   end
   local prefix = doc.line:sub(session.startcol + 1, doc.col)
-  local count = self.ui.frozen_count and self.ui.frozen_count() or 0
+  local count = self.ui.frozen_count()
   local frozen = vim.list_slice(self.displayed or {}, 1, count)
   local projection
   if #frozen > 0 then
@@ -88,10 +87,6 @@ function Engine:render()
   end
   session.startcol = startcol
   if #frozen > 0 then
-    -- A menu that cannot update in place keeps its entries until the next input.
-    if not self.ui.update then
-      return
-    end
     self.ui.update(startcol + 1, items, doc.mode)
   else
     self.ui.open(startcol + 1, items, doc.mode)
@@ -250,9 +245,7 @@ end
 ---@param client_id integer
 function Engine:drop_client(client_id)
   self.displayed = nil
-  if self.ui.reset then
-    self.ui.reset()
-  end
+  self.ui.reset()
   local token = self.pending[client_id]
   self.pending[client_id] = nil
   if token and token.cancel then
@@ -274,9 +267,7 @@ function Engine:on_char(doc, char)
   local session, old = self.session, self.doc
   if not vim.deep_equal(doc, old) then
     self.displayed = nil
-    if self.ui.reset then
-      self.ui.reset()
-    end
+    self.ui.reset()
   end
   if
     not session

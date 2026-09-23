@@ -20,6 +20,14 @@ function M.new()
   function ui.visible()
     return ui.is_visible
   end
+  -- Tests that exercise browsing replace these.
+  function ui.frozen_count()
+    return 0
+  end
+  function ui.update(startcol, items, mode)
+    ui.open(startcol, items, mode)
+  end
+  function ui.reset() end
   function ui.last()
     return ui.opened[#ui.opened]
   end

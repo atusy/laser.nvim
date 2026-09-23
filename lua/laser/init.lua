@@ -71,7 +71,8 @@ local function on_confirm(candidate)
   M.close()
 end
 
-local function make_ui()
+---@return laser.FloatUI
+local function get_menu()
   if not menu then
     menu = require("laser.ui.float").new({
       on_confirm = on_confirm,
@@ -116,11 +117,10 @@ end
 ---@return fun(...): boolean
 local function action(name)
   return function(...)
-    local ui = engine and engine.ui
-    if not ui or not ui[name] then
+    if not menu then
       return false
     end
-    return ui[name](...) == true
+    return menu[name](...)
   end
 end
 
@@ -201,7 +201,7 @@ end
 function M.complete(opts)
   opts = opts or {}
   initialize()
-  local ui = make_ui()
+  local ui = get_menu()
   ui.configure(opts.menu)
   if ui.skip_text_change() then
     return
