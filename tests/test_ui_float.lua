@@ -634,4 +634,19 @@ T["the scrollbar thumb is sized by the visible share and mirrored when reversed"
   expect.equality(thumb_rows(ui), { 0 })
 end
 
+T["updates keep a scrolled viewport in place"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 2 })
+  local items = labels(6)
+  ui.open(1, items, "i")
+  ui.select(4, { insert = false })
+  local before = rows(ui)
+  expect.equality(ui.frozen_count(), 4)
+  table.insert(items, 5, candidate("b0"))
+  ui.update(1, items, "i")
+  expect.equality(rows(ui), before)
+  expect.equality(ui.selected(), 4)
+end
+
 return T
