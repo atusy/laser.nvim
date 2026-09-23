@@ -111,7 +111,7 @@ local function make_ui()
   return menu
 end
 
----Run a menu action when the active menu supports it.
+---Run a menu action; returns false before completion has started.
 ---@param name string
 ---@return fun(...): boolean
 local function action(name)
@@ -124,12 +124,14 @@ local function action(name)
   end
 end
 
----Move the selection by `delta` and insert the selected candidate. Moving past
----either end restores the typed input.
+---Move the selection by `delta` and insert the selected candidate, unless
+---auto-wrap would split it across lines. Moving past either end restores the
+---typed input.
 M.insert_relative = action("insert_relative")
 ---Move the selection by `delta` without inserting.
 M.select_relative = action("select_relative")
 ---Accept the selected candidate; returns false when nothing was selected.
+---Closes the menu either way.
 M.confirm = action("confirm")
 ---Restore the typed input and close the menu.
 M.cancel = action("cancel")

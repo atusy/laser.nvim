@@ -1,5 +1,5 @@
 ---Built-in completion menu drawn in a floating window. Only the rows inside the
----viewport are rendered, so long candidate lists cost little to show.
+---viewport are drawn; column widths still visit every candidate.
 local M = {}
 
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
@@ -54,7 +54,7 @@ end
 ---@field max_width? integer columns shown at once; defaults to 80
 ---@field border? string|string[] nvim_open_win() border
 ---@field auto_select? boolean highlight the first candidate without inserting it; defaults to whether 'completeopt' has "noinsert"
----@field direction? "auto"|"below"|"above" "auto" prefers below unless above has more room
+---@field direction? "auto"|"below"|"above" "auto" opens below unless the rows do not fit there and above has more room; the command-line menu always opens above
 ---@field reversed? boolean list candidates bottom-up when the menu opens above
 ---@field preview? boolean|laser.PreviewOpts show documentation of the selected candidate
 
