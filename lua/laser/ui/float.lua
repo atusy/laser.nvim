@@ -129,7 +129,7 @@ local function measure(items, limit)
   return widths
 end
 
----@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }? }
+---@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?, commit_characters?: fun(candidate: table): string[] }
 ---@return laser.UI
 function M.new(opts)
   opts = opts or {}
@@ -630,9 +630,9 @@ function M.new(opts)
     return true
   end
 
-  ---Accept the selected candidate. Without a selection the menu just closes.
+  ---@param after? fun() runs once the confirmation edits are applied
   ---@return boolean confirmed
-  function ui.confirm()
+  local function confirm(after)
     if not ui.visible() then
       return false
     end
@@ -645,6 +645,9 @@ function M.new(opts)
       if opts.on_confirm then
         opts.on_confirm(item)
       end
+      if after then
+        after()
+      end
     end
     if inserted == item.word then
       done()
@@ -652,6 +655,48 @@ function M.new(opts)
       insert(item.word, done)
     end
     return true
+  end
+
+  ---Accept the selected candidate. Without a selection the menu just closes.
+  ---@return boolean confirmed
+  function ui.confirm()
+    return confirm()
+  end
+
+  if opts.commit_characters and opts.on_confirm then
+    local pending_commit -- commit character plus input typed while confirming
+    vim.on_key(function(key, typed)
+      if pending_commit and typed ~= "" then
+        pending_commit = pending_commit .. key
+        return ""
+      end
+      local current = vim.api.nvim_get_mode().mode
+      if typed == "" or (current ~= "i" and current ~= "c") or not ui.visible() then
+        return
+      end
+      local item = items[cursor]
+      if
+        not item
+        or vim.fn.strchars(key) ~= 1
+        or not vim.list_contains(opts.commit_characters(item), key)
+      then
+        return
+      end
+      -- Confirmation edits the text, which is not allowed inside on_key.
+      pending_commit = key
+      local function release()
+        local keys = pending_commit
+        pending_commit = nil
+        vim.api.nvim_feedkeys(keys, "ni", true)
+      end
+      feed({}, function()
+        -- The menu may have closed meanwhile; never keep swallowing input.
+        if not confirm(release) then
+          release()
+        end
+      end)
+      return ""
+    end, vim.api.nvim_create_namespace("laser.ui.float.commit." .. tostring(ui)))
   end
 
   ---Restore the typed input and close the menu.

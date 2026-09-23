@@ -17,6 +17,7 @@ local T = MiniTest.new_set({
         CLOSED = 0
         UI = require("laser.ui.float").new({
           on_close = function() CLOSED = CLOSED + 1 end,
+          commit_characters = function(item) return COMMIT and COMMIT[item.word] or {} end,
           on_confirm = function(item)
             table.insert(CONFIRMED, { word = item.word, line = vim.api.nvim_get_current_line() })
           end,
@@ -142,6 +143,29 @@ T["clicking a candidate selects it"] = function()
   child.lua([[vim.wait(20)]])
   expect.equality(child.lua_get("UI.selected()"), 2)
   expect.equality(line(), "b")
+end
+
+T["a commit character confirms the selection, then is typed"] = function()
+  child.lua([[COMMIT = { bar = { "." } }]])
+  type_keys("ib<F2><C-j>.")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "bar.")
+  expect.equality(child.lua_get("CONFIRMED"), { { word = "bar", line = "bar" } })
+end
+
+T["input typed while a commit is pending follows the commit character"] = function()
+  child.lua([[COMMIT = { bar = { "." } }]])
+  type_keys("ib<F2><C-j>")
+  child.api.nvim_input(".xy")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "bar.xy")
+end
+
+T["other characters and unselected menus are typed normally"] = function()
+  child.lua([[COMMIT = { bar = { "." } }]])
+  type_keys("ib<F2>.")
+  expect.equality(line(), "b.")
+  expect.equality(child.lua_get("CONFIRMED"), {})
 end
 
 return T
