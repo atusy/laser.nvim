@@ -216,6 +216,8 @@ function M.new(opts)
   local typed = "" -- input between startcol and the cursor when the menu opened
   local inserted = "" -- text the menu currently holds between startcol and the cursor
   local expected -- text state right after the menu's own edit
+  local pending_insertions = 0 -- insertions whose fed keys have not run yet
+  local after_insertions = {} ---@type fun()[] run once no insertion is pending
   local browsing, frozen, initial_cursor = false, 0, 0
   local layout = { height = 0, above = false, reversed = false, scrollbar = false }
   local shown -- text state the menu was drawn for
@@ -240,6 +242,8 @@ function M.new(opts)
         return
       end
       expected = nil
+      -- Fed keys may have been discarded; nothing may wait for them forever.
+      pending_insertions, after_insertions = 0, {}
     end,
   })
 
@@ -965,7 +969,9 @@ function M.new(opts)
     -- Typed control characters act as keys, such as <Tab> under 'expandtab';
     -- <C-v> inserts them as they are. Newlines are meant to split the line.
     local typed_word = text:gsub("[\1-\9\11-\31\127]", "\22%0")
+    pending_insertions = pending_insertions + 1
     feed({ { bs:rep(chars), false }, { typed_word, true } }, function()
+      pending_insertions = pending_insertions - 1
       restore_options()
       -- The keys are in; record what they produced, which a prediction can
       -- miss when a confirmed candidate spans lines.
@@ -973,6 +979,13 @@ function M.new(opts)
       shown = expected.state
       if callback then
         callback()
+      end
+      if pending_insertions == 0 then
+        local waiting = after_insertions
+        after_insertions = {}
+        for _, run in ipairs(waiting) do
+          run()
+        end
       end
     end)
   end
@@ -1106,10 +1119,13 @@ function M.new(opts)
         end)
       end
     end
-    if inserted == item.word then
-      done()
-    else
+    if inserted ~= item.word then
       insert(item.word, done)
+    elseif pending_insertions > 0 then
+      -- The candidate's keys are still queued; confirmation edits need them.
+      table.insert(after_insertions, done)
+    else
+      done()
     end
     return true
   end

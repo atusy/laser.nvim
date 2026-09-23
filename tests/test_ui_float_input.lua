@@ -601,4 +601,12 @@ T["leaving Insert mode with Ctrl-C closes the menu"] = function()
   expect.equality(child.lua_get("CLOSED"), 1)
 end
 
+T["confirming right after selecting waits for the insertion"] = function()
+  child.lua([[vim.keymap.set("i", "<F6>", function() UI.select(1); UI.confirm() end)]])
+  type_keys("ib<F2><F6>")
+  child.lua([[vim.wait(50)]])
+  expect.equality(line(), "bar")
+  expect.equality(child.lua_get("CONFIRMED"), { { word = "bar", line = "bar" } })
+end
+
 return T
