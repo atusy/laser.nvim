@@ -381,4 +381,23 @@ T["a bordered menu aligns its text with the completion start"] = function()
   expect.equality(config.col + 1, screen_col(5))
 end
 
+T["the preview does not cover a menu shifted from the right edge"] = function()
+  vim.o.columns = 40
+  set_line(string.rep("x", 30) .. "b")
+  local ui = new()
+  ui.configure({ preview = { max_width = 10 } })
+  ui.open(31, { documented("barbazquxquux", "docs") }, "i")
+  ui.select_relative(1)
+  -- Compare where the windows are drawn, after Neovim has fitted them.
+  vim.cmd("redraw")
+  local function span(win)
+    local col = vim.fn.win_screenpos(win)[2]
+    return col, col + vim.api.nvim_win_get_width(win)
+  end
+  local menu_first, menu_last = span(ui.win())
+  local preview_first, preview_last = span(ui.preview_win())
+  local overlaps = preview_first < menu_last and menu_first < preview_last
+  expect.equality(overlaps, false)
+end
+
 return T
