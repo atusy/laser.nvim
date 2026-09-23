@@ -351,4 +351,20 @@ T["a close refused under textlock leaves a working menu"] = function()
   expect.equality(child.lua_get("UI.visible()"), false)
 end
 
+T["clicking a bordered menu selects by its drawn border"] = function()
+  child.o.mouse = "a"
+  child.lua([[
+    vim.keymap.set("i", "<LeftMouse>", function() UI.select_mouse() end)
+    UI.configure({ border = "single" })
+  ]])
+  type_keys("ib<F2>")
+  -- Options passed to a later call must not change how the open menu is read.
+  child.lua([[UI.configure({})]])
+  child.cmd("redraw")
+  local pos = child.lua_get([[vim.fn.win_screenpos(UI.win())]])
+  child.api.nvim_input_mouse("left", "press", "", 0, pos[1], pos[2])
+  child.lua([[vim.wait(20)]])
+  expect.equality(child.lua_get("UI.selected()"), 1)
+end
+
 return T

@@ -63,6 +63,14 @@ end
 ---@field max_height? integer defaults to 20
 ---@field border? string|string[] nvim_open_win() border
 
+---Cells a drawn window's border takes on each side. Read from the window,
+---since options passed to later calls may differ from those it was drawn with.
+---@param config vim.api.keyset.win_config
+---@return integer
+local function drawn_border(config)
+  return (config.border == nil or config.border == "none") and 0 or 1
+end
+
 ---@param opts laser.MenuOpts
 ---@return integer
 local function max_height(opts)
@@ -421,7 +429,7 @@ function M.new(opts)
     local border = (options.border == nil or options.border == "none") and 0 or 2
     local anchor = vim.api.nvim_win_get_config(win)
     local width = preview_size.width
-    local col = anchor.col + anchor.width + border_rows()
+    local col = anchor.col + anchor.width + 2 * drawn_border(anchor)
     if col + width + border > vim.o.columns then
       col = math.max(anchor.col - width - border, 0)
     end
@@ -875,7 +883,7 @@ function M.new(opts)
     -- getmousepos() reports the window below a non-focusable float.
     local pos = vim.fn.getmousepos()
     local origin = vim.fn.win_screenpos(win)
-    local offset = border_rows() / 2
+    local offset = drawn_border(vim.api.nvim_win_get_config(win))
     local row = pos.screenrow - origin[1] + 1 - offset
     local col = pos.screencol - origin[2] + 1 - offset
     if row < 1 or row > height() or col < 1 or col > vim.api.nvim_win_get_width(win) then
