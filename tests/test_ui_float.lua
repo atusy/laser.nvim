@@ -665,4 +665,22 @@ T["the preview opens on the left without room and starts at the top"] = function
   expect.equality(vim.fn.line("w0", ui.preview_win()), 1)
 end
 
+T["resolved plain text replaces the filetype of initial markdown"] = function()
+  set_line("b")
+  local client = fake_client()
+  local ui = new({
+    preview_context = function()
+      return { client = client, bufnr = 0 }
+    end,
+  })
+  ui.configure({ preview = true })
+  ui.open(1, { documented("b1", { kind = "markdown", value = "**docs**" }) }, "i")
+  ui.select(1, { insert = false })
+  local buf = vim.api.nvim_win_get_buf(ui.preview_win())
+  expect.equality(vim.bo[buf].filetype, "markdown")
+  client.callbacks[1](nil, { documentation = { kind = "plaintext", value = "docs" } })
+  expect.equality(vim.bo[buf].filetype, "")
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "docs" })
+end
+
 return T
