@@ -106,7 +106,7 @@ vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
 })
 ```
 
-The mappings above work in both Insert and command-line mode.
+The mappings in [Get started](#-get-started) work in both Insert and command-line mode.
 
 ### 🪟 Menu
 
