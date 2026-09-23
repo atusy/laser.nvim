@@ -576,4 +576,17 @@ T["NUL bytes in candidates are dropped instead of corrupting the input"] = funct
   expect.equality(child.api.nvim_buf_line_count(0), 1)
 end
 
+T["the command-line preview stays above the command line"] = function()
+  child.o.lines, child.o.columns = 12, 40
+  child.lua([[
+    ITEMS[1].user_data.laser.item.documentation = "1\n2\n3"
+    UI.configure({ preview = true, max_height = 1 })
+  ]])
+  type_keys(":b<F2><C-n>")
+  local preview = child.lua_get([[vim.api.nvim_win_get_config(UI.preview_win())]])
+  -- Row 11 (0-based) holds the command line.
+  expect.equality(preview.row + preview.height <= 11, true)
+  expect.equality(preview.height, 3)
+end
+
 return T

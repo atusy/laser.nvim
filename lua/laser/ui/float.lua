@@ -551,9 +551,14 @@ function M.new(opts)
       height = height + math.max(1, math.ceil(cells / width))
     end
     height = math.min(height, preview_size.max_height)
+    -- Stay above the command line: move up first, then shorten.
+    local cmdline = mode == "c" and math.max(vim.o.cmdheight, 1) or vim.o.cmdheight
+    local bottom = vim.o.lines - cmdline - own.top - own.bottom
+    height = math.max(1, math.min(height, bottom))
+    local row = math.max(0, math.min(anchor.row, bottom - height))
     vim.api.nvim_win_set_config(preview_win, {
       relative = "editor",
-      row = anchor.row,
+      row = row,
       col = col,
       width = width,
       height = height,
