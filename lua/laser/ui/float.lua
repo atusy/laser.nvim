@@ -199,7 +199,7 @@ function M.new(opts)
   local cells = {}
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
-  local dismiss, redraw, watch
+  local dismiss, redraw, watch, layout_and_draw
   local closing = false -- the menu is closing its own window
   -- Typeahead can leave the mode before the menu's own change is observed.
   -- Unlike the window watchers, this outlives each menu window.
@@ -661,11 +661,7 @@ function M.new(opts)
         if
           vim.b.changedtick ~= placed_tick or vim.deep_equal(vim.fn.winsaveview(), placed_view)
         then
-          compute_layout()
-          top = math.max(1, math.min(top, #items - height() + 1))
-          place()
-          place_preview()
-          render()
+          layout_and_draw()
           redraw()
         else
           dismiss()
@@ -692,17 +688,26 @@ function M.new(opts)
     })
   end
 
-  local function show(col, new_items, new_mode)
-    startcol, mode, items = col, new_mode, new_items
-    shown = text_state(mode)
+  ---Fit the menu to the room around the cursor and draw it there.
+  function layout_and_draw()
     compute_layout()
     -- The scrollbar takes a column of the width available to the fields.
     widths = measure(items, (menu.max_width or 80) - (layout.scrollbar and 1 or 0), cells)
     top = math.max(1, math.min(top, #items - height() + 1))
+    -- A shorter menu keeps the selection in view.
+    if cursor > 0 and cursor >= top + height() then
+      top = cursor - height() + 1
+    end
     ensure_buf()
     place()
     place_preview()
     render()
+  end
+
+  local function show(col, new_items, new_mode)
+    startcol, mode, items = col, new_mode, new_items
+    shown = text_state(mode)
+    layout_and_draw()
   end
 
   ---@param col integer 1-based

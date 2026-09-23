@@ -470,4 +470,27 @@ T["clicking right of the menu selects nothing"] = function()
   expect.equality(child.lua_get("UI.selected()"), 0)
 end
 
+T["a window shrunk under the menu lays it out again within its limits"] = function()
+  child.o.lines = 20
+  child.lua([[
+    ITEMS = {}
+    for i = 1, 6 do
+      ITEMS[i] = { word = i .. "barbazqux", abbr = i .. "barbazqux", user_data = { laser = { client_id = 1, item = { label = "b" } } } }
+    end
+    UI.configure({ max_width = 8 })
+  ]])
+  type_keys("ib<F2>")
+  child.lua([[UI.select(6, { insert = false })]])
+  -- Leave less room below the cursor without scrolling the window.
+  child.o.cmdheight = 15
+  child.cmd("redraw")
+  expect.equality(child.lua_get("UI.visible()"), true)
+  expect.equality(child.lua_get([[vim.api.nvim_win_get_width(UI.win())]]) <= 8, true)
+  local rows =
+    child.lua_get([[vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(UI.win()), 0, -1, false)]])
+  expect.equality(#rows < 6, true)
+  -- Fields fit beside the scrollbar, and the selected last candidate stays in view.
+  expect.equality(rows[#rows], "6barbaz ")
+end
+
 return T
