@@ -52,7 +52,7 @@ end
 ---@class laser.MenuOpts
 ---@field max_height? integer rows shown at once; defaults to 'pumheight' or 10
 ---@field max_width? integer columns shown at once; defaults to 80
----@field border? string|string[] nvim_open_win() border
+---@field border? string|(string|string[])[] nvim_open_win() border
 ---@field auto_select? boolean highlight the first candidate without inserting it
 ---@field direction? "auto"|"below"|"above" "auto" opens below unless the rows do not fit there and above has more room; the command-line menu always opens above
 ---@field reversed? boolean list candidates bottom-up when the menu opens above
@@ -61,7 +61,7 @@ end
 ---@class laser.PreviewOpts
 ---@field max_width? integer defaults to 60
 ---@field max_height? integer defaults to 20
----@field border? string|string[] nvim_open_win() border
+---@field border? string|(string|string[])[] nvim_open_win() border
 
 ---@class laser.BorderSides
 ---@field top integer
