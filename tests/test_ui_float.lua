@@ -776,4 +776,15 @@ T["the scrollbar fits within max_width"] = function()
   expect.equality(rows(ui), { "barba " })
 end
 
+T["the preview starts after a bordered menu's right border"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ border = "single", preview = true })
+  ui.open(1, { documented("b1", "docs") }, "i")
+  ui.select(1, { insert = false })
+  local menu = vim.api.nvim_win_get_config(ui.win())
+  local preview = vim.api.nvim_win_get_config(ui.preview_win())
+  expect.equality(preview.col, menu.col + menu.width + 2)
+end
+
 return T
