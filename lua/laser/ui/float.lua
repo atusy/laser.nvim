@@ -202,7 +202,9 @@ function M.new(opts)
   local dismiss, redraw, watch
   local closing = false -- the menu is closing its own window
   -- Typeahead can leave the mode before the menu's own change is observed.
+  -- Unlike the window watchers, this outlives each menu window.
   vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave" }, {
+    group = vim.api.nvim_create_augroup("laser.ui.float.state." .. tostring(ui), { clear = true }),
     callback = function()
       expected = nil
     end,
