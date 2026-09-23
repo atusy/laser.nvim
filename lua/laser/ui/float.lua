@@ -165,7 +165,7 @@ function M.new(opts)
   local resolved = {}
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
-  local dismiss, redraw
+  local dismiss, redraw, watch
   -- Typeahead can leave the mode before the menu's own change is observed.
   vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave" }, {
     callback = function()
@@ -363,6 +363,8 @@ function M.new(opts)
       win = vim.api.nvim_open_win(ensure_buf(), false, config)
       vim.wo[win].winhighlight = "Normal:Pmenu,FloatBorder:Pmenu"
       vim.wo[win].wrap = false
+      -- Watchers read the current state, so one set serves the window's life.
+      watch()
     end
   end
 
@@ -526,11 +528,14 @@ function M.new(opts)
   end
 
   ---Close when the user moves away from the completed text without editing it.
-  local function watch()
+  function watch()
     vim.api.nvim_clear_autocmds({ group = group })
-    vim.api.nvim_create_autocmd(mode == "c" and "CursorMovedC" or "CursorMovedI", {
+    vim.api.nvim_create_autocmd({ "CursorMovedI", "CursorMovedC" }, {
       group = group,
-      callback = function()
+      callback = function(args)
+        if (args.event == "CursorMovedC") ~= (mode == "c") then
+          return
+        end
         local state = text_state(mode)
         if expected and vim.deep_equal(state, expected.state) then
           return
@@ -585,7 +590,6 @@ function M.new(opts)
     place()
     place_preview()
     render()
-    watch()
   end
 
   ---@param col integer 1-based
