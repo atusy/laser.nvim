@@ -216,6 +216,7 @@ function M.new(opts)
   local typed = "" -- input between startcol and the cursor when the menu opened
   local inserted = "" -- text the menu currently holds between startcol and the cursor
   local expected -- text state right after the menu's own edit
+  local restore_options -- defined with the option relaxation below
   local pending_insertions = 0 -- insertions whose fed keys have not run yet
   local after_insertions = {} ---@type fun()[] run once no insertion is pending
   local browsing, frozen, initial_cursor = false, 0, 0
@@ -242,8 +243,10 @@ function M.new(opts)
         return
       end
       expected = nil
-      -- Fed keys may have been discarded; nothing may wait for them forever.
+      -- Fed keys may have been discarded; nothing may wait for them forever,
+      -- and options relaxed for them must come back.
       pending_insertions, after_insertions = 0, {}
+      restore_options()
     end,
   })
 
@@ -895,7 +898,7 @@ function M.new(opts)
     buffer = { cinkeys = "", indentkeys = "", softtabstop = 0, varsofttabstop = "" },
   }
 
-  local function restore_options()
+  function restore_options()
     if not saved_options then
       return
     end

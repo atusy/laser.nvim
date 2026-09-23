@@ -624,4 +624,14 @@ T["several actions in one mapping apply in order"] = function()
   expect.equality(line(), "b")
 end
 
+T["options changed for insertion are restored when Ctrl-C leaves Insert mode"] = function()
+  child.o.backspace = "indent,eol,start"
+  type_keys("ib<F2>")
+  -- In one input, so <C-c> can discard the keys the insertion queued.
+  type_keys("<C-n><C-c>")
+  expect.equality(child.api.nvim_get_mode().mode, "n")
+  expect.equality(child.o.eventignore, "")
+  expect.equality(child.o.backspace, "indent,eol,start")
+end
+
 return T
