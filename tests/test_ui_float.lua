@@ -754,4 +754,12 @@ T["the menu lines up with text in a bordered floating window"] = function()
   expect.equality({ config.row, config.col }, { 7, 11 + 4 })
 end
 
+T["truncation keeps composing characters with their base"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_width = 3 })
+  ui.open(1, { candidate("abc\u{0301}d") }, "i")
+  expect.equality(rows(ui), { "abc\u{0301}" })
+end
+
 return T

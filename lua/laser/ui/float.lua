@@ -107,13 +107,15 @@ local function fit(text, width)
   local cells = vim.api.nvim_strwidth(text)
   if cells > width then
     -- Every character takes at least one cell, so start from `width` of them
-    -- and drop only what wide characters push past the limit.
+    -- and drop only what wide characters push past the limit. Composing
+    -- characters take no cell and stay with their base character.
     local chars = width
-    text = vim.fn.strcharpart(text, 0, chars)
+    local original = text
+    text = vim.fn.strcharpart(original, 0, chars, 1)
     cells = vim.api.nvim_strwidth(text)
     while chars > 0 and cells > width do
       chars = chars - 1
-      text = vim.fn.strcharpart(text, 0, chars)
+      text = vim.fn.strcharpart(original, 0, chars, 1)
       cells = vim.api.nvim_strwidth(text)
     end
   end
