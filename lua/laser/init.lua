@@ -125,9 +125,9 @@ local function action(name)
 end
 
 ---Move the selection by `delta` and put the selected candidate in place of the
----typed input, unless `opts.insert` is false or auto-wrap would split it across
----lines. Single steps cycle through the typed input; larger moves stop at the
----first or last candidate.
+---typed input, unless `opts.insert` is false or the candidate would split the
+---line, by a newline or auto-wrap. Single steps cycle through the typed input;
+---larger moves stop at the first or last candidate.
 ---@type fun(delta: integer, opts?: { insert?: boolean }): boolean
 M.select = action("select")
 ---Accept the selected candidate; returns false when nothing was selected.
