@@ -319,7 +319,10 @@ function M.new(opts)
     redraw()
   end
 
+  local placed_tick -- b:changedtick when the menu was last placed
+
   local function place()
+    placed_tick = mode == "i" and vim.b.changedtick or nil
     local total = 0
     for _, name in ipairs(COLUMNS) do
       if widths[name] > 0 then
@@ -519,7 +522,17 @@ function M.new(opts)
     vim.api.nvim_create_autocmd("WinScrolled", {
       group = group,
       callback = function()
-        if vim.v.event[tostring(vim.api.nvim_get_current_win())] then
+        if not vim.v.event[tostring(vim.api.nvim_get_current_win())] then
+          return
+        end
+        -- Typing, including the menu's own insertion, can scroll the view;
+        -- only a scroll without an edit moves away from the completion.
+        local tick = vim.b.changedtick
+        if tick ~= placed_tick then
+          place()
+          place_preview()
+          redraw()
+        else
           dismiss()
         end
       end,

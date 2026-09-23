@@ -313,4 +313,28 @@ T["the menu lines up with input() text after its prompt"] = function()
   expect.equality(child.lua_get([[vim.api.nvim_win_get_config(UI.win()).col]]), 3)
 end
 
+T["scrolling caused by the menu's own insertion keeps it open"] = function()
+  child.o.columns = 20
+  child.wo.wrap = false
+  child.o.sidescroll = 1
+  child.lua([[
+    ITEMS = { { word = "0123456789bar_very_long", abbr = "x", user_data = { laser = { client_id = 1, item = { label = "x" } } } } }
+    START = 1
+  ]])
+  type_keys("i0123456789b<F2><C-n>")
+  child.cmd("redraw")
+  expect.equality(line(), "0123456789bar_very_long")
+  expect.equality(child.lua_get("UI.visible()"), true)
+  expect.equality(child.lua_get("CLOSED"), 0)
+end
+
+T["scrolling the window without editing closes the menu"] = function()
+  child.api.nvim_buf_set_lines(0, 0, -1, false, vim.fn["repeat"]({ "" }, 100))
+  type_keys("50Gzzib<F2>")
+  type_keys("<C-x><C-e>")
+  -- WinScrolled is detected when the screen is updated.
+  child.cmd("redraw")
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
 return T
