@@ -115,13 +115,20 @@ end
 ---Column widths over every candidate, so the menu does not jitter on scroll.
 ---@param items table[]
 ---@param limit integer
+---@param cells table<string, integer> display widths already measured
 ---@return table<string, integer>
-local function measure(items, limit)
+local function measure(items, limit, cells)
   local widths = {}
   for _, name in ipairs(COLUMNS) do
     local width = 0
     for _, item in ipairs(items) do
-      width = math.max(width, vim.api.nvim_strwidth(field(item, name)))
+      local text = field(item, name)
+      local cell = cells[text]
+      if not cell then
+        cell = vim.api.nvim_strwidth(text)
+        cells[text] = cell
+      end
+      width = math.max(width, cell)
     end
     widths[name] = width
   end
@@ -163,6 +170,9 @@ function M.new(opts)
   -- Resolved documentation by candidate id. Ids restart with each completion
   -- session, so the cache lives only while the menu is open.
   local resolved = {}
+  -- Display widths of field texts. Kinds and details repeat across candidates
+  -- and labels across keystrokes; cleared with the menu to stay bounded.
+  local cells = {}
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
   local dismiss, redraw, watch
@@ -583,7 +593,7 @@ function M.new(opts)
   local function show(col, new_items, new_mode)
     startcol, mode, items = col, new_mode, new_items
     shown = text_state(mode)
-    widths = measure(items, menu.max_width or 80)
+    widths = measure(items, menu.max_width or 80, cells)
     compute_layout()
     top = math.max(1, math.min(top, #items - height() + 1))
     ensure_buf()
@@ -638,7 +648,7 @@ function M.new(opts)
 
   function ui.close()
     close_preview()
-    resolved = {}
+    resolved, cells = {}, {}
     vim.api.nvim_clear_autocmds({ group = group })
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
