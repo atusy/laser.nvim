@@ -611,4 +611,32 @@ T["per-call client order rearranges cached candidates"] = function()
   )
 end
 
+for name, item in pairs({
+  snippet = { label = "bar", insertText = "bar($1)$0", insertTextFormat = 2 },
+  ["additional edits"] = {
+    label = "bar",
+    additionalTextEdits = {
+      {
+        range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 0 } },
+        newText = "local ",
+      },
+    },
+  },
+}) do
+  T["confirmation edits do not reopen the menu: " .. name] = function()
+    child.lua("ITEM = " .. vim.inspect(item))
+    child.lua([[
+      FAKE.start({ items = { ITEM } })
+      vim.keymap.set("i", "<C-y>", function() LASER.confirm() end)
+    ]])
+    type_keys("ib")
+    wait_menu_items(1)
+    local count = #completion_requests()
+    type_keys("<C-n><C-y>")
+    child.lua([[vim.wait(200)]])
+    expect.equality(child.lua_get("LASER.visible()"), false)
+    expect.equality(#completion_requests(), count)
+  end
+end
+
 return T

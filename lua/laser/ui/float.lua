@@ -670,6 +670,9 @@ function M.new(opts)
     local function done()
       if opts.on_confirm then
         opts.on_confirm(item)
+        -- Snippet expansion and additional edits are part of the confirmation,
+        -- not input that should start a new completion.
+        expected = { mode = mode, state = text_state(mode) }
       end
       if after then
         after()
