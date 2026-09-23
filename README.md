@@ -104,8 +104,9 @@ require("laser").complete({
 })
 ```
 
-The menu draws only the rows in view, so long candidate lists stay cheap to
-show.
+The menu draws only the rows in view. Filtering and column widths still visit
+every candidate, so `max_items` remains useful for servers that return very
+long lists.
 
 ### 📖 Documentation preview
 
