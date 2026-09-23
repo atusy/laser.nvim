@@ -647,7 +647,10 @@ function M.new(opts)
     -- Typed keys keep undo and dot-repeat intact, unlike direct buffer edits.
     relax_options()
     local bs = vim.keycode("<BS>")
-    feed({ { bs:rep(vim.fn.strchars(current)), false }, { word, true } }, function()
+    -- One <BS> removes a character with its composing characters unless
+    -- 'delcombine' makes it remove them one at a time.
+    local chars = vim.fn.strchars(current, vim.o.delcombine and 0 or 1)
+    feed({ { bs:rep(chars), false }, { word, true } }, function()
       restore_options()
       if callback then
         callback()

@@ -279,6 +279,15 @@ T["a confirmation without edits does not skip the next completion"] = function()
   expect.equality(child.lua_get("UI.skip_text_change()"), false)
 end
 
+for _, delcombine in ipairs({ false, true }) do
+  T["insertion replaces combining characters exactly (delcombine=" .. tostring(delcombine) .. ")"] = function()
+    child.o.delcombine = delcombine
+    child.lua([[START = 4]])
+    type_keys("iab.e\u{0301}<F2><C-n>")
+    expect.equality(line(), "ab.bar")
+  end
+end
+
 T["insertion replaces spaces one by one despite softtabstop"] = function()
   child.bo.softtabstop, child.bo.expandtab = 4, true
   child.lua([[START = 4]])
