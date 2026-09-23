@@ -806,4 +806,24 @@ T["column separators count toward max_width"] = function()
   expect.equality(rows(ui), { "aaaa bbbb" })
 end
 
+T["borders drawn on some sides only offset just those sides"] = function()
+  -- A shadow has only right and bottom edges.
+  local host = vim.api.nvim_open_win(vim.api.nvim_create_buf(false, true), true, {
+    relative = "editor",
+    row = 5,
+    col = 10,
+    width = 30,
+    height = 5,
+    border = "shadow",
+  })
+  set_line("foo.ba")
+  local ui = new()
+  ui.configure({ border = "shadow" })
+  ui.open(5, { candidate("bar") }, "i")
+  local config = vim.api.nvim_win_get_config(ui.win())
+  vim.api.nvim_win_close(host, true)
+  -- Text starts at row 5 and column 10; the typed text at column 14.
+  expect.equality({ config.row, config.col }, { 6, 14 })
+end
+
 return T

@@ -63,12 +63,41 @@ end
 ---@field max_height? integer defaults to 20
 ---@field border? string|string[] nvim_open_win() border
 
----Cells a drawn window's border takes on each side. Read from the window,
----since options passed to later calls may differ from those it was drawn with.
----@param config vim.api.keyset.win_config
----@return integer
-local function drawn_border(config)
-  return (config.border == nil or config.border == "none") and 0 or 1
+---@class laser.BorderSides
+---@field top integer
+---@field right integer
+---@field bottom integer
+---@field left integer
+
+---Cells a nvim_open_win() border takes on each side. An edge whose character
+---is empty is not drawn, and "shadow" has only right and bottom edges.
+---@param border? string|table
+---@return laser.BorderSides
+local function border_sides(border)
+  if border == nil or border == "none" or border == "" then
+    return { top = 0, right = 0, bottom = 0, left = 0 }
+  elseif border == "shadow" then
+    return { top = 0, right = 1, bottom = 1, left = 0 }
+  elseif type(border) == "string" then
+    return { top = 1, right = 1, bottom = 1, left = 1 }
+  end
+  -- Clockwise from the top-left corner; shorter lists repeat.
+  local function edge(index)
+    local part = border[(index - 1) % #border + 1]
+    if type(part) == "table" then
+      part = part[1]
+    end
+    return (part and part ~= "") and 1 or 0
+  end
+  return { top = edge(2), right = edge(4), bottom = edge(6), left = edge(8) }
+end
+
+---Border of a drawn window. Read from the window, since options passed to
+---later calls may differ from those it was drawn with.
+---@param win_id integer
+---@return laser.BorderSides
+local function drawn_border(win_id)
+  return border_sides(vim.api.nvim_win_get_config(win_id).border)
 end
 
 ---@param opts laser.MenuOpts
@@ -232,7 +261,8 @@ function M.new(opts)
   end
 
   local function border_rows()
-    return (menu.border == nil or menu.border == "none") and 0 or 2
+    local sides = border_sides(menu.border)
+    return sides.top + sides.bottom
   end
 
   ---1-based screen row and column where the current window's rows begin:
@@ -241,9 +271,9 @@ function M.new(opts)
   local function window_origin()
     local win_id = vim.api.nvim_get_current_win()
     local origin = vim.fn.win_screenpos(win_id)
-    local border = drawn_border(vim.api.nvim_win_get_config(win_id))
+    local border = drawn_border(win_id)
     local winbar = vim.fn.getwininfo(win_id)[1].winbar
-    return origin[1] + border + winbar, origin[2] + border
+    return origin[1] + border.top + winbar, origin[2] + border.left
   end
 
   ---1-based screen row and column of the cursor in the edited text.
@@ -450,12 +480,13 @@ function M.new(opts)
     }
     -- Position against the editor so the menu stays where it is computed
     -- here; Neovim would otherwise shift a window that does not fit.
-    local side = border_rows() / 2
+    local sides = border_sides(config.border)
     local row = cursor_screenpos()
-    local outer_width = config.width + 2 * side
+    local outer_width = config.width + sides.left + sides.right
     config.relative = "editor"
-    config.row = layout.above and row - 1 - height() - 2 * side or row
-    config.col = math.max(0, math.min(start_screencol() - 1 - side, vim.o.columns - outer_width))
+    config.row = layout.above and row - 1 - height() - sides.top - sides.bottom or row
+    config.col =
+      math.max(0, math.min(start_screencol() - 1 - sides.left, vim.o.columns - outer_width))
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_config(win, config)
     else
@@ -493,10 +524,12 @@ function M.new(opts)
       return
     end
     local options = type(menu.preview) == "table" and menu.preview or {}
-    local border = (options.border == nil or options.border == "none") and 0 or 2
+    local own = border_sides(options.border)
+    local border = own.left + own.right
     local anchor = vim.api.nvim_win_get_config(win)
+    local sides = drawn_border(win)
     local width = preview_size.width
-    local col = anchor.col + anchor.width + 2 * drawn_border(anchor)
+    local col = anchor.col + sides.left + anchor.width + sides.right
     if col + width + border > vim.o.columns then
       col = math.max(anchor.col - width - border, 0)
     end
@@ -953,9 +986,9 @@ function M.new(opts)
     -- getmousepos() reports the window below a non-focusable float.
     local pos = vim.fn.getmousepos()
     local origin = vim.fn.win_screenpos(win)
-    local offset = drawn_border(vim.api.nvim_win_get_config(win))
-    local row = pos.screenrow - origin[1] + 1 - offset
-    local col = pos.screencol - origin[2] + 1 - offset
+    local border = drawn_border(win)
+    local row = pos.screenrow - origin[1] + 1 - border.top
+    local col = pos.screencol - origin[2] + 1 - border.left
     if row < 1 or row > height() or col < 1 or col > vim.api.nvim_win_get_width(win) then
       return false
     end
