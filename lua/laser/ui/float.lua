@@ -149,7 +149,7 @@ function M.new(opts)
   local preview_buf, preview_win, cancel_resolve
   local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
-  local dismiss
+  local dismiss, redraw
 
   function ui.configure(options)
     menu = options or {}
@@ -178,10 +178,12 @@ function M.new(opts)
 
   local function compute_layout()
     local want = math.min(#items, max_height(menu))
-    local row = vim.fn.win_screenpos(0)[1] + vim.fn.winline() - 1
+    -- The command line sits on the last rows, so its menu always opens above.
+    local row = mode == "c" and vim.o.lines - vim.o.cmdheight + 1
+      or vim.fn.win_screenpos(0)[1] + vim.fn.winline() - 1
     local below = vim.o.lines - vim.o.cmdheight - row - border_rows()
     local above = row - 1 - border_rows()
-    local direction = menu.direction or "auto"
+    local direction = mode == "c" and "above" or menu.direction or "auto"
     local up = direction == "above" or (direction == "auto" and below < want and above > below)
     local rows = math.max(1, math.min(want, up and above or below))
     layout = {
@@ -276,6 +278,7 @@ function M.new(opts)
         end
       end
     end
+    redraw()
   end
 
   local function place()
@@ -296,11 +299,18 @@ function M.new(opts)
       zindex = 200,
       border = menu.border or "none",
     }
-    local col = vim.api.nvim_win_get_cursor(0)[2]
-    local line = vim.api.nvim_get_current_line()
-    config.relative = "cursor"
-    config.row = layout.above and -(height() + border_rows()) or 1
-    config.col = -vim.api.nvim_strwidth(line:sub(startcol, col))
+    if mode == "c" then
+      local prompt = vim.fn.getcmdtype() .. vim.fn.getcmdprompt()
+      config.relative = "editor"
+      config.row = vim.o.lines - vim.o.cmdheight - height() - border_rows()
+      config.col = vim.api.nvim_strwidth(prompt .. vim.fn.getcmdline():sub(1, startcol - 1))
+    else
+      local col = vim.api.nvim_win_get_cursor(0)[2]
+      local line = vim.api.nvim_get_current_line()
+      config.relative = "cursor"
+      config.row = layout.above and -(height() + border_rows()) or 1
+      config.col = -vim.api.nvim_strwidth(line:sub(startcol, col))
+    end
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_set_config(win, config)
     else
@@ -314,6 +324,7 @@ function M.new(opts)
   local function hide_preview()
     if preview_win and vim.api.nvim_win_is_valid(preview_win) then
       vim.api.nvim_win_close(preview_win, true)
+      redraw()
     end
     preview_win = nil
   end
@@ -375,6 +386,7 @@ function M.new(opts)
     vim.api.nvim_win_call(preview_win, function()
       vim.fn.winrestview({ topline = 1 })
     end)
+    redraw()
   end
 
   ---Show the selected candidate's documentation, then its resolved version.
@@ -425,13 +437,21 @@ function M.new(opts)
     return true
   end
 
+  -- Floats are not repainted while the command line is being edited. Headless
+  -- tests can only observe the first paint, so every visible change asks.
+  function redraw()
+    if mode == "c" then
+      vim.api.nvim__redraw({ flush = true })
+    end
+  end
+
   ---Close when the user moves away from the completed text without editing it.
   local function watch()
     vim.api.nvim_clear_autocmds({ group = group })
-    vim.api.nvim_create_autocmd("CursorMovedI", {
+    vim.api.nvim_create_autocmd(mode == "c" and "CursorMovedC" or "CursorMovedI", {
       group = group,
       callback = function()
-        local state = text_state("i")
+        local state = text_state(mode)
         if expected and vim.deep_equal(state, expected.state) then
           return
         end
@@ -515,6 +535,7 @@ function M.new(opts)
     vim.api.nvim_clear_autocmds({ group = group })
     if win and vim.api.nvim_win_is_valid(win) then
       vim.api.nvim_win_close(win, true)
+      redraw()
     end
     win = nil
   end

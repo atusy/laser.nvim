@@ -23,6 +23,11 @@ local T = MiniTest.new_set({
           end,
         })
         vim.keymap.set("i", "<F2>", function() UI.open(1, ITEMS, "i") end)
+        vim.keymap.set("c", "<F2>", function() UI.open(1, ITEMS, "c") end)
+        vim.keymap.set("c", "<C-n>", function() UI.insert_relative(1) end)
+        vim.keymap.set("c", "<C-j>", function() UI.select_relative(1) end)
+        vim.keymap.set("c", "<C-y>", function() UI.confirm() end)
+        vim.keymap.set("c", "<C-e>", function() UI.cancel() end)
         vim.keymap.set("i", "<C-n>", function() UI.insert_relative(1) end)
         vim.keymap.set("i", "<C-p>", function() UI.insert_relative(-1) end)
         vim.keymap.set("i", "<C-j>", function() UI.select_relative(1) end)
@@ -166,6 +171,55 @@ T["other characters and unselected menus are typed normally"] = function()
   type_keys("ib<F2>.")
   expect.equality(line(), "b.")
   expect.equality(child.lua_get("CONFIRMED"), {})
+end
+
+T["the command-line menu is drawn above the command line"] = function()
+  child.o.lines, child.o.columns = 10, 30
+  type_keys(":b<F2>")
+  expect.equality(child.api.nvim_get_mode().mode, "c")
+  local pos = child.lua_get([[vim.fn.win_screenpos(UI.win())]])
+  expect.equality(pos, { 10 - 1 - 2 + 1, 2 })
+  local screen = child.get_screenshot()
+  expect.equality(screen.text[8][2], "b")
+  expect.equality(table.concat(screen.text[8], "", 2, 4), "bar")
+  expect.equality(table.concat(screen.text[9], "", 2, 4), "baz")
+end
+
+T["command-line insertion, cancellation and confirmation edit the command line"] = function()
+  type_keys(":b<F2><C-n>")
+  expect.equality(child.fn.getcmdline(), "bar")
+  expect.equality(child.fn.getcmdpos(), 4)
+  expect.equality(child.lua_get("UI.skip_text_change()"), true)
+  type_keys("<C-e>")
+  expect.equality(child.fn.getcmdline(), "b")
+  type_keys("<F2><C-n><C-n><C-y>")
+  expect.equality(child.fn.getcmdline(), "baz")
+  expect.equality(child.lua_get("CONFIRMED"), { { word = "baz", line = "" } })
+end
+
+T["moving the command-line cursor without editing closes the menu"] = function()
+  type_keys(":b<F2>")
+  type_keys("<Left>")
+  expect.equality(child.lua_get("UI.visible()"), false)
+end
+
+T["command-line scrolling and closing are repainted"] = function()
+  child.o.lines, child.o.columns = 10, 30
+  child.lua([[UI.configure({ max_height = 1 })]])
+  type_keys(":b<F2><C-n><C-n>")
+  expect.equality(table.concat(child.get_screenshot().text[9], "", 2, 4), "baz")
+  type_keys("<C-e>")
+  expect.no_equality(table.concat(child.get_screenshot().text[9], "", 2, 4), "baz")
+end
+
+T["command-line selection without insertion is repainted"] = function()
+  child.o.lines, child.o.columns = 10, 30
+  type_keys(":b<F2>")
+  local before = child.get_screenshot().attr
+  expect.equality(before[8][2], before[9][2])
+  type_keys("<C-j>")
+  local after = child.get_screenshot().attr
+  expect.no_equality(after[8][2], after[9][2])
 end
 
 return T
