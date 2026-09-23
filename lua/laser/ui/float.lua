@@ -324,7 +324,6 @@ function M.new(opts)
         end
       end
     end
-    redraw()
   end
 
   local placed_tick -- b:changedtick when the menu was last placed
@@ -371,7 +370,6 @@ function M.new(opts)
   local function hide_preview()
     if preview_win and vim.api.nvim_win_is_valid(preview_win) then
       vim.api.nvim_win_close(preview_win, true)
-      redraw()
     end
     preview_win = nil
   end
@@ -458,7 +456,6 @@ function M.new(opts)
     vim.api.nvim_win_call(preview_win, function()
       vim.fn.winrestview({ topline = 1 })
     end)
-    redraw()
   end
 
   ---Show the selected candidate's documentation, then its resolved version.
@@ -487,6 +484,7 @@ function M.new(opts)
           resolved[id] = { info, ft }
         end
         draw_preview(info, ft)
+        redraw()
       end)
     end
   end
@@ -516,11 +514,13 @@ function M.new(opts)
     end
     preview_hidden = not preview_hidden
     update_preview()
+    redraw()
     return true
   end
 
-  -- Floats are not repainted while the command line is being edited. Headless
-  -- tests can only observe the first paint, so every visible change asks.
+  -- Floats are not repainted while the command line is being edited. Each
+  -- action that changes what is shown flushes once when it is done. Headless
+  -- tests can only observe the first paint.
   function redraw()
     if mode == "c" then
       vim.api.nvim__redraw({ flush = true })
@@ -605,6 +605,7 @@ function M.new(opts)
     preview_hidden = false
     show(col, new_items, new_mode)
     update_preview()
+    redraw()
   end
 
   ---Release the frozen prefix after actual user input.
@@ -632,6 +633,7 @@ function M.new(opts)
       return
     end
     show(col, new_items, new_mode)
+    redraw()
   end
 
   function ui.close()
@@ -780,6 +782,7 @@ function M.new(opts)
     ui.frozen_count()
     render()
     update_preview()
+    redraw()
   end
 
   ---Move the selection without editing text. Moving past either end selects
