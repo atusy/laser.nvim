@@ -603,4 +603,35 @@ T["candidates without positions or with their own match highlights are left alon
   expect.equality(match_ranges(ui, 1), { { 2, 3 } })
 end
 
+---0-based rows of the scrollbar thumb.
+local function thumb_rows(ui)
+  local found = {}
+  for _, mark in ipairs(marks(ui)) do
+    if mark[4].hl_group == "PmenuThumb" then
+      found[#found + 1] = mark[2]
+    end
+  end
+  table.sort(found)
+  return found
+end
+
+T["the scrollbar thumb is sized by the visible share and mirrored when reversed"] = function()
+  set_line("b")
+  local ui = new()
+  ui.configure({ max_height = 3 })
+  ui.open(1, labels(4), "i")
+  -- Three of four rows are visible: round(3 * 3 / 4) = 2 rows of thumb.
+  expect.equality(thumb_rows(ui), { 0, 1 })
+  ui.select(4, { insert = false })
+  expect.equality(thumb_rows(ui), { 1, 2 })
+  ui.close()
+
+  cursor_at_bottom()
+  ui.configure({ max_height = 2, reversed = true })
+  ui.open(1, labels(4), "i")
+  expect.equality(thumb_rows(ui), { 1 })
+  ui.select(4, { insert = false })
+  expect.equality(thumb_rows(ui), { 0 })
+end
+
 return T
