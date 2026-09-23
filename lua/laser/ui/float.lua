@@ -913,7 +913,16 @@ function M.new(opts)
         return value == "" and "InsertCharPre" or value .. ",InsertCharPre"
       end,
     },
-    buffer = { cinkeys = "", indentkeys = "", softtabstop = 0, varsofttabstop = "" },
+    buffer = {
+      cinkeys = "",
+      indentkeys = "",
+      softtabstop = 0,
+      varsofttabstop = "",
+      -- Paragraph reflow on each key would move text across the backspaces.
+      formatoptions = function(value)
+        return (value:gsub("a", ""))
+      end,
+    },
   }
 
   function restore_options()
@@ -957,6 +966,9 @@ function M.new(opts)
       vim.o[name] = value
     end
     for name, value in pairs(RELAXED.buffer) do
+      if type(value) == "function" then
+        value = value(saved_options.buffer[name])
+      end
       vim.bo[target][name] = value
     end
   end

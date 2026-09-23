@@ -656,4 +656,16 @@ T["typing after a selection makes the typed text the input to restore"] = functi
   expect.equality(line(), "barx")
 end
 
+T["automatic paragraph formatting waits until the candidate is inserted"] = function()
+  child.bo.formatoptions, child.bo.textwidth = "a", 30
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "before text", "b after text" })
+  child.api.nvim_win_set_cursor(0, { 2, 1 })
+  type_keys("i<F2><C-n>")
+  expect.equality(
+    child.api.nvim_buf_get_lines(0, 0, -1, false),
+    { "before text", "bar after text" }
+  )
+  expect.equality(child.bo.formatoptions, "a")
+end
+
 return T
