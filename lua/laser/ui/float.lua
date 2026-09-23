@@ -421,9 +421,11 @@ function M.new(opts)
   end
 
   local placed_tick -- b:changedtick when the menu was last placed
+  local placed_view -- window view when the menu was last placed
 
   local function place()
     placed_tick = mode == "i" and vim.b.changedtick or nil
+    placed_view = mode == "i" and vim.fn.winsaveview() or nil
     local total = 0
     for _, name in ipairs(COLUMNS) do
       if widths[name] > 0 then
@@ -647,12 +649,18 @@ function M.new(opts)
         if not vim.v.event[tostring(vim.api.nvim_get_current_win())] then
           return
         end
-        -- Typing, including the menu's own insertion, can scroll the view;
-        -- only a scroll without an edit moves away from the completion.
-        local tick = vim.b.changedtick
-        if tick ~= placed_tick then
+        -- Typing, including the menu's own insertion, can scroll the view.
+        -- Completion may already have redrawn the menu for that scroll, and
+        -- then the view is the one the menu was placed in. Only a scroll
+        -- without an edit moves away from the completion.
+        if
+          vim.b.changedtick ~= placed_tick or vim.deep_equal(vim.fn.winsaveview(), placed_view)
+        then
+          compute_layout()
+          top = math.max(1, math.min(top, #items - height() + 1))
           place()
           place_preview()
+          render()
           redraw()
         else
           dismiss()

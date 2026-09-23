@@ -407,4 +407,26 @@ T["the command-line menu starts under the completion start when typed text is wi
   expect.equality(child.lua_get([[vim.api.nvim_win_get_config(UI.win()).col]]), 3)
 end
 
+T["typing that scrolls the window sideways keeps the menu open"] = function()
+  child.o.columns = 20
+  child.wo.wrap = false
+  child.o.sidescroll = 1
+  child.lua([[
+    -- Like completion, redraw the menu from the current input on every change.
+    vim.api.nvim_create_autocmd("TextChangedI", {
+      callback = function()
+        if not UI.skip_text_change() then UI.open(1, ITEMS, "i") end
+      end,
+    })
+  ]])
+  type_keys("i0123456789<F2>")
+  for _ = 1, 12 do
+    type_keys("x")
+    child.cmd("redraw")
+  end
+  expect.equality(child.fn.winsaveview().leftcol > 0, true)
+  expect.equality(child.lua_get("UI.visible()"), true)
+  expect.equality(child.lua_get("CLOSED"), 0)
+end
+
 return T
