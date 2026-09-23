@@ -201,12 +201,20 @@ T["reversed menus above the cursor put the first candidate nearest to it"] = fun
 end
 
 T["an explicit direction limits the height to the room on that side"] = function()
-  cursor_at_bottom()
+  vim.o.lines = 20
+  local lines = {}
+  for i = 1, 100 do
+    lines[i] = "b"
+  end
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, lines)
+  vim.cmd("normal! gg15G")
+  -- The cursor is on screen row 15; row 20 holds the command line.
+  expect.equality(vim.fn.win_screenpos(0)[1] + vim.fn.winline() - 1, 15)
   local ui = new()
   ui.configure({ direction = "below", max_height = 20 })
   ui.open(1, labels(20), "i")
-  local room = vim.o.lines - vim.o.cmdheight - cursor_row()
-  expect.equality(vim.api.nvim_win_get_height(ui.win()), math.max(room, 1))
+  expect.equality(vim.api.nvim_win_get_height(ui.win()), 4)
+  expect.equality(vim.api.nvim_win_get_config(ui.win()).row, 15)
 end
 
 T["a scrollbar marks the viewport when candidates overflow"] = function()
