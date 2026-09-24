@@ -1,5 +1,7 @@
 local M = {}
 
+local hl_names = require("laser.highlight")
+
 ---@alias laser.Candidate table
 
 ---@class laser.MatchInfo
@@ -75,7 +77,7 @@ local function highlight(candidate, input)
   local text = candidate.abbr or candidate.word
   local highlights = {}
   for _, hl in ipairs(candidate.highlights or {}) do
-    if hl.name ~= "laser_match" then
+    if hl.name ~= hl_names.MATCH then
       highlights[#highlights + 1] = hl
     end
   end
@@ -83,17 +85,7 @@ local function highlight(candidate, input)
   if info and info.positions and text ~= filter_text(candidate) and input and input ~= "" then
     positions = vim.fn.matchfuzzypos({ text }, input)[2][1] or {}
   end
-  for _, pos in ipairs(positions) do
-    local start = vim.fn.byteidx(text, pos)
-    local finish = vim.fn.byteidx(text, pos + 1)
-    highlights[#highlights + 1] = {
-      name = "laser_match",
-      type = "abbr",
-      hl_group = "PmenuMatch",
-      col = start + 1,
-      width = finish - start,
-    }
-  end
+  vim.list_extend(highlights, hl_names.matches(text, positions, 0, hl_names.MATCH))
   candidate.highlights = highlights
   return candidate
 end

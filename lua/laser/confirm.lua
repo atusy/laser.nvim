@@ -5,7 +5,6 @@ local M = {}
 
 local items = require("laser.items")
 
-local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
 local ADJUST_INDENTATION = 2 -- lsp.InsertTextMode.adjustIndentation
 local ns = vim.api.nvim_create_namespace("laser.confirm")
 
@@ -89,8 +88,7 @@ end
 local function main_edit(item, start, request, opts)
   local edit = item.textEdit
   if edit then
-    -- The insert range of an InsertReplaceEdit, like the menu's own word.
-    local range = edit.range or edit.insert
+    local range = assert(items.edit_range(item))
     local encoding = opts.client.offset_encoding
     local srow, scol = byte_position(opts.bufnr, range.start, encoding)
     local erow, ecol = byte_position(opts.bufnr, range["end"], encoding)
@@ -158,7 +156,7 @@ function M.apply(candidate, opts)
   local current = get_line(bufnr, row)
   local to = #current - (#request.line - request.col)
   local restored = request.line:sub(from + 1, request.col)
-  local snippet = item.insertTextFormat == SNIPPET
+  local snippet = items.is_snippet(item)
   local edits = item.additionalTextEdits or {}
   local range, text = main_edit(item, data.startcol, request, opts)
   if not snippet and not next(edits) and range[1] == row and range[3] == row then

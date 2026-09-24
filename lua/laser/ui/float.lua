@@ -2,6 +2,8 @@
 ---viewport are drawn; column widths still visit every candidate.
 local M = {}
 
+local highlight = require("laser.highlight")
+
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
 local COLUMNS = { "abbr", "kind", "menu" }
 -- Search matches in candidates or documentation are unrelated to completion.
@@ -422,9 +424,9 @@ function M.new(opts)
     end
     local pad = 0
     for _, hl in ipairs(item.highlights or {}) do
-      if hl.name == "laser_match" then
+      if hl.name == highlight.MATCH then
         return {}
-      elseif hl.name == "laser_prefix" then
+      elseif hl.name == highlight.PREFIX then
         pad = hl.width
       end
     end
@@ -438,19 +440,7 @@ function M.new(opts)
       local input = typed:sub(math.max((data.startcol or 0) - (startcol - 1), 0) + 1)
       positions = input ~= "" and vim.fn.matchfuzzypos({ shown }, input)[2][1] or {}
     end
-    local highlights = {}
-    for _, pos in ipairs(positions) do
-      local first, last = vim.fn.byteidx(shown, pos), vim.fn.byteidx(shown, pos + 1)
-      if first >= 0 and last > first then
-        highlights[#highlights + 1] = {
-          type = "abbr",
-          col = pad + first + 1,
-          width = last - first,
-          hl_group = "PmenuMatch",
-        }
-      end
-    end
-    return highlights
+    return highlight.matches(shown, positions, pad)
   end
 
   local function render()
