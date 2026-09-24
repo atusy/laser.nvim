@@ -54,6 +54,25 @@ local function initialize()
   initialized = true
 end
 
+local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
+
+---Insert mode types plain candidates for dot-repeat and leaves snippets to
+---expansion. The command line cannot expand snippets and takes their text.
+---@param candidate table
+---@return string?
+local function confirm_text(candidate)
+  local item = candidate.user_data.laser.item
+  if item.insertTextFormat ~= SNIPPET then
+    return candidate.word
+  elseif not engine or not engine.doc or engine.doc.mode == "i" then
+    return nil
+  end
+  local session, doc = assert(engine.session), engine.doc
+  local body = item.textEdit and item.textEdit.newText or item.insertText or item.label
+  local pad = doc.line:sub(session.startcol + 1, candidate.user_data.laser.startcol)
+  return pad .. require("laser.confirm").snippet_text(body)
+end
+
 ---@param candidate table
 local function on_confirm(candidate)
   if not engine then
@@ -64,7 +83,7 @@ local function on_confirm(candidate)
   if session and doc and doc.mode == "i" and client then
     require("laser.confirm").apply(candidate, {
       bufnr = doc.bufnr,
-      startcol = candidate.user_data.laser.startcol or session.startcol,
+      startcol = session.startcol,
       client = client,
     })
   end
@@ -76,6 +95,7 @@ local function get_menu()
   if not menu then
     menu = require("laser.ui.float").new({
       on_confirm = on_confirm,
+      confirm_text = confirm_text,
       preview_context = function(candidate)
         if engine and engine.doc then
           return {

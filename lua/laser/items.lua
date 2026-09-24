@@ -9,6 +9,7 @@ local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
 ---@field cursor_col integer 0-based byte column of the cursor
 ---@field encoding string
 ---@field client_id integer
+---@field request? laser.Request the completion line when the response was requested
 
 ---@param item lsp.CompletionItem
 ---@return lsp.Range?
@@ -144,7 +145,7 @@ function M.convert(item, ctx)
     menu = item.labelDetails and item.labelDetails.description or nil,
     info = require("laser.preview").info(item),
     dup = 1,
-    user_data = { laser = { client_id = ctx.client_id, item = item } },
+    user_data = { laser = { client_id = ctx.client_id, item = item, request = ctx.request } },
   }
 end
 

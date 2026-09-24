@@ -166,6 +166,8 @@ function Engine:request(clients, ctx)
         cancel_request()
       end
     end
+    -- Candidates keep the line their edits refer to.
+    local requested = { line = doc.line, line_nr = doc.line_nr, col = doc.col }
     cancel_request = request.completion({ client }, function()
       local params =
         position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
@@ -191,6 +193,7 @@ function Engine:request(clients, ctx)
         cursor_col = current.col,
         encoding = client.offset_encoding,
         client_id = client.id,
+        request = requested,
       }, token.received)
       token.received = true
       if partial then

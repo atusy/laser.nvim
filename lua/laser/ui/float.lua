@@ -204,7 +204,14 @@ end
 ---@field scroll_preview fun(delta: integer): boolean
 ---@field toggle_preview fun(): boolean
 
----@param opts? { on_confirm?: fun(candidate: table), on_close?: fun(), preview_context?: fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?, commit_characters?: fun(candidate: table): string[] }
+---@class laser.FloatOpts
+---@field on_confirm? fun(candidate: table) applies the confirmed candidate once the menu typed its text
+---@field confirm_text? fun(candidate: table): string? text the menu types on confirm; nil leaves it to on_confirm. Defaults to the candidate's word
+---@field on_close? fun()
+---@field preview_context? fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?
+---@field commit_characters? fun(candidate: table): string[]
+
+---@param opts? laser.FloatOpts
 ---@return laser.FloatUI
 function M.new(opts)
   opts = opts or {}
@@ -1189,8 +1196,14 @@ function M.new(opts)
         end)
       end
     end
-    if inserted ~= item.word then
-      insert(item.word, done)
+    local word = item.word
+    if opts.confirm_text then
+      word = opts.confirm_text(item)
+    end
+    -- Typed text keeps dot-repeat; text that would split the line is left
+    -- to on_confirm, as keys would reindent and rewrap it.
+    if word and inserted ~= word and not splits_line(word) then
+      insert(word, done)
     else
       -- The candidate's keys may still be queued; confirmation edits need them.
       after_pending(done)

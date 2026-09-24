@@ -196,6 +196,62 @@ T["confirming a snippet item expands it in the buffer"] = function()
   expect.equality(child.api.nvim_win_get_cursor(0), { 1, 4 })
 end
 
+T["confirming a snippet that auto-wrap would split expands it in place"] = function()
+  child.lua([[FAKE.start({
+    items = { { label = "function", insertText = "function($1)", insertTextFormat = 2 } },
+  })]])
+  child.lua([[vim.keymap.set("i", "<C-y>", function() LASER.confirm() end)]])
+  child.bo.textwidth = 10
+  child.bo.formatoptions = "t"
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "aaaaaaaa " })
+  type_keys("Af")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  type_keys("<C-y>")
+  child.lua([[vim.wait(100)]])
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "aaaaaaaa function()" })
+  expect.equality(child.lua_get([[vim.v.errmsg]]), "")
+end
+
+T["confirming multi-line text keeps its indentation and comment leaders out"] = function()
+  child.lua([[FAKE.start({ items = { { label = "bar", insertText = "bar(\n  a\n)" } } })]])
+  child.lua([[vim.keymap.set("i", "<C-y>", function() LASER.confirm() end)]])
+  child.bo.autoindent = true
+  child.bo.comments = "://"
+  child.bo.formatoptions = "ro"
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "  " })
+  type_keys("Ab")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  type_keys("<C-y>")
+  child.lua([[vim.wait(100)]])
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "  bar(", "  a", ")" })
+end
+
+T["confirming a snippet on the command line inserts its text"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        FAKE.start({
+          items = { { label = "echo", insertText = "echo ${1:'x'}", insertTextFormat = 2 } },
+        }, ev.buf)
+      end,
+    })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1) end)
+    vim.keymap.set("c", "<C-y>", function() LASER.confirm() end)
+  ]])
+  type_keys(":e")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  type_keys("<C-y>")
+  expect.equality(child.fn.getcmdline(), "echo 'x'")
+end
+
 T["the command line completes through the scratch document"] = function()
   child.lua([[
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
