@@ -702,6 +702,7 @@ function M.new(opts)
       -- :normal passes through Normal mode; the menu must not see it leave.
       vim.cmd("noautocmd normal! " .. math.abs(delta) .. key)
     end)
+    redraw()
     return true
   end
 

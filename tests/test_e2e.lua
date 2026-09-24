@@ -343,6 +343,40 @@ T["command-line words follow the scratch document's iskeyword"] = function()
   expect.equality(child.fn.getcmdline(), "a-bc")
 end
 
+T["scrolling the command-line preview redraws it"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function()
+        require("laser").complete({
+          language_id = "laser-cmd",
+          menu = { preview = { max_height = 2 } },
+        })
+      end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        FAKE.start({ items = { { label = "echo", detail = "1\n2\n3\n4" } } }, ev.buf)
+      end,
+    })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1, { insert = false }) end)
+    vim.keymap.set("c", "<F9>", function() LASER.scroll_preview(1) end)
+    local redraw = vim.api.nvim__redraw
+    REDRAWS = 0
+    vim.api.nvim__redraw = function(...)
+      REDRAWS = REDRAWS + 1
+      return redraw(...)
+    end
+  ]])
+  type_keys(":e")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  local before = child.lua_get("REDRAWS")
+  type_keys("<F9>")
+  expect.equality(child.lua_get("REDRAWS") > before, true)
+end
+
 T["an expression prompt entered from the command line closes its menu"] = function()
   child.lua([[
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
