@@ -80,12 +80,15 @@ end
 ---The item's own edit as a byte range of the restored document. An item
 ---without a range replaces the typed word from its start column.
 ---@param item lsp.CompletionItem
----@param start integer the item's start column
----@param request laser.Request
+---@param data table the candidate's user_data.laser
 ---@param opts laser.ConfirmOpts
 ---@return { [1]: integer, [2]: integer, [3]: integer, [4]: integer } range
 ---@return string text
-local function main_edit(item, start, request, opts)
+local function main_edit(item, data, opts)
+  local start, request, candidate_word = data.startcol, data.request, data.word
+  if items.is_snippet(item) then
+    candidate_word = nil
+  end
   local edit = item.textEdit
   if edit then
     local range = assert(items.edit_range(item))
@@ -94,7 +97,8 @@ local function main_edit(item, start, request, opts)
     local erow, ecol = byte_position(opts.bufnr, range["end"], encoding)
     return { srow, scol, erow, ecol }, edit.newText
   end
-  local text = item.insertText or item.label
+  -- The candidate's own word, without symbols typed before its start.
+  local text = candidate_word or item.insertText or item.label
   return { request.line_nr, start, request.line_nr, request.col }, text
 end
 
@@ -158,7 +162,7 @@ function M.apply(candidate, opts)
   local restored = request.line:sub(from + 1, request.col)
   local snippet = items.is_snippet(item)
   local edits = item.additionalTextEdits or {}
-  local range, text = main_edit(item, data.startcol, request, opts)
+  local range, text = main_edit(item, data, opts)
   if not snippet and not next(edits) and range[1] == row and range[3] == row then
     local final = request.line:sub(1, range[2]) .. text .. request.line:sub(range[4] + 1)
     if final == current then
@@ -170,7 +174,7 @@ function M.apply(candidate, opts)
   vim.api.nvim_buf_set_text(bufnr, row, from, row, to, { restored })
   if item.textEdit then
     -- Ranges are relative to the restored document.
-    range, text = main_edit(item, data.startcol, request, opts)
+    range, text = main_edit(item, data, opts)
   end
 
   -- Track the item's range while the additional edits move text around it.
