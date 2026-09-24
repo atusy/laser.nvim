@@ -296,15 +296,29 @@ function M.new(opts)
     return origin[1] + border.top + winbar, origin[2] + border.left
   end
 
-  ---1-based screen row and column of the cursor in the edited text.
-  ---@return integer row, integer col
-  local function cursor_screenpos()
+  ---Display width of the text between the menu start and the cursor.
+  ---@return integer
+  local function typed_width()
+    local state = text_state(mode)
+    return vim.fn.strdisplaywidth(state.line:sub(1, state.col))
+      - vim.fn.strdisplaywidth(state.line:sub(1, startcol - 1))
+  end
+
+  ---1-based screen row the menu is placed against: the cursor row, or the
+  ---first row of the command line, which wraps onto more rows as it grows.
+  ---@return integer
+  local function anchor_row()
     if mode == "c" then
+      -- getcmdscreenpos() counts cells from the start of the command line,
+      -- prompt included. The cursor takes a cell after the text.
+      local cells = vim.fn.getcmdscreenpos()
+        + vim.fn.strdisplaywidth(vim.fn.getcmdline():sub(vim.fn.getcmdpos()))
+      local rows = math.floor((cells - 1) / vim.o.columns) + 1
       -- With 'cmdheight' 0 the command line still takes a row while edited.
-      return vim.o.lines - math.max(vim.o.cmdheight, 1) + 1, vim.fn.getcmdscreenpos()
+      return vim.o.lines - math.max(vim.o.cmdheight, rows) + 1
     end
-    local row, col = window_origin()
-    return row + vim.fn.winline() - 1, col + vim.fn.wincol() - 1
+    local row = window_origin()
+    return row + vim.fn.winline() - 1
   end
 
   ---1-based screen column where the completed text starts, measured back from
@@ -312,23 +326,21 @@ function M.new(opts)
   ---scrolling are accounted for.
   ---@return integer
   local function start_screencol()
-    local _, col = cursor_screenpos()
-    local state = text_state(mode)
-    local typed_width = vim.fn.strdisplaywidth(state.line:sub(1, state.col))
-      - vim.fn.strdisplaywidth(state.line:sub(1, startcol - 1))
-    -- Text wrapped in from the previous screen line starts at the left edge.
-    local left = 1
-    if mode ~= "c" then
-      local _, origin_col = window_origin()
-      left = origin_col + vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+    if mode == "c" then
+      local cell = vim.fn.getcmdscreenpos() - typed_width()
+      return (cell - 1) % vim.o.columns + 1
     end
-    return math.max(col - typed_width, left)
+    local _, origin_col = window_origin()
+    local col = origin_col + vim.fn.wincol() - 1
+    -- Text wrapped in from the previous screen line starts at the left edge.
+    local left = origin_col + vim.fn.getwininfo(vim.api.nvim_get_current_win())[1].textoff
+    return math.max(col - typed_width(), left)
   end
 
   local function compute_layout()
     local want = math.min(#items, max_height(menu))
     -- The command line sits on the last rows, so its menu always opens above.
-    local row = cursor_screenpos()
+    local row = anchor_row()
     local below = vim.o.lines - vim.o.cmdheight - row - border_rows()
     local above = row - 1 - border_rows()
     local direction = mode == "c" and "above" or menu.direction or "auto"
@@ -501,7 +513,7 @@ function M.new(opts)
     -- Position against the editor so the menu stays where it is computed
     -- here; Neovim would otherwise shift a window that does not fit.
     local sides = border_sides(config.border)
-    local row = cursor_screenpos()
+    local row = anchor_row()
     local outer_width = config.width + sides.left + sides.right
     config.relative = "editor"
     config.row = layout.above and row - 1 - height() - sides.top - sides.bottom or row
@@ -571,8 +583,8 @@ function M.new(opts)
     local height = vim.api.nvim_win_text_height(preview_win, {}).all
     height = math.min(height, preview_size.max_height)
     -- Stay above the command line: move up first, then shorten.
-    local cmdline = mode == "c" and math.max(vim.o.cmdheight, 1) or vim.o.cmdheight
-    local bottom = vim.o.lines - cmdline - own.top - own.bottom
+    local limit = mode == "c" and anchor_row() - 1 or vim.o.lines - vim.o.cmdheight
+    local bottom = limit - own.top - own.bottom
     height = math.max(1, math.min(height, bottom))
     local row = math.max(0, math.min(anchor.row, bottom - height))
     vim.api.nvim_win_set_config(preview_win, {
