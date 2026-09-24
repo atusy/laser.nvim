@@ -9,25 +9,43 @@ local WINHIGHLIGHT = "Normal:Pmenu,FloatBorder:Pmenu,Search:None,CurSearch:None,
 local SELECTED =
   { PmenuMatch = "PmenuMatchSel", PmenuKind = "PmenuKindSel", PmenuExtra = "PmenuExtraSel" }
 
--- Callbacks queued behind fed keys, keyed by a serial number.
-local pending_callbacks, next_callback = {}, 0
+-- Callbacks queued behind fed keys, keyed by a serial number, with the menu
+-- that queued them.
+local pending_callbacks, next_callback = {}, 0 ---@type table<integer, { owner: table, fn: fun() }>, integer
 
 ---@param id integer
 function M._run(id)
   local callback = pending_callbacks[id]
   pending_callbacks[id] = nil
   if callback then
-    callback()
+    callback.fn()
   end
+end
+
+---Drop the callbacks `owner` queued; their keys were discarded or no longer
+---apply, and running them later would act on a state that moved on.
+---@param owner table
+local function forget_callbacks(owner)
+  for id, callback in pairs(pending_callbacks) do
+    if callback.owner == owner then
+      pending_callbacks[id] = nil
+    end
+  end
+end
+
+---@return integer
+function M._pending_count()
+  return vim.tbl_count(pending_callbacks)
 end
 
 ---Feed keys that run `callback` once every key queued before it is processed.
 ---Keys are inserted in front of typeahead, so they are fed in reverse order.
+---@param owner table the menu queuing the keys
 ---@param parts { [1]: string, [2]: boolean }[] key strings with their escape_ks flag
 ---@param callback fun()
-local function feed(parts, callback)
+local function feed(owner, parts, callback)
   next_callback = next_callback + 1
-  pending_callbacks[next_callback] = callback
+  pending_callbacks[next_callback] = { owner = owner, fn = callback }
   local run =
     vim.keycode(string.format("<Cmd>lua require('laser.ui.float')._run(%d)<CR>", next_callback))
   vim.api.nvim_feedkeys(run, "in", false)
@@ -255,6 +273,7 @@ function M.new(opts)
       -- Fed keys may have been discarded; nothing may wait for them forever,
       -- and options relaxed for them must come back.
       pending_insertions, after_insertions = 0, {}
+      forget_callbacks(ui)
       restore_options()
     end,
   })
@@ -1087,7 +1106,7 @@ function M.new(opts)
     -- <C-v> inserts them as they are. Newlines are meant to split the line.
     local typed_word = text:gsub("[\1-\9\11-\31\127]", "\22%0")
     pending_insertions = pending_insertions + 1
-    feed({ { bs:rep(chars), false }, { typed_word, true } }, function()
+    feed(ui, { { bs:rep(chars), false }, { typed_word, true } }, function()
       pending_insertions = pending_insertions - 1
       restore_options()
       -- The keys are in; record what they produced, which a prediction can
@@ -1275,7 +1294,7 @@ function M.new(opts)
       local function type_key()
         vim.api.nvim_feedkeys(key, "ni", false)
       end
-      feed({}, function()
+      feed(ui, {}, function()
         if not confirm(type_key) then
           type_key()
         end
