@@ -125,6 +125,9 @@ require("laser").complete({
 })
 ```
 
+When the server preselects candidates, the first one is highlighted without
+being inserted, whether or not `auto_select` is set.
+
 The menu draws only the rows in view. Filtering and column widths still visit
 every candidate, so `max_items` remains useful for servers that return very
 long lists.

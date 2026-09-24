@@ -150,4 +150,9 @@ T["an inapplicable range inserts newText from the keyword boundary"] = function(
   end
 end
 
+T["preselect is carried to the complete-item"] = function()
+  expect.equality(items.convert({ label = "bar", preselect = true }, ctx()).preselect, true)
+  expect.equality(items.convert({ label = "bar" }, ctx()).preselect, nil)
+end
+
 return T

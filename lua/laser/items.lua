@@ -145,6 +145,7 @@ function M.convert(item, ctx)
     menu = item.labelDetails and item.labelDetails.description or nil,
     info = require("laser.preview").info(item),
     dup = 1,
+    preselect = item.preselect == true or nil,
     user_data = { laser = { client_id = ctx.client_id, item = item, request = ctx.request } },
   }
 end
