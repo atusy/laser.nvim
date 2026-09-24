@@ -155,4 +155,24 @@ T["preselect is carried to the complete-item"] = function()
   expect.equality(items.convert({ label = "bar" }, ctx()).preselect, nil)
 end
 
+T["an item repeating the non-keyword text before the word starts there"] = function()
+  -- "@pr" was typed; "@" is not a keyword character.
+  local c = ctx({ line = "x @pr", startcol = 3, cursor_col = 5, line_nr = 0 })
+  expect.equality(items.start_col({ label = "@property" }, c), 2)
+  expect.equality(
+    items.start_col({ label = "--flag" }, ctx({ line = "--fl", startcol = 2, cursor_col = 4 })),
+    0
+  )
+  -- Keyword text is already part of the word, and unrelated items keep the boundary.
+  expect.equality(items.start_col({ label = "property" }, c), 3)
+  expect.equality(
+    items.start_col({ label = "@@x" }, ctx({ line = "@x", startcol = 1, cursor_col = 2 })),
+    0
+  )
+  expect.equality(
+    items.start_col({ label = "-c" }, ctx({ line = "a.b-c", startcol = 4, cursor_col = 5 })),
+    3
+  )
+end
+
 return T
