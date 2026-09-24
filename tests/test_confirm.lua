@@ -237,6 +237,50 @@ T["an unresolved item is resolved before its edits are applied"] = function()
   expect.equality(executed, { "resolved.cmd" })
 end
 
+T["an item that carries its additionalTextEdits is not resolved"] = function()
+  local buf, request = typed_bar()
+  local c = resolving_client(function(item)
+    return item
+  end, {}, 0)
+  c.request = function()
+    error("resolve must not be requested")
+  end
+  local item = {
+    label = "bar",
+    additionalTextEdits = {
+      {
+        newText = "x",
+        range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 0 } },
+      },
+    },
+  }
+  confirm.apply(candidate(item, request, 4), { bufnr = buf, client = c })
+  expect.equality(lines(buf), { "xfoo.bar" })
+end
+
+T["a failed resolve is reported and the item applies as it is"] = function()
+  local buf, request = typed_bar()
+  local executed, notified = {}, {}
+  local c = resolving_client(function(item)
+    return item
+  end, executed, nil)
+  c.request = function(_, _, _, handler)
+    handler({ code = -32603, message = "resolve failed" }, nil)
+    return true, 1
+  end
+  local notify_once = vim.notify_once
+  vim.notify_once = function(message)
+    table.insert(notified, message)
+  end
+  local item = { label = "bar", command = { title = "t", command = "own.cmd" } }
+  local ok, err = pcall(confirm.apply, candidate(item, request, 4), { bufnr = buf, client = c })
+  vim.notify_once = notify_once
+  assert(ok, err)
+  expect.equality(notified, { "resolve failed" })
+  expect.equality(lines(buf), { "foo.bar" })
+  expect.equality(executed, { "own.cmd" })
+end
+
 T["a resolve that does not answer in time is cancelled"] = function()
   local buf, request = typed_bar()
   local executed, cancelled = {}, {}

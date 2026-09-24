@@ -339,6 +339,39 @@ T["dynamic trigger characters apply only to matching documents"] = function()
   expect.equality(engine.session.clients[client.id].trigger_chars, { "." })
 end
 
+T["input that matches nothing closes the menu"] = function()
+  local buf = scratch("b")
+  fake.start({ name = "one", items = { { label = "bar" } } }, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  local closed = ui.closed
+  engine:on_char(doc(buf, "bx", 2), "x")
+  expect.equality(ui.closed > closed, true)
+  expect.equality(ui.visible(), false)
+end
+
+T["a change of buffer, mode or line starts a new session"] = function()
+  local buf = scratch("b")
+  local other = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(other, 0, -1, false, { "b" })
+  fake.start({ name = "one", items = { { label = "bar" } } }, buf)
+  fake.start({ name = "one", items = { { label = "bar" } } }, other)
+  local engine = Engine.new({ ui = stub_ui.new(), clientOptions = {} })
+  local changes = {
+    vim.tbl_extend("force", doc(other, "ba", 2), {}),
+    vim.tbl_extend("force", doc(buf, "ba", 2), { mode = "c" }),
+    vim.tbl_extend("force", doc(buf, "ba", 2), { line_nr = 1 }),
+  }
+  for _, changed in ipairs(changes) do
+    engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+    local session = engine.session
+    engine:on_char(changed, "a")
+    expect.no_equality(engine.session, session)
+  end
+end
+
 T["closing cancels every request still in flight"] = function()
   local buf = scratch("foo.ba")
   fake.start({ name = "a", items = { { label = "bar" } }, delay_ms = 50 }, buf)
