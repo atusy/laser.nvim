@@ -55,7 +55,7 @@ T["leaving the mode releases callbacks waiting for discarded keys"] = function()
       UI.select(1)
       -- Typeahead can be discarded, e.g. by <C-c>, before the queued keys run.
       vim.api.nvim_exec_autocmds("InsertLeave", {})
-      PENDING = require("laser.ui.float")._pending_count()
+      PENDING = require("laser.ui.feedkeys").pending_count()
     end)
   ]])
   type_keys("ib<F2><F3>")
