@@ -64,6 +64,7 @@ end
 ---@field cancel fun(): boolean
 ---@field scroll_preview fun(delta: integer): boolean
 ---@field toggle_preview fun(): boolean
+---@field dispose fun()
 
 ---@class laser.FloatOpts
 ---@field on_confirm? fun(candidate: table) applies the confirmed candidate once the menu typed its text
@@ -95,6 +96,9 @@ function M.new(opts)
   -- and labels across keystrokes; cleared with the menu to stay bounded.
   local cells = {}
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
+  local state_group =
+    vim.api.nvim_create_augroup("laser.ui.float.state." .. tostring(ui), { clear = true })
+  local key_ns = vim.api.nvim_create_namespace("laser.ui.float.commit." .. tostring(ui))
   local dismiss, redraw, watch, layout_and_draw, reconcile, note_seen
   local preview = require("laser.ui.preview_window").new({
     menu_win = function()
@@ -119,7 +123,7 @@ function M.new(opts)
   -- Unlike the window watchers, this outlives each menu window. ModeChanged
   -- also covers <C-c>, which skips InsertLeave.
   vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave", "ModeChanged" }, {
-    group = vim.api.nvim_create_augroup("laser.ui.float.state." .. tostring(ui), { clear = true }),
+    group = state_group,
     callback = function(args)
       if args.event == "ModeChanged" and vim.v.event.new_mode:find("^[ic]") then
         return
@@ -405,7 +409,12 @@ function M.new(opts)
   -- tests can only observe the first paint.
   function redraw()
     if mode == "c" then
-      vim.api.nvim__redraw({ flush = true })
+      -- nvim__redraw is experimental; :redraw also repaints, less precisely.
+      if vim.api.nvim__redraw then
+        vim.api.nvim__redraw({ flush = true })
+      else
+        vim.cmd.redraw()
+      end
     end
   end
 
@@ -886,7 +895,7 @@ function M.new(opts)
         end
       end)
       return ""
-    end, vim.api.nvim_create_namespace("laser.ui.float.commit." .. tostring(ui)))
+    end, key_ns)
   end
 
   ---Restore the typed input and close the menu.
@@ -908,6 +917,15 @@ function M.new(opts)
   ---@return boolean
   function ui.visible()
     return win ~= nil and vim.api.nvim_win_is_valid(win)
+  end
+
+  ---Close the menu and release its autocmds and key handler for good.
+  function ui.dispose()
+    ui.close()
+    feedkeys.forget(ui)
+    vim.on_key(nil, key_ns)
+    vim.api.nvim_del_augroup_by_id(group)
+    vim.api.nvim_del_augroup_by_id(state_group)
   end
 
   return ui
