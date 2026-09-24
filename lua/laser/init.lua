@@ -165,7 +165,7 @@ M.toggle_preview = action("toggle_preview")
 M.visible = action("visible")
 
 ---Start or update completion at the current cursor. Options belong to this
----call; changing client options invalidates that client. No setup is required.
+---call and apply to results already received. No setup is required.
 ---@param opts? laser.CompleteOpts
 function M.complete(opts)
   opts = opts or {}

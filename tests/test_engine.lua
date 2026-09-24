@@ -542,26 +542,53 @@ T["a server cancellation clears pending while preserving accepted results"] = fu
   expect.equality(ui.last().labels, { "bar" })
 end
 
-T["changing one client's options preserves the other client's results"] = function()
+T["changed client options apply to cached results without a new request"] = function()
   local buf = scratch("ba")
-  local calls = { 0, 0 }
-  for i, name in ipairs({ "one", "two" }) do
-    fake.start({
-      name = name,
-      items = function()
-        calls[i] = calls[i] + 1
-        return { { label = "bar" } }
-      end,
-    }, buf)
-  end
+  local calls = 0
+  fake.start({
+    name = "one",
+    items = function()
+      calls = calls + 1
+      return { { label = "bar" }, { label = "baz" } }
+    end,
+  }, buf)
   local ui = stub_ui.new()
   local engine = Engine.new({ ui = ui, clientOptions = {} })
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
-  wait_opened(ui, 2)
-  engine.client_options = { one = { timeout_ms = 1000 } }
+  wait_opened(ui, 1)
+  expect.equality(ui.last().labels, { "bar", "baz" })
+  engine.client_options = { one = { max_items = 1 } }
+  engine:on_char(doc(buf, "ba", 2), "")
+  vim.wait(50)
+  expect.equality(ui.last().labels, { "bar" })
+  expect.equality(calls, 1)
+end
+
+T["options rebuilt with new functions on every call keep cached results"] = function()
+  local buf = scratch("b")
+  local calls = 0
+  fake.start({
+    name = "one",
+    items = function()
+      calls = calls + 1
+      return { { label = "bar" }, { label = "baz" } }
+    end,
+  }, buf)
+  local ui = stub_ui.new()
+  local function options()
+    return { one = { refresh = function() end } }
+  end
+  local engine = Engine.new({ ui = ui, clientOptions = options() })
+  engine.client_options = options()
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  engine.client_options = options()
+  engine:on_char(doc(buf, "ba", 2), "a")
+  engine.client_options = options()
   engine:on_char(doc(buf, "bar", 3), "r")
   vim.wait(50)
-  expect.equality(calls, { 2, 1 })
+  expect.equality(calls, 1)
+  expect.equality(ui.last().labels, { "bar" })
 end
 
 T["a request that cannot be sent does not remain pending"] = function()

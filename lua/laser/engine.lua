@@ -315,11 +315,10 @@ function Engine:on_char(doc, char)
     local opts = clients_mod.resolve(client.name, self.client_options)
     active[client.id] = true
     local cached = session.clients[client.id]
-    if cached and not vim.deep_equal(cached.opts, opts) then
-      self:drop_client(client.id)
-      cached = nil
-    end
     if cached then
+      -- Options shape how cached results are shown and when to request
+      -- again, not the results themselves; they apply from this call on.
+      cached.opts = opts
       cached.order = order
       cached.trigger_chars =
         clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters")
