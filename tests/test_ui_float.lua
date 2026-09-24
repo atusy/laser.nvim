@@ -194,6 +194,33 @@ T["dispose releases the menu's autocmds and key handler"] = function()
   )
 end
 
+T["the kind and detail columns use PmenuKind and PmenuExtra"] = function()
+  set_line("b")
+  local ui = new()
+  ui.open(1, {
+    candidate("bar", { kind = "Field", menu = "string" }),
+    candidate("baz", { kind = "Method", menu = "fn" }),
+  }, "i")
+  ui.select(1, { insert = false })
+  local got = {}
+  for _, mark in ipairs(marks(ui)) do
+    local group = mark[4].hl_group
+    if group and group:find("^Pmenu[KE]") then
+      got[#got + 1] = { mark[2], mark[3], mark[4].end_col, group }
+    end
+  end
+  table.sort(got, function(a, b)
+    return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+  end)
+  -- Rows are "bar Field  string" and "baz Method fn    ".
+  expect.equality(got, {
+    { 0, 4, 9, "PmenuKindSel" },
+    { 0, 11, 17, "PmenuExtraSel" },
+    { 1, 4, 10, "PmenuKind" },
+    { 1, 11, 13, "PmenuExtra" },
+  })
+end
+
 ---Put the cursor on the last screen row of a long buffer.
 local function cursor_at_bottom()
   local lines = {}

@@ -12,6 +12,7 @@ local highlight = require("laser.highlight")
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
 local SELECTED =
   { PmenuMatch = "PmenuMatchSel", PmenuKind = "PmenuKindSel", PmenuExtra = "PmenuExtraSel" }
+local COLUMN_GROUPS = { kind = "PmenuKind", menu = "PmenuExtra" }
 
 ---@param mode "i"|"c"
 ---@return { buf?: integer, row?: integer, line: string, col: integer } col is a 0-based byte index
@@ -317,6 +318,17 @@ function M.new(opts)
           line_hl_group = "PmenuSel",
           priority = 100,
         })
+      end
+      -- Like the built-in popup menu, kinds and details have their own groups.
+      for name, group in pairs(COLUMN_GROUPS) do
+        local span = decoration.spans[name]
+        if span and span[2] > span[1] then
+          vim.api.nvim_buf_set_extmark(buf, ns, row - 1, span[1], {
+            end_col = span[2],
+            hl_group = selected and SELECTED[group] or group,
+            priority = 150,
+          })
+        end
       end
       local highlights = vim.list_extend(
         vim.list_slice(decoration.item.highlights or {}),
