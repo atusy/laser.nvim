@@ -23,7 +23,7 @@ local T = MiniTest.new_set({
 
 local function type_keys(keys)
   child.api.nvim_input(keys)
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
 end
 
 local function wait_menu_items(n)
@@ -94,7 +94,7 @@ T["commit characters opt in confirms the selected item before typing"] = functio
   wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(".")
-  child.lua([[vim.wait(200)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.api.nvim_get_current_line(), "bar.")
   expect.equality(child.lua_get("COMMITTED"), true)
 end
@@ -137,7 +137,7 @@ for name, case in pairs({
       type_keys("<C-n>")
     end
     type_keys(".")
-    child.lua([[vim.wait(100)]])
+    child.lua([[require("tests.helpers.settle")()]])
     expect.equality(child.api.nvim_get_current_line(), case.expected)
   end
 end
@@ -152,7 +152,7 @@ T["commit character is inserted after snippet expansion"] = function()
   wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(".")
-  child.lua([[vim.wait(200)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.api.nvim_get_current_line(), "bar(.)")
 end
 
@@ -166,7 +166,7 @@ T["commit character preserves queued input after snippet expansion"] = function(
   wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(".x")
-  child.lua([[vim.wait(200)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.api.nvim_get_current_line(), "bar(.x)")
 end
 
@@ -188,7 +188,7 @@ T["commit characters confirm command-line candidates"] = function()
   wait_menu_items(1)
   type_keys("<C-n>")
   type_keys(" ")
-  child.lua([[vim.wait(100)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.fn.getcmdline(), "echo ")
 end
 
@@ -202,7 +202,7 @@ T["confirming a snippet item expands it in the buffer"] = function()
   wait_menu_items(1)
 
   type_keys("<C-n>")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   type_keys("<C-y>")
   child.lua([[vim.wait(200, function() return vim.api.nvim_get_current_line() == "bar()" end)]])
 
@@ -222,7 +222,7 @@ T["confirming a snippet that auto-wrap would split expands it in place"] = funct
   wait_menu_items(1)
   type_keys("<C-n>")
   type_keys("<C-y>")
-  child.lua([[vim.wait(100)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "aaaaaaaa function()" })
   expect.equality(child.lua_get([[vim.v.errmsg]]), "")
 end
@@ -238,7 +238,7 @@ T["confirming multi-line text keeps its indentation and comment leaders out"] = 
   wait_menu_items(1)
   type_keys("<C-n>")
   type_keys("<C-y>")
-  child.lua([[vim.wait(100)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "  bar(", "  a", ")" })
 end
 
@@ -442,7 +442,7 @@ T["moving the selection does not reopen the menu"] = function()
   wait_menu_items(2)
 
   type_keys("<C-n>")
-  child.lua([[vim.wait(100)]])
+  child.lua([[require("tests.helpers.settle")()]])
 
   expect.equality(child.api.nvim_get_current_line(), "bar")
   expect.equality(selected(), 1)
@@ -499,6 +499,7 @@ T["leaving Insert mode cancels delayed completion"] = function()
   child.lua([[FAKE.start({ delay_ms = 200, items = { { label = "bar" } } })]])
   type_keys("ib")
   type_keys("<Esc>")
+  -- Past the server's delay: a late reply must not show up.
   child.lua([[vim.wait(300)]])
   expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
   expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
@@ -511,6 +512,7 @@ T["a response arriving after the cursor moved away does not open the menu"] = fu
   child.api.nvim_win_set_cursor(0, { 1, 1 })
   type_keys("A b")
   type_keys("<Down>")
+  -- Past the server's delay: a late reply must not show up.
   child.lua([[vim.wait(300)]])
   expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
   type_keys("<C-n>")
@@ -629,7 +631,7 @@ T["detaching a client removes its candidates without discarding the other client
   type_keys("ib")
   wait_menu_items(2)
   child.lua([[vim.lsp.buf_detach_client(0, ONE.id)]])
-  child.lua([[vim.wait(100)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(menu_labels(), { "baz" })
   expect.equality(
     child.lua_get([[require("laser")._engine().session.results[ONE.id] == nil]]),
@@ -687,7 +689,7 @@ T["mixed edit starts preserve the prefix when confirming a snippet"] = function(
   expect.equality(child.lua_get([[require("laser")._engine().session.startcol]]), 0)
   type_keys("<C-n><C-n>")
   type_keys("<C-y>")
-  child.lua([[vim.wait(100)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.api.nvim_get_current_line(), "é.bar()")
   expect.equality(child.api.nvim_win_get_cursor(0), { 1, 7 })
 end
@@ -741,7 +743,7 @@ T["partial updates preserve the inserted selection and cancellation input"] = fu
   expect.equality(child.api.nvim_get_current_line(), "bb")
   type_keys("<C-e>")
   expect.equality(child.api.nvim_get_current_line(), "b")
-  child.lua([[SERVER.progress(TOKEN, { { label = 'b0' } }); vim.wait(50)]])
+  child.lua([[SERVER.progress(TOKEN, { { label = 'b0' } }); require("tests.helpers.settle")()]])
   expect.equality(child.lua_get([[require('laser')._engine().ui.visible()]]), false)
 end
 
@@ -883,7 +885,7 @@ T["mouse selection is retained when a partial batch arrives"] = function()
   child.cmd("redraw")
   local pos = child.lua_get([[vim.fn.win_screenpos(require('laser')._engine().ui.win())]])
   child.api.nvim_input_mouse("left", "press", "", 0, pos[1] - 1, pos[2] - 1)
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(selected_label(), "bb")
   child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
   wait_menu_items(4)
@@ -935,7 +937,7 @@ for name, item in pairs({
     wait_menu_items(1)
     local count = #completion_requests()
     type_keys("<C-n><C-y>")
-    child.lua([[vim.wait(200)]])
+    child.lua([[require("tests.helpers.settle")()]])
     expect.equality(child.lua_get("LASER.visible()"), false)
     expect.equality(#completion_requests(), count)
   end
