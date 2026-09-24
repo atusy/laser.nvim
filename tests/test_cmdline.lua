@@ -43,6 +43,8 @@ T["a document that lost its clients re-fires FileType so they can attach"] = fun
       attached = attached + 1
     end,
   })
+  -- The next command line gives it a chance.
+  vim.api.nvim_exec_autocmds("CmdlineLeave", {})
   local again = cmdline.ensure_buffer("laser-attach")
   expect.equality(again.bufnr, doc.bufnr)
   expect.equality(attached, 1)
@@ -53,6 +55,25 @@ T["a document that lost its clients re-fires FileType so they can attach"] = fun
     { "late" }
   )
   fake.stop_all()
+end
+
+T["a document without clients re-fires FileType once per command line"] = function()
+  local fired = 0
+  vim.api.nvim_create_autocmd("FileType", {
+    pattern = "laser-once",
+    callback = function()
+      fired = fired + 1
+    end,
+  })
+  for _ = 1, 3 do
+    cmdline.ensure_buffer("laser-once")
+  end
+  expect.equality(fired, 1)
+  vim.api.nvim_exec_autocmds("CmdlineLeave", {})
+  for _ = 1, 3 do
+    cmdline.ensure_buffer("laser-once")
+  end
+  expect.equality(fired, 2)
 end
 
 return T

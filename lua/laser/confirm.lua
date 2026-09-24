@@ -48,7 +48,8 @@ local function resolve(item, opts)
     return item
   end
   if
-    not done and not vim.wait(opts.resolve_timeout_ms or 1000, function()
+    not done
+    and not vim.wait(opts.resolve_timeout_ms or 1000, function()
       return done
     end, 1)
   then
