@@ -1,4 +1,5 @@
 MINI := $(or $(MINI_NVIM_PATH),deps/mini.nvim)
+MINI_VERSION := v0.18.0
 NVIM_TEST := MINI_NVIM_PATH=$(MINI) nvim --headless --noplugin -u ./scripts/minimal_init.lua
 
 test: $(MINI)
@@ -9,9 +10,19 @@ test_file: $(MINI)
 
 deps/mini.nvim:
 	@mkdir -p deps
-	git clone --filter=blob:none https://github.com/nvim-mini/mini.nvim $@
+	git clone --filter=blob:none --branch $(MINI_VERSION) https://github.com/nvim-mini/mini.nvim $@
 
 fmt:
 	stylua lua tests scripts
 
-.PHONY: test test_file fmt
+lint:
+	stylua --check lua tests scripts
+
+typecheck:
+	VIMRUNTIME="$$(nvim --headless --clean -c 'lua io.stdout:write(vim.env.VIMRUNTIME)' -c q)" \
+		lua-language-server --check=lua --checklevel=Warning \
+		--configpath="$(CURDIR)/.luarc.json" --logpath="$(CURDIR)/deps/luals"
+
+check: lint typecheck test
+
+.PHONY: test test_file fmt lint typecheck check
