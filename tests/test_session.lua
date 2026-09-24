@@ -283,4 +283,25 @@ T["candidates hidden by max_items do not widen the menu"] = function()
   expect.equality(got[1].word, "bar")
 end
 
+T["JSON null fields in a response count as absent"] = function()
+  local s = Session.new({ startcol = 4, clients = { [1] = { name = "lua_ls" } } })
+  s:set_result(1, {
+    items = {
+      {
+        label = "bar",
+        detail = vim.NIL,
+        documentation = vim.NIL,
+        textEdit = vim.NIL,
+        labelDetails = vim.NIL,
+        filterText = vim.NIL,
+      },
+    },
+    itemDefaults = vim.NIL,
+  }, ctx(1))
+  local got = s:candidates("ba")
+  expect.equality(labels(got), { "bar" })
+  expect.equality(got[1].word, "bar")
+  expect.equality(got[1].user_data.laser.item.detail, nil)
+end
+
 return T

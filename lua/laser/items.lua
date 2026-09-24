@@ -20,6 +20,27 @@ local function edit_range(item)
   return edit.range or edit.insert
 end
 
+---Remove JSON nulls, which Neovim decodes as vim.NIL, so absent and null
+---fields read the same. Tables are rewritten in place.
+---@generic T
+---@param value T
+---@return T
+function M.drop_null(value)
+  if value == vim.NIL then
+    return nil
+  end
+  if type(value) == "table" then
+    for key, field in pairs(value) do
+      if field == vim.NIL then
+        value[key] = nil
+      else
+        M.drop_null(field)
+      end
+    end
+  end
+  return value
+end
+
 ---Materialize list defaults without changing the server's response table.
 ---@param item lsp.CompletionItem
 ---@param defaults? table

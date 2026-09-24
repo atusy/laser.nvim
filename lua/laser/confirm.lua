@@ -95,6 +95,7 @@ function M.apply(candidate, opts)
     if not vim.api.nvim_buf_is_valid(opts.bufnr) then
       return
     end
+    resolved = require("laser.items").drop_null(resolved)
     if err then
       vim.notify_once(err.message, vim.log.levels.WARN)
     elseif resolved then

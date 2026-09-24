@@ -107,6 +107,28 @@ T["an unresolved item is resolved first so late edits and commands apply"] = fun
   expect.equality(executed, { "resolved.cmd" })
 end
 
+T["a resolved item with JSON null fields keeps the item's own command"] = function()
+  local buf = buffer_after_insert("foo.bar", 7)
+  local executed = {}
+  local c = client({
+    server_capabilities = { completionProvider = { resolveProvider = true } },
+    exec_cmd = function(_, cmd)
+      table.insert(executed, cmd.command)
+    end,
+    request = function(_, _, params, handler)
+      local resolved = vim.deepcopy(params)
+      resolved.additionalTextEdits = vim.NIL
+      resolved.command = vim.NIL
+      handler(nil, resolved)
+      return true, 1
+    end,
+  })
+  local item = { label = "bar", command = { title = "t", command = "own.cmd" } }
+  confirm.apply(candidate(item), { bufnr = buf, startcol = 4, client = c })
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "foo.bar" })
+  expect.equality(executed, { "own.cmd" })
+end
+
 T["resolve honors dynamic registration for the completion buffer"] = function()
   local fake = require("tests.helpers.fake_server")
   local buf = buffer_after_insert("foo.bar", 7)
