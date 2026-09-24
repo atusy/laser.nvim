@@ -12,6 +12,8 @@ local RequestCancelled = -32800
 ---@field trigger_chars? string[]
 ---@field filetypes? string[]
 ---@field manual? boolean respond explicitly via fake.last.respond
+---@field sync? boolean answer completion inside the request call, as only in-process servers can
+---@field resolve? boolean advertise completionItem/resolve; default true
 
 ---@param opts laser.test.FakeServerOpts
 ---@return fun(dispatchers: vim.lsp.rpc.Dispatchers): vim.lsp.rpc.PublicClient
@@ -35,16 +37,23 @@ local function cmd_fn(opts)
       end
     end
 
-    function srv.request(method, params, callback)
+    function srv.request(method, params, handler, notify_reply_callback)
       next_id = next_id + 1
       local id = next_id
+      -- The client tracks requests until it is told the reply was handled.
+      local function callback(err, result)
+        handler(err, result)
+        if notify_reply_callback then
+          notify_reply_callback(id)
+        end
+      end
       table.insert(srv.requests, { id = id, method = method, params = params })
       if method == "initialize" then
         callback(nil, {
           capabilities = {
             completionProvider = {
               triggerCharacters = opts.trigger_chars or {},
-              resolveProvider = true,
+              resolveProvider = opts.resolve ~= false,
             },
           },
         })
@@ -52,18 +61,19 @@ local function cmd_fn(opts)
         callback(nil, nil)
       elseif method == "textDocument/completion" then
         srv.respond = function(result, err)
-          callback(err, result)
+          reply(id, callback, err, result)
         end
         if opts.manual then
           return true, id
         end
         local result = type(opts.items) == "function" and opts.items(params) or opts.items or {}
-        if (opts.delay_ms or 0) > 0 then
+        if opts.sync then
+          reply(id, callback, nil, result)
+        else
+          -- Like a real server, answer on a later turn of the event loop.
           vim.defer_fn(function()
             reply(id, callback, nil, result)
-          end, opts.delay_ms)
-        else
-          reply(id, callback, nil, result)
+          end, opts.delay_ms or 0)
         end
       elseif method == "completionItem/resolve" then
         local item = vim.deepcopy(params)
