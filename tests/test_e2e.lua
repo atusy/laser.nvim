@@ -322,6 +322,27 @@ T["the command-line preview stays above a wrapped command line"] = function()
   expect.equality(config.row + config.height <= 22, true)
 end
 
+T["command-line words follow the scratch document's iskeyword"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        vim.bo[ev.buf].iskeyword = "@,-"
+        FAKE.start({ items = { { label = "a-bc" } } }, ev.buf)
+      end,
+    })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1) end)
+  ]])
+  type_keys(":a-b")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  expect.equality(child.fn.getcmdline(), "a-bc")
+end
+
 T["an expression prompt entered from the command line closes its menu"] = function()
   child.lua([[
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {

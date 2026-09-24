@@ -19,4 +19,12 @@ T["the keyword start is the byte column where the current \\k* run begins"] = fu
   expect.equality(position.keyword_start("", 0), 0)
 end
 
+T["the keyword start follows the completed document's iskeyword"] = function()
+  local buf = vim.api.nvim_create_buf(false, true)
+  vim.bo[buf].iskeyword = "@,48-57,_,-"
+  expect.equality(position.keyword_start("a-b", 3), 2)
+  expect.equality(position.keyword_start("a-b", 3, buf), 0)
+  vim.api.nvim_buf_delete(buf, { force = true })
+end
+
 return T

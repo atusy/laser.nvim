@@ -11,6 +11,7 @@ local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
 ---@field client_id integer
 ---@field request? laser.Request the completion line when the response was requested
 ---@field symbols? string non-keyword text before startcol, computed on demand
+---@field bufnr? integer document whose 'iskeyword' applies
 
 ---@param item lsp.CompletionItem
 ---@return lsp.Range?
@@ -97,7 +98,9 @@ local function symbols_before(ctx)
   if not ctx.symbols then
     local before = ctx.line:sub(1, ctx.startcol)
     -- The trailing run of characters that are neither keyword nor blank.
-    local from = vim.fn.match(before, [[\%(\%(\k\|\s\)\@!.\)*$]])
+    local from = require("laser.position").in_buffer(ctx.bufnr, function()
+      return vim.fn.match(before, [[\%(\%(\k\|\s\)\@!.\)*$]])
+    end)
     ctx.symbols = before:sub(from + 1)
   end
   return ctx.symbols
