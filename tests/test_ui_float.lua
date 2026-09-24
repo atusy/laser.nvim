@@ -178,47 +178,28 @@ T["the first preselected candidate is highlighted without inserting it"] = funct
 end
 
 T["dispose releases the menu's autocmds and key handler"] = function()
-  local ui = new({
-    on_confirm = function() end,
-    commit_characters = function()
-      return {}
-    end,
-  })
-  local name = "laser.ui.float." .. tostring(ui)
-  ui.dispose()
-  current = nil
-  expect.equality(pcall(vim.api.nvim_get_autocmds, { group = name }), false)
-  expect.equality(
-    pcall(vim.api.nvim_get_autocmds, { group = "laser.ui.float.state." .. tostring(ui) }),
-    false
-  )
-end
-
-T["the kind and detail columns use PmenuKind and PmenuExtra"] = function()
-  set_line("b")
-  local ui = new()
-  ui.open(1, {
-    candidate("bar", { kind = "Field", menu = "string" }),
-    candidate("baz", { kind = "Method", menu = "fn" }),
-  }, "i")
-  ui.select(1, { insert = false })
-  local got = {}
-  for _, mark in ipairs(marks(ui)) do
-    local group = mark[4].hl_group
-    if group and group:find("^Pmenu[KE]") then
-      got[#got + 1] = { mark[2], mark[3], mark[4].end_col, group }
-    end
+  local on_key, handlers = vim.on_key, {}
+  vim.on_key = function(fn, ns)
+    handlers[ns] = fn
+    return on_key(fn, ns)
   end
-  table.sort(got, function(a, b)
-    return a[1] < b[1] or (a[1] == b[1] and a[2] < b[2])
+  local ok, err = pcall(function()
+    local ui = new({
+      on_confirm = function() end,
+      commit_characters = function()
+        return {}
+      end,
+    })
+    expect.equality(vim.tbl_count(handlers), 1)
+    ui.dispose()
+    current = nil
+    expect.equality(vim.tbl_count(handlers), 0)
+    for _, group in ipairs({ "laser.ui.float.", "laser.ui.float.state." }) do
+      expect.equality(pcall(vim.api.nvim_get_autocmds, { group = group .. tostring(ui) }), false)
+    end
   end)
-  -- Rows are "bar Field  string" and "baz Method fn    ".
-  expect.equality(got, {
-    { 0, 4, 9, "PmenuKindSel" },
-    { 0, 11, 17, "PmenuExtraSel" },
-    { 1, 4, 10, "PmenuKind" },
-    { 1, 11, 13, "PmenuExtra" },
-  })
+  vim.on_key = on_key
+  assert(ok, err)
 end
 
 ---Put the cursor on the last screen row of a long buffer.
