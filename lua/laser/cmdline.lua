@@ -49,11 +49,22 @@ function M.get_clients(bufnr, language_id)
   end, vim.lsp.get_clients({ bufnr = bufnr, method = "textDocument/completion" }))
 end
 
+-- Language ids whose document had its FileType chance in this command line.
+local attached = {} ---@type table<string, true>
+vim.api.nvim_create_autocmd("CmdlineLeave", {
+  group = vim.api.nvim_create_augroup("laser.cmdline", { clear = true }),
+  callback = function()
+    attached = {}
+  end,
+})
+
 ---Find or recreate the scratch document for `language_id`.
 ---
----An existing document without completion clients re-runs attach so a client
----the user enabled after the command line was first opened gets its FileType
----chance instead of the document staying client-less for the session.
+---An existing document without completion clients re-runs attach once per
+---command line, so a client the user enabled after the command line was
+---first opened gets its FileType chance. Re-running it on every keystroke
+---would repeat ftplugins, syntax and treesitter work while no server exists
+---or one is still starting.
 ---@param language_id string
 ---@return { bufnr: integer, uri: string }
 function M.ensure_buffer(language_id)
@@ -63,9 +74,10 @@ function M.ensure_buffer(language_id)
     if not vim.api.nvim_buf_is_loaded(buf) then
       vim.fn.bufload(buf)
     end
-    if #M.get_clients(buf, language_id) == 0 then
+    if not attached[language_id] and #M.get_clients(buf, language_id) == 0 then
       attach(buf, language_id)
     end
+    attached[language_id] = true
     return { bufnr = buf, uri = uri }
   end
 
@@ -75,6 +87,7 @@ function M.ensure_buffer(language_id)
   vim.bo[buf].swapfile = false
   vim.api.nvim_buf_set_name(buf, uri)
   attach(buf, language_id)
+  attached[language_id] = true
   return { bufnr = buf, uri = uri }
 end
 
