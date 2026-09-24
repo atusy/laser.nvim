@@ -10,6 +10,7 @@ local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
 ---@field encoding string
 ---@field client_id integer
 ---@field request? laser.Request the completion line when the response was requested
+---@field symbols? string non-keyword text before startcol, computed on demand
 
 ---@param item lsp.CompletionItem
 ---@return lsp.Range?
@@ -88,13 +89,44 @@ local function edit_start(item, ctx)
   return vim.str_byteindex(ctx.line, ctx.encoding, char, false)
 end
 
----Use the item's edit start when it is applicable. Items without an
----applicable range use the keyword boundary.
+---Text before the keyword boundary that is not keyword text, like "@" or
+---"--". Cached on ctx, which a response's items share.
+---@param ctx laser.ConvertContext
+---@return string
+local function symbols_before(ctx)
+  if not ctx.symbols then
+    local before = ctx.line:sub(1, ctx.startcol)
+    -- The trailing run of characters that are neither keyword nor blank.
+    local from = vim.fn.match(before, [[\%(\%(\k\|\s\)\@!.\)*$]])
+    ctx.symbols = before:sub(from + 1)
+  end
+  return ctx.symbols
+end
+
+---Use the item's edit start when it is applicable. Items without a range use
+---the keyword boundary, moved back over symbols the item's text starts with,
+---so "@pr" completes to "@property" rather than "@@property".
 ---@param item lsp.CompletionItem
 ---@param ctx laser.ConvertContext
 ---@return integer
 function M.start_col(item, ctx)
-  return edit_start(item, ctx) or ctx.startcol
+  local start = edit_start(item, ctx)
+  if start then
+    return start
+  elseif item.textEdit then
+    return ctx.startcol
+  end
+  local symbols = symbols_before(ctx)
+  if symbols == "" then
+    return ctx.startcol
+  end
+  local text = item.insertTextFormat ~= SNIPPET and item.insertText or item.label
+  for k = math.min(#symbols, #text), 1, -1 do
+    if text:sub(1, k) == symbols:sub(-k) then
+      return ctx.startcol - k
+    end
+  end
+  return ctx.startcol
 end
 
 ---@param item lsp.CompletionItem
