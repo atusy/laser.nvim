@@ -47,4 +47,23 @@ T["resolve treats JSON null fields as absent"] = function()
   eq(shown, "kept")
 end
 
+T["a failed resolve shows nothing new"] = function()
+  local callback
+  local client = {
+    supports_method = function()
+      return true
+    end,
+    request = function(_, _, _, cb)
+      callback = cb
+      return true, 1
+    end,
+  }
+  local shown = false
+  require("laser.preview").resolve({ label = "foo" }, client, 12, function()
+    shown = true
+  end)
+  callback({ code = -32603, message = "failed" }, { label = "foo", detail = "ignored" })
+  eq(shown, false)
+end
+
 return T

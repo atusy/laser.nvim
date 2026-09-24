@@ -39,6 +39,20 @@ local function wait_menu_items(n)
   assert(ok, "the menu did not show " .. n .. " items")
 end
 
+---Wait until completion has handled the text typed so far.
+local function wait_handled(line)
+  local ok = child.lua_get(string.format(
+    [[
+    vim.wait(1000, function()
+      local engine = require("laser")._engine()
+      return engine and engine.doc and engine.doc.line == %q
+    end)
+  ]],
+    line
+  ))
+  assert(ok, "completion did not handle " .. line)
+end
+
 local function menu_labels()
   return child.lua_get(
     [[vim.tbl_map(function(i) return i.abbr end, require("laser")._engine().ui.items())]]
@@ -446,8 +460,9 @@ T["typing reuses a complete list"] = function()
   wait_menu_items(2)
   local count = #completion_requests()
   type_keys("a")
-  wait_menu_items(2)
+  wait_handled("ba")
   expect.equality(#completion_requests(), count)
+  expect.equality(menu_labels(), { "bar", "baz" })
 end
 
 T["trigger characters request a new list with trigger context"] = function()
@@ -455,6 +470,7 @@ T["trigger characters request a new list with trigger context"] = function()
   type_keys("ib")
   wait_menu_items(1)
   type_keys(".")
+  wait_handled("b.")
   wait_menu_items(1)
   local requests = completion_requests()
   expect.equality(requests[#requests].params.context, {
@@ -486,6 +502,7 @@ T["leaving Insert mode cancels delayed completion"] = function()
   child.lua([[vim.wait(300)]])
   expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
   expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
+  expect.equality(child.lua_get([[FAKE.last.cancelled_count]]), 1)
 end
 
 T["a response arriving after the cursor moved away does not open the menu"] = function()
@@ -498,6 +515,70 @@ T["a response arriving after the cursor moved away does not open the menu"] = fu
   expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
   type_keys("<C-n>")
   expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "xx b", "hello world" })
+end
+
+T["switching buffers closes completion"] = function()
+  child.lua([[
+    FAKE.start({ items = { { label = "bar" } } })
+    OTHER = vim.api.nvim_create_buf(true, true)
+  ]])
+  type_keys("ib")
+  wait_menu_items(1)
+  type_keys("<Cmd>lua vim.api.nvim_set_current_buf(OTHER)<CR>")
+  expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
+  expect.equality(child.lua_get([[LASER.visible()]]), false)
+end
+
+local function setup_cmdline(items)
+  child.lua(string.format(
+    [[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev) FAKE.start({ items = %s }, ev.buf) end,
+    })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1) end)
+    vim.keymap.set("c", "<C-y>", function() LASER.confirm() end)
+  ]],
+    vim.inspect(items)
+  ))
+end
+
+T["wiping the command-line document closes its session"] = function()
+  setup_cmdline({ { label = "echo" } })
+  type_keys(":e")
+  wait_menu_items(1)
+  type_keys(
+    [[<Cmd>lua vim.api.nvim_buf_delete(require("laser")._engine().doc.bufnr, { force = true })<CR>]]
+  )
+  expect.equality(child.lua_get([[require("laser")._engine().session == nil]]), true)
+end
+
+T["confirming on the command line leaves the edited buffer alone"] = function()
+  setup_cmdline({
+    {
+      label = "echo",
+      additionalTextEdits = {
+        {
+          newText = "edited",
+          range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 0 } },
+        },
+      },
+    },
+  })
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "text" })
+  type_keys(":e")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  type_keys("<C-y>")
+  expect.equality(child.fn.getcmdline(), "echo")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "text" })
+  -- Nor is the scratch document edited: the command line owns the text.
+  local scratch = child.fn.bufnr("untitled://laser-cmdline/laser-cmd")
+  expect.equality(child.api.nvim_buf_get_lines(scratch, 0, -1, false), { "e" })
 end
 
 T["leaving the command line closes its session"] = function()
