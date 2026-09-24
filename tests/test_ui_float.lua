@@ -12,7 +12,7 @@ local T = MiniTest.new_set({
     end,
     post_case = function()
       if current then
-        current.close()
+        current.dispose()
         current = nil
       end
     end,
@@ -175,6 +175,23 @@ T["the first preselected candidate is highlighted without inserting it"] = funct
   expect.equality(vim.api.nvim_get_current_line(), "b")
   -- The selection is scrolled into view.
   expect.equality(vim.tbl_contains(rows(ui), "b20 "), true)
+end
+
+T["dispose releases the menu's autocmds and key handler"] = function()
+  local ui = new({
+    on_confirm = function() end,
+    commit_characters = function()
+      return {}
+    end,
+  })
+  local name = "laser.ui.float." .. tostring(ui)
+  ui.dispose()
+  current = nil
+  expect.equality(pcall(vim.api.nvim_get_autocmds, { group = name }), false)
+  expect.equality(
+    pcall(vim.api.nvim_get_autocmds, { group = "laser.ui.float.state." .. tostring(ui) }),
+    false
+  )
 end
 
 ---Put the cursor on the last screen row of a long buffer.
