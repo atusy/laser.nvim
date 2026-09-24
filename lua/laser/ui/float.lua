@@ -3,6 +3,7 @@
 local M = {}
 
 local feedkeys = require("laser.ui.feedkeys")
+local relaxed = require("laser.ui.relaxed")
 local highlight = require("laser.highlight")
 
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
@@ -201,7 +202,6 @@ function M.new(opts)
   local typed = "" -- input between startcol and the cursor when the menu opened
   local inserted = "" -- text the menu currently holds between startcol and the cursor
   local expected -- text state right after the menu's own edit
-  local restore_options -- defined with the option relaxation below
   local pending_insertions = 0 -- insertions whose fed keys have not run yet
   local after_insertions = {} ---@type fun()[] run once no insertion is pending
   local browsing, frozen, initial_cursor = false, 0, 0
@@ -232,7 +232,7 @@ function M.new(opts)
       -- and options relaxed for them must come back.
       pending_insertions, after_insertions = 0, {}
       feedkeys.forget(ui)
-      restore_options()
+      relaxed.restore()
     end,
   })
 
@@ -921,79 +921,6 @@ function M.new(opts)
     return want ~= nil and vim.deep_equal(text_state(want.mode), want.state)
   end
 
-  local saved_options -- options to restore once fed insertion keys are done
-  -- Options that change what one typed <BS> or character does, with the values
-  -- that make fed keys behave like deleting and typing plain characters.
-  -- A function derives the value from the user's.
-  local RELAXED = {
-    global = {
-      backspace = "indent,start",
-      smarttab = false,
-      -- Hooks such as auto-pairs would rewrite the candidate's characters.
-      eventignore = function(value)
-        return value == "" and "InsertCharPre" or value .. ",InsertCharPre"
-      end,
-    },
-    buffer = {
-      cinkeys = "",
-      indentkeys = "",
-      softtabstop = 0,
-      varsofttabstop = "",
-      -- Paragraph reflow on each key would move text across the backspaces.
-      formatoptions = function(value)
-        return (value:gsub("a", ""))
-      end,
-    },
-  }
-
-  function restore_options()
-    if not saved_options then
-      return
-    end
-    for name, value in pairs(saved_options.global) do
-      vim.o[name] = value
-    end
-    if vim.api.nvim_buf_is_valid(saved_options.buf) then
-      for name, value in pairs(saved_options.buffer) do
-        vim.bo[saved_options.buf][name] = value
-      end
-    end
-    saved_options = nil
-  end
-
-  ---Let backspaces remove exactly one character each, including text typed
-  ---before this insertion, and keep typed candidates from reindenting or
-  ---being rewritten.
-  local function relax_options()
-    local target = vim.api.nvim_get_current_buf()
-    if not saved_options then
-      saved_options = { buf = target, global = {}, buffer = {} }
-      for name in pairs(RELAXED.global) do
-        saved_options.global[name] = vim.o[name]
-      end
-      for name in pairs(RELAXED.buffer) do
-        saved_options.buffer[name] = vim.bo[target][name]
-      end
-      -- The fed keys, and the restore queued behind them, can be discarded.
-      vim.api.nvim_create_autocmd({ "TextChangedI", "InsertLeave" }, {
-        once = true,
-        callback = restore_options,
-      })
-    end
-    for name, value in pairs(RELAXED.global) do
-      if type(value) == "function" then
-        value = value(saved_options.global[name])
-      end
-      vim.o[name] = value
-    end
-    for name, value in pairs(RELAXED.buffer) do
-      if type(value) == "function" then
-        value = value(saved_options.buffer[name])
-      end
-      vim.bo[target][name] = value
-    end
-  end
-
   ---Replace the text between startcol and the cursor with `word`.
   ---@param word string
   ---@param callback? fun() runs once the edit is in place
@@ -1043,7 +970,7 @@ function M.new(opts)
       return
     end
     -- Typed keys keep undo and dot-repeat intact, unlike direct buffer edits.
-    relax_options()
+    relaxed.relax()
     local bs = vim.keycode("<BS>")
     -- One <BS> removes a character with its composing characters unless
     -- 'delcombine' makes it remove them one at a time.
@@ -1054,7 +981,7 @@ function M.new(opts)
     pending_insertions = pending_insertions + 1
     feedkeys.feed(ui, { { bs:rep(chars), false }, { typed_word, true } }, function()
       pending_insertions = pending_insertions - 1
-      restore_options()
+      relaxed.restore()
       -- The keys are in; record what they produced, which a prediction can
       -- miss when a confirmed candidate spans lines.
       expected = { mode = mode, state = text_state(mode) }
