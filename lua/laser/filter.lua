@@ -6,6 +6,8 @@ local M = {}
 ---@field score number
 ---@field positions? integer[] 0-based character indices into item.filterText or item.label
 
+---A matcher reads the cached candidate and must not modify it; converters
+---own the copies that survive.
 ---@alias laser.Matcher
 ---| fun(input: string, candidate: laser.Candidate): false, nil
 ---| fun(input: string, candidate: laser.Candidate): true, laser.MatchInfo
@@ -139,16 +141,16 @@ M.by_score = M.score_sorter({ tiebreak = M.by_sort_text })
 local function resolve_filters(opts)
   local filters = opts.filters
   if filters == nil then
-    local function matcher(input, candidate)
-      local matched, info
-      if opts.matcher and opts.matcher ~= fuzzy then
-        local score = opts.matcher(input, candidate)
-        matched, info = score ~= nil and score ~= false, { score = score }
-      else
-        matched, info = fuzzy(input, candidate)
+    local matcher = fuzzy
+    local legacy = opts.matcher
+    if legacy and legacy ~= fuzzy then
+      matcher = function(input, candidate)
+        local score = legacy(input, candidate)
+        if score == nil or score == false then
+          return false, nil
+        end
+        return true, { score = score }
       end
-      candidate.score = info and info.score or nil -- Legacy sorter callbacks.
-      return matched, matched and info or nil
     end
     filters = {
       { kind = "matcher", callback = matcher },
@@ -172,16 +174,123 @@ end
 ---Copy the parts filters may modify. Deep-copying whole LSP items (docs,
 ---edits, data) dominated filtering time on large lists; nested item fields
 ---are shared, so converters must replace them rather than mutate them.
+---Only converters may change the item, so it is shared when none runs.
 ---@param candidate table
+---@param with_item boolean
 ---@return table
-local function own(candidate)
+local function own(candidate, with_item)
   local copy = shallow_copy(candidate)
   copy.user_data = shallow_copy(candidate.user_data)
   local data = shallow_copy(candidate.user_data.laser)
   copy.user_data.laser = data
-  data.item = shallow_copy(data.item)
+  if with_item then
+    data.item = shallow_copy(data.item)
+  end
   if candidate.highlights then
     copy.highlights = vim.deepcopy(candidate.highlights)
+  end
+  return copy
+end
+
+---Match every candidate with the built-in fuzzy matcher in one call per
+---distinct input. Matching depends only on the text and the input, so
+---candidates sharing both share the result.
+---@param candidates table[]
+---@param input_of fun(candidate: table): string
+---@return table<integer, laser.MatchInfo> infos by candidate index; missing when unmatched
+local function fuzzy_all(candidates, input_of)
+  -- Per input: distinct texts in order, and the first candidate index of
+  -- each text; candidates repeating a text are chained through `next_same`.
+  local groups = {} ---@type table<string, { texts: string[], first: table<string, integer> }>
+  local next_same, last_same = {}, {}
+  for i, candidate in ipairs(candidates) do
+    local input = input_of(candidate)
+    local group = groups[input]
+    if not group then
+      group = { texts = {}, first = {} }
+      groups[input] = group
+    end
+    local text = filter_text(candidate)
+    local head = group.first[text]
+    if head then
+      next_same[last_same[head] or head] = i
+      last_same[head] = i
+    else
+      group.first[text] = i
+      group.texts[#group.texts + 1] = text
+    end
+  end
+  local infos = {}
+  for input, group in pairs(groups) do
+    if input == "" then
+      for _, head in pairs(group.first) do
+        local i = head
+        while i do
+          infos[i] = { score = 0 }
+          i = next_same[i]
+        end
+      end
+    else
+      local matched = vim.fn.matchfuzzypos(group.texts, input)
+      local scores, positions = matched[3], matched[2]
+      for n, text in ipairs(matched[1]) do
+        local i = group.first[text]
+        while i do
+          infos[i] = { score = scores[n], positions = positions[n] }
+          i = next_same[i]
+        end
+      end
+    end
+  end
+  return infos
+end
+
+---Run a first matcher over the cached candidates, which it only reads.
+---Converters own copies, so only its survivors need copying. Later
+---matchers see its match info and run on the copies.
+---@param candidates table[]
+---@param input_of fun(candidate: table): string
+---@param filters laser.Filter[]
+---@param stop_at_first? boolean return as soon as one candidate survives
+---@return table[] survivors
+---@return laser.MatchInfo[] infos match info of each survivor
+---@return integer next index of the first filter left to run
+local function first_matcher(candidates, input_of, filters, stop_at_first)
+  local filter = filters[1]
+  if not filter or filter.kind ~= "matcher" then
+    return candidates, {}, 1
+  end
+  local kept, infos = {}, {}
+  if filter.callback == fuzzy then
+    local matched = fuzzy_all(candidates, input_of)
+    for i, candidate in ipairs(candidates) do
+      if matched[i] then
+        kept[#kept + 1], infos[#kept + 1] = candidate, matched[i]
+      end
+    end
+    return kept, infos, 2
+  end
+  for _, candidate in ipairs(candidates) do
+    local ok, info = filter.callback(input_of(candidate), candidate)
+    if ok then
+      kept[#kept + 1], infos[#kept + 1] = candidate, info
+      if stop_at_first then
+        break
+      end
+    end
+  end
+  return kept, infos, 2
+end
+
+---@param candidate table cached candidate
+---@param info? laser.MatchInfo
+---@param with_item boolean whether converters will run on the copy
+---@return table
+local function own_matched(candidate, info, with_item)
+  local copy = own(candidate, with_item)
+  if info then
+    copy.user_data.laser.match_info = info
+    copy.score = info.score -- Legacy sorter callbacks.
   end
   return copy
 end
@@ -190,9 +299,11 @@ end
 ---@param candidate table owned copy
 ---@param input string
 ---@param filters laser.Filter[]
+---@param first integer index of the first filter to run
 ---@return table? candidate nil when a matcher rejects it
-local function pass(candidate, input, filters)
-  for _, filter in ipairs(filters) do
+local function pass(candidate, input, filters, first)
+  for index = first, #filters do
+    local filter = filters[index]
     if filter.kind == "matcher" then
       local matched, info = filter.callback(input, candidate)
       if not matched then
@@ -208,6 +319,17 @@ local function pass(candidate, input, filters)
   return candidate
 end
 
+---@param prefix string|fun(candidate: table): string
+---@return fun(candidate: table): string
+local function input_getter(prefix)
+  if type(prefix) == "function" then
+    return prefix
+  end
+  return function()
+    return prefix
+  end
+end
+
 ---Whether any candidate survives the filters. Sorters cannot change the
 ---answer, so they are skipped, and the scan stops at the first survivor.
 ---@param candidates table[]
@@ -216,13 +338,75 @@ end
 ---@return boolean
 function M.any(candidates, prefix, opts)
   local filters = resolve_filters(opts)
-  for _, candidate in ipairs(candidates) do
-    local input = type(prefix) == "function" and prefix(candidate) or prefix
-    if pass(own(candidate), input, filters) then
+  local input_of = input_getter(prefix)
+  local rest = false
+  for index = 2, #filters do
+    if filters[index].kind == "matcher" then
+      rest = true
+    end
+  end
+  local survivors, infos, first = first_matcher(candidates, input_of, filters, not rest)
+  if not rest then
+    -- Converters are one-to-one; they cannot drop a survivor.
+    return #survivors > 0
+  end
+  for i, candidate in ipairs(survivors) do
+    if pass(own_matched(candidate, infos[i], true), input_of(candidate), filters, first) then
       return true
     end
   end
   return false
+end
+
+---The default sorter's order with its keys computed once per candidate.
+---@param current table[]
+local function sort_by_score(current)
+  local keyed = {}
+  for i, candidate in ipairs(current) do
+    local info, item = candidate.user_data.laser.match_info, candidate.user_data.laser.item
+    keyed[i] = {
+      candidate = candidate,
+      score = info and info.score or candidate.score or 0,
+      key = item.sortText or item.label,
+      label = item.label,
+      index = i,
+    }
+  end
+  table.sort(keyed, function(a, b)
+    if a.score ~= b.score then
+      return a.score > b.score
+    elseif a.key ~= b.key then
+      return a.key < b.key
+    elseif a.label ~= b.label then
+      return a.label < b.label
+    end
+    return a.index < b.index
+  end)
+  for i, entry in ipairs(keyed) do
+    current[i] = entry.candidate
+  end
+end
+
+---Sort stably with a user comparator, which may be inconsistent.
+---@param current table[]
+---@param callback laser.Sorter
+local function sort_with(current, callback)
+  local ordered = {}
+  for i, candidate in ipairs(current) do
+    ordered[i] = { candidate = candidate, index = i }
+  end
+  table.sort(ordered, function(a, b)
+    if callback(a.candidate, b.candidate) then
+      return true
+    end
+    if callback(b.candidate, a.candidate) then
+      return false
+    end
+    return a.index < b.index
+  end)
+  for i, entry in ipairs(ordered) do
+    current[i] = entry.candidate
+  end
 end
 
 ---@param candidates table[]
@@ -232,6 +416,7 @@ end
 ---@return table[]
 function M.apply(candidates, prefix, opts, limit)
   local filters = resolve_filters(opts)
+  local input_of = input_getter(prefix)
   -- Later converters are one-to-one, so the kept candidates are known once the
   -- last filter that can drop or reorder them has run.
   local truncate_after = 0
@@ -245,39 +430,38 @@ function M.apply(candidates, prefix, opts, limit)
   if truncate_after == 0 and limit and limit > 0 then
     candidates = vim.list_slice(candidates, 1, limit)
   end
+  local survivors, infos, first = first_matcher(candidates, input_of, filters)
+  if truncate_after == 1 and first == 2 then
+    survivors = vim.list_slice(survivors, 1, limit)
+  end
   -- Each render starts from server candidates, never from a previous conversion.
-  local current = vim.tbl_map(own, candidates)
-  for i, filter in ipairs(filters) do
+  local converts = false
+  for i = first, #filters do
+    converts = converts or filters[i].kind == "converter"
+  end
+  local current = {}
+  for i, candidate in ipairs(survivors) do
+    current[i] = own_matched(candidate, infos[i], converts)
+  end
+  for i = first, #filters do
+    local filter = filters[i]
     if filter.kind == "sorter" then
-      local ordered = {}
-      for i, candidate in ipairs(current) do
-        ordered[i] = { candidate = candidate, index = i }
-      end
-      table.sort(ordered, function(a, b)
-        if filter.callback(a.candidate, b.candidate) then
-          return true
-        end
-        if filter.callback(b.candidate, a.candidate) then
-          return false
-        end
-        return a.index < b.index
-      end)
-      for i, entry in ipairs(ordered) do
-        current[i] = entry.candidate
+      if filter.callback == M.by_score then
+        sort_by_score(current)
+      else
+        sort_with(current, filter.callback)
       end
     else
       local next_candidates = {}
       for _, candidate in ipairs(current) do
         if filter.kind == "matcher" then
-          local input = type(prefix) == "function" and prefix(candidate) or prefix
-          local matched, info = filter.callback(input, candidate)
+          local matched, info = filter.callback(input_of(candidate), candidate)
           if matched then
             candidate.user_data.laser.match_info = info
             next_candidates[#next_candidates + 1] = candidate
           end
         elseif filter.kind == "converter" then
-          local input = type(prefix) == "function" and prefix(candidate) or prefix
-          next_candidates[#next_candidates + 1] = filter.callback(candidate, input)
+          next_candidates[#next_candidates + 1] = filter.callback(candidate, input_of(candidate))
         else
           error("Unknown filter kind: " .. tostring(filter.kind))
         end
