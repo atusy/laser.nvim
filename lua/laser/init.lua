@@ -65,7 +65,7 @@ local function confirm_text(candidate)
   elseif not engine or not engine.doc or engine.doc.mode == "i" then
     return nil
   end
-  local session, doc = assert(engine.session), engine.doc
+  local session, doc = assert(engine.session), assert(engine.doc)
   local body = item.textEdit and item.textEdit.newText or item.insertText or item.label
   local pad = doc.line:sub(session.startcol + 1, candidate.user_data.laser.startcol)
   return pad .. require("laser.confirm").snippet_text(body)

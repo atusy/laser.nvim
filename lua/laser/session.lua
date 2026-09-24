@@ -52,7 +52,7 @@ function Session:set_result(client_id, result, ctx, append)
   local lsp_items, incomplete = unpack_result(result)
   local previous = append and self.results[client_id]
   local candidates = previous and previous.candidates or {}
-  local defaults = result and result.itemDefaults or previous and previous.defaults
+  local defaults = (result and result.itemDefaults) or (previous and previous.defaults) or nil
   if previous and not (result and result.items) then
     incomplete = previous.incomplete
   end
@@ -239,7 +239,7 @@ end
 ---@param doc laser.Doc
 ---@param projection? laser.Projection
 ---@return table[]
----@return integer? startcol
+---@return integer startcol the menu start: the earliest start among the candidates
 function Session:candidates(doc, projection)
   local merged = {}
   for _, client_id in ipairs(self:ordered_client_ids()) do
@@ -247,7 +247,7 @@ function Session:candidates(doc, projection)
     vim.list_extend(merged, matched)
   end
   if #merged == 0 and not projection then
-    return merged
+    return merged, self.startcol
   end
   local startcol = projection and projection.startcol or doc.col
   for _, candidate in ipairs(merged) do

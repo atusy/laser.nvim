@@ -1,6 +1,12 @@
 local M = {}
 
----@class laser.RefreshContext
+---What the LSP trigger context is derived from.
+---@class laser.TriggerContext
+---@field inserted_char string single inserted character, or "" for other changes
+---@field trigger_characters string[] this client's trigger characters
+---@field is_incomplete boolean? nil until a response has been accepted
+
+---@class laser.RefreshContext: laser.TriggerContext
 ---@field client_id integer
 ---@field client_name string
 ---@field bufnr integer completion document (scratch buffer in command-line mode)
@@ -18,7 +24,7 @@ local M = {}
 ---@alias laser.Refresh fun(ctx: laser.RefreshContext): boolean?
 
 ---Test the inserted character against this client's triggers, using only ctx.
----@param ctx laser.RefreshContext
+---@param ctx laser.TriggerContext
 ---@return boolean
 function M.hasTriggerCharacter(ctx)
   return ctx.inserted_char ~= "" and vim.list_contains(ctx.trigger_characters, ctx.inserted_char)
@@ -61,7 +67,7 @@ function M.default(ctx)
 end
 
 ---The predicate chooses whether to request; laser chooses the LSP context.
----@param ctx laser.RefreshContext
+---@param ctx laser.TriggerContext
 ---@return lsp.CompletionContext
 function M.lsp_context(ctx)
   local kind = vim.lsp.protocol.CompletionTriggerKind

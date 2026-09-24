@@ -304,8 +304,10 @@ local function pass(candidate, input, filters, first)
       candidate.user_data.laser.match_info = info
     elseif filter.kind == "converter" then
       candidate = filter.callback(candidate, input)
-    elseif filter.kind ~= "sorter" then
-      error("Unknown filter kind: " .. tostring(filter.kind))
+    elseif
+      (filter --[[@as table]]).kind ~= "sorter"
+    then
+      error("Unknown filter kind: " .. tostring((filter --[[@as table]]).kind))
     end
   end
   return candidate
@@ -455,7 +457,7 @@ function M.apply(candidates, prefix, opts, limit)
         elseif filter.kind == "converter" then
           next_candidates[#next_candidates + 1] = filter.callback(candidate, input_of(candidate))
         else
-          error("Unknown filter kind: " .. tostring(filter.kind))
+          error("Unknown filter kind: " .. tostring((filter --[[@as table]]).kind))
         end
       end
       current = next_candidates

@@ -63,7 +63,7 @@ local function completion_options(client, bufnr)
     local method = "textDocument/completion"
     local provider = client._registration_provider and client:_registration_provider(method)
       or method
-    local registrations = client.dynamic_capabilities:get(provider, { bufnr = bufnr })
+    local registrations = client.dynamic_capabilities:get(provider, { bufnr = bufnr }) --[[@as table?]]
     -- Neovim 0.11 returns one registration; newer versions return a list.
     if registrations and registrations.method then
       registrations = { registrations }
