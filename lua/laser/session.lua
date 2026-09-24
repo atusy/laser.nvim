@@ -8,6 +8,7 @@ local refresh = require("laser.refresh")
 ---@field opts? table resolved per-client options (filters, matcher, sorter, refresh)
 ---@field trigger_chars? string[]
 ---@field timed_out? boolean last request timed out; cleared when a new request starts
+---@field interrupted? boolean last request ended before its final answer; cleared when a new request starts
 
 ---@class laser.Session
 ---@field startcol integer common menu boundary
@@ -109,6 +110,7 @@ function Session:refresh_context(client_id, doc, char, pending, previous_doc)
     pending = pending,
     has_candidate = self:has_candidate(client_id, doc),
     timed_out = client.timed_out == true,
+    interrupted = client.interrupted == true,
   }
 end
 
