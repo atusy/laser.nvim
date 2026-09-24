@@ -81,4 +81,33 @@ T["named options override shared defaults"] = function()
   )
 end
 
+---Client whose completion is registered dynamically with `options`.
+---@param registrations table one registration, as Neovim 0.11 returns, or a list
+local function dynamic_client(static, registrations)
+  return {
+    server_capabilities = { completionProvider = static },
+    dynamic_capabilities = {
+      get = function()
+        return registrations
+      end,
+    },
+    supports_method = function()
+      return false
+    end,
+  }
+end
+
+T["resolve support is read from static and dynamic completion options"] = function()
+  local clients = require("laser.clients")
+  local registration =
+    { method = "textDocument/completion", registerOptions = { resolveProvider = true } }
+  expect.equality(
+    clients.supports_resolve(dynamic_client({ resolveProvider = true }, nil), 1),
+    true
+  )
+  expect.equality(clients.supports_resolve(dynamic_client(nil, registration), 1), true)
+  expect.equality(clients.supports_resolve(dynamic_client(nil, { registration }), 1), true)
+  expect.equality(clients.supports_resolve(dynamic_client({}, nil), 1), false)
+end
+
 return T

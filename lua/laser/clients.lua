@@ -48,22 +48,17 @@ function M.select(clients, names, config)
   return selected
 end
 
+---Completion options the server gave at initialization and in dynamic
+---registrations that apply to `bufnr`.
 ---@param client vim.lsp.Client
 ---@param bufnr integer
----@param field "triggerCharacters"|"allCommitCharacters"
----@return string[]
-function M.completion_characters(client, bufnr, field)
-  local chars = {}
-  local function collect(options)
-    if type(options) == "table" then
-      for _, char in ipairs(options[field] or {}) do
-        if not vim.list_contains(chars, char) then
-          chars[#chars + 1] = char
-        end
-      end
-    end
+---@return table[]
+local function completion_options(client, bufnr)
+  local options = {}
+  local static = client.server_capabilities and client.server_capabilities.completionProvider
+  if type(static) == "table" then
+    options[#options + 1] = static
   end
-  collect(client.server_capabilities and client.server_capabilities.completionProvider)
   if client.dynamic_capabilities then
     local method = "textDocument/completion"
     local provider = client._registration_provider and client:_registration_provider(method)
@@ -74,10 +69,42 @@ function M.completion_characters(client, bufnr, field)
       registrations = { registrations }
     end
     for _, registration in ipairs(registrations or {}) do
-      collect(registration.registerOptions)
+      if type(registration.registerOptions) == "table" then
+        options[#options + 1] = registration.registerOptions
+      end
+    end
+  end
+  return options
+end
+
+---@param client vim.lsp.Client
+---@param bufnr integer
+---@param field "triggerCharacters"|"allCommitCharacters"
+---@return string[]
+function M.completion_characters(client, bufnr, field)
+  local chars = {}
+  for _, options in ipairs(completion_options(client, bufnr)) do
+    for _, char in ipairs(options[field] or {}) do
+      if not vim.list_contains(chars, char) then
+        chars[#chars + 1] = char
+      end
     end
   end
   return chars
+end
+
+---Whether the client resolves completion items for `bufnr`. Neovim 0.11
+---does not look for resolveProvider in dynamic registrations.
+---@param client vim.lsp.Client
+---@param bufnr integer
+---@return boolean
+function M.supports_resolve(client, bufnr)
+  for _, options in ipairs(completion_options(client, bufnr)) do
+    if options.resolveProvider == true then
+      return true
+    end
+  end
+  return client:supports_method("completionItem/resolve", bufnr)
 end
 
 return M

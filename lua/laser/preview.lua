@@ -21,7 +21,7 @@ end
 function M.resolve(item, client, bufnr, show)
   local done = false
   local request_id
-  if client and client:supports_method("completionItem/resolve", bufnr) then
+  if client and require("laser.clients").supports_resolve(client, bufnr) then
     local ok, id = client:request("completionItem/resolve", item, function(err, result)
       if done then
         return
