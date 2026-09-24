@@ -43,7 +43,7 @@ local function resolve(item, opts)
       resolved = items.drop_null(result)
     end
   end, opts.bufnr)
-  if not ok then
+  if not ok or not id then
     return item
   end
   if

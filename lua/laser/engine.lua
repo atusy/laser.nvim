@@ -166,7 +166,7 @@ function Engine:request(clients, ctx)
     local requested = { line = doc.line, line_nr = doc.line_nr, col = doc.col }
     cancel_request = request.completion({ client }, function()
       local params =
-        position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding)
+        position.params(doc.uri, doc.line_nr, doc.line, doc.col, client.offset_encoding) --[[@as lsp.CompletionParams]]
       params.context = context_for(ctx, client)
       return params
     end, function(_, err, result, partial)

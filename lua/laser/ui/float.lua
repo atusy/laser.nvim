@@ -73,10 +73,16 @@ end
 ---@field preview_context? fun(candidate: table): { client?: vim.lsp.Client, bufnr: integer }?
 ---@field commit_characters? fun(candidate: table): string[]
 
+---@return { new_mode: string, old_mode: string }
+local function mode_event()
+  return vim.v.event --[[@as { new_mode: string, old_mode: string }]]
+end
+
 ---@param opts? laser.FloatOpts
 ---@return laser.FloatUI
 function M.new(opts)
   opts = opts or {}
+  ---@diagnostic disable-next-line: missing-fields
   local ui = {} ---@type laser.FloatUI
   local menu = {} ---@type laser.MenuOpts
   local buf, win
@@ -125,7 +131,7 @@ function M.new(opts)
   vim.api.nvim_create_autocmd({ "InsertLeave", "CmdlineLeave", "ModeChanged" }, {
     group = state_group,
     callback = function(args)
-      if args.event == "ModeChanged" and vim.v.event.new_mode:find("^[ic]") then
+      if args.event == "ModeChanged" and mode_event().new_mode:find("^[ic]") then
         return
       end
       expected = nil
@@ -498,7 +504,7 @@ function M.new(opts)
     vim.api.nvim_create_autocmd("ModeChanged", {
       group = group,
       callback = function()
-        if vim.v.event.new_mode:sub(1, 1) ~= mode then
+        if mode_event().new_mode:sub(1, 1) ~= mode then
           dismiss()
         end
       end,
@@ -546,9 +552,6 @@ function M.new(opts)
     layout_and_draw()
   end
 
-  ---@param col integer 1-based
-  ---@param new_items table[]
-  ---@param new_mode "i"|"c"
   ---The first candidate the server preselects, else the first one under
   ---auto_select, else the typed input.
   ---@param new_items table[]
@@ -562,6 +565,9 @@ function M.new(opts)
     return menu.auto_select and #new_items > 0 and 1 or 0
   end
 
+  ---@param col integer 1-based
+  ---@param new_items table[]
+  ---@param new_mode "i"|"c"
   function ui.open(col, new_items, new_mode)
     top = 1
     cursor = initial_selection(new_items)
@@ -643,9 +649,9 @@ function M.new(opts)
     return want ~= nil and vim.deep_equal(text_state(want.mode), want.state)
   end
 
-  ---Replace the text between startcol and the cursor with `word`.
-  ---@param word string
-  ---@param callback? fun() runs once the edit is in place
+  ---Replace the text between startcol and the cursor with `word`; `callback`
+  ---runs once the edit is in place.
+  ---@type fun(word: string, callback?: fun())
   local insert
 
   ---Run `step` once no insertion's keys are pending, in call order.
