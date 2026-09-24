@@ -372,6 +372,46 @@ T["a change of buffer, mode or line starts a new session"] = function()
   end
 end
 
+T["candidates starting later insert the text before their start too"] = function()
+  local buf = scratch("foo.ba")
+  fake.start({
+    name = "one",
+    items = {
+      { label = "bar" },
+      {
+        label = "foo.baz",
+        textEdit = {
+          newText = "foo.baz",
+          range = { start = { line = 0, character = 0 }, ["end"] = { line = 0, character = 6 } },
+        },
+      },
+    },
+  }, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
+  engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  -- The menu starts where "foo.baz" does; "bar" keeps "foo." before it.
+  expect.equality(ui.last().startcol, 1)
+  local words = ui.words()
+  table.sort(words)
+  expect.equality(words, { "foo.bar", "foo.baz" })
+end
+
+T["typing releases the menu's frozen rows"] = function()
+  local buf = scratch("b")
+  fake.start({ name = "one", items = { { label = "bar" } } }, buf)
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  wait_opened(ui, 1)
+  local resets = ui.resets
+  engine:on_char(doc(buf, "b", 1), "")
+  expect.equality(ui.resets, resets)
+  engine:on_char(doc(buf, "ba", 2), "a")
+  expect.equality(ui.resets, resets + 1)
+end
+
 T["closing cancels every request still in flight"] = function()
   local buf = scratch("foo.ba")
   fake.start({ name = "a", items = { { label = "bar" } }, delay_ms = 50 }, buf)
