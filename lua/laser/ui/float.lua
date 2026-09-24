@@ -781,16 +781,18 @@ function M.new(opts)
         dismiss()
       end,
     })
-    -- <C-c> leaves Insert mode without InsertLeave.
+    -- <C-c> leaves Insert mode without InsertLeave, and <C-r>= enters the
+    -- command line without leaving Insert mode.
     vim.api.nvim_create_autocmd("ModeChanged", {
       group = group,
       callback = function()
-        if not vim.v.event.new_mode:find("^[ic]") then
+        if vim.v.event.new_mode:sub(1, 1) ~= mode then
           dismiss()
         end
       end,
     })
-    vim.api.nvim_create_autocmd({ "VimResized", "WinLeave", "CmdwinEnter" }, {
+    -- A nested command line such as <C-r>= does not leave the outer one.
+    vim.api.nvim_create_autocmd({ "VimResized", "WinLeave", "CmdwinEnter", "CmdlineEnter" }, {
       group = group,
       callback = function()
         dismiss()
