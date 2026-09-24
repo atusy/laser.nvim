@@ -54,15 +54,13 @@ local function initialize()
   initialized = true
 end
 
-local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
-
 ---Insert mode types plain candidates for dot-repeat and leaves snippets to
 ---expansion. The command line cannot expand snippets and takes their text.
 ---@param candidate table
 ---@return string?
 local function confirm_text(candidate)
   local item = candidate.user_data.laser.item
-  if item.insertTextFormat ~= SNIPPET then
+  if not require("laser.items").is_snippet(item) then
     return candidate.word
   elseif not engine or not engine.doc or engine.doc.mode == "i" then
     return nil

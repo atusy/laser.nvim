@@ -2,6 +2,12 @@ local M = {}
 
 local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
 
+---@param item lsp.CompletionItem
+---@return boolean
+function M.is_snippet(item)
+  return item.insertTextFormat == SNIPPET
+end
+
 ---@class laser.ConvertContext
 ---@field line string
 ---@field line_nr? integer 0-based line number
@@ -13,9 +19,10 @@ local SNIPPET = 2 -- lsp.InsertTextFormat.Snippet
 ---@field symbols? string non-keyword text before startcol, computed on demand
 ---@field bufnr? integer document whose 'iskeyword' applies
 
+---The item's edit range; the insert range of an InsertReplaceEdit.
 ---@param item lsp.CompletionItem
 ---@return lsp.Range?
-local function edit_range(item)
+function M.edit_range(item)
   local edit = item.textEdit
   if not edit then
     return nil
@@ -79,7 +86,7 @@ end
 ---@param ctx laser.ConvertContext
 ---@return integer?
 local function edit_start(item, ctx)
-  local range = edit_range(item)
+  local range = M.edit_range(item)
   if not range or (ctx.line_nr and range.start.line ~= ctx.line_nr) then
     return nil
   end

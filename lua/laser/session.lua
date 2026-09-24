@@ -269,7 +269,7 @@ function Session:candidates(doc, projection)
         end
       end
       table.insert(merged[i].highlights, {
-        name = "laser_prefix",
+        name = require("laser.highlight").PREFIX,
         type = "abbr",
         col = 1,
         width = #prefix,
