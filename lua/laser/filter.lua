@@ -352,31 +352,80 @@ function M.any(candidates, prefix, opts)
   return false
 end
 
----The default sorter's order with its keys computed once per candidate.
----@param current table[]
-local function sort_by_score(current)
+---@class laser.Ranked
+---@field candidate table
+---@field info? laser.MatchInfo
+---@field score number
+---@field key string
+---@field label string
+---@field index integer
+
+---The default sorter's order: higher score, then sortText or label, then
+---label, then input order.
+---@param a laser.Ranked
+---@param b laser.Ranked
+---@return boolean
+local function ranks_before(a, b)
+  if a.score ~= b.score then
+    return a.score > b.score
+  elseif a.key ~= b.key then
+    return a.key < b.key
+  elseif a.label ~= b.label then
+    return a.label < b.label
+  end
+  return a.index < b.index
+end
+
+---Order candidates as the default sorter does, with each key computed once.
+---With a limit, only the best `limit` are kept, which is cheaper than
+---sorting all of them.
+---@param candidates table[]
+---@param infos (laser.MatchInfo?)[] match info by candidate index
+---@param limit? integer
+---@return laser.Ranked[]
+local function rank(candidates, infos, limit)
   local keyed = {}
-  for i, candidate in ipairs(current) do
-    local info, item = candidate.user_data.laser.match_info, candidate.user_data.laser.item
+  for i, candidate in ipairs(candidates) do
+    local info, item = infos[i], candidate.user_data.laser.item
     keyed[i] = {
       candidate = candidate,
+      info = info,
       score = info and info.score or candidate.score or 0,
       key = item.sortText or item.label,
       label = item.label,
       index = i,
     }
   end
-  table.sort(keyed, function(a, b)
-    if a.score ~= b.score then
-      return a.score > b.score
-    elseif a.key ~= b.key then
-      return a.key < b.key
-    elseif a.label ~= b.label then
-      return a.label < b.label
+  if not limit or limit <= 0 or limit >= #keyed then
+    table.sort(keyed, ranks_before)
+    return keyed
+  end
+  local best = {}
+  for _, entry in ipairs(keyed) do
+    if #best < limit or ranks_before(entry, best[#best]) then
+      local low, high = 1, #best + 1
+      while low < high do
+        local middle = math.floor((low + high) / 2)
+        if ranks_before(entry, best[middle]) then
+          high = middle
+        else
+          low = middle + 1
+        end
+      end
+      table.insert(best, low, entry)
+      best[limit + 1] = nil
     end
-    return a.index < b.index
-  end)
-  for i, entry in ipairs(keyed) do
+  end
+  return best
+end
+
+---@param current table[] owned candidates, reordered in place
+local function sort_by_score(current)
+  local infos = {}
+  for i, candidate in ipairs(current) do
+    infos[i] = candidate.user_data.laser.match_info
+  end
+  for i, entry in ipairs(rank(current, infos)) do
     current[i] = entry.candidate
   end
 end
@@ -428,11 +477,30 @@ function M.apply(candidates, prefix, opts, limit)
   if truncate_after == 1 and first == 2 then
     survivors = vim.list_slice(survivors, 1, limit)
   end
-  -- Each render starts from server candidates, never from a previous conversion.
   local converts = false
   for i = first, #filters do
     converts = converts or filters[i].kind == "converter"
   end
+  -- The default sorter needs only the match info, so when converters alone
+  -- follow it, it ranks the cached candidates and only the kept are copied.
+  local sorter = filters[first]
+  if sorter and sorter.kind == "sorter" and sorter.callback == M.by_score then
+    local last_reorder = first
+    for i = first + 1, #filters do
+      if filters[i].kind ~= "converter" then
+        last_reorder = i
+      end
+    end
+    if last_reorder == first then
+      local ranked = rank(survivors, infos, truncate_after == first and limit or nil)
+      survivors, infos = {}, {}
+      for i, entry in ipairs(ranked) do
+        survivors[i], infos[i] = entry.candidate, entry.info
+      end
+      first = first + 1
+    end
+  end
+  -- Each render starts from server candidates, never from a previous conversion.
   local current = {}
   for i, candidate in ipairs(survivors) do
     current[i] = own_matched(candidate, infos[i], converts)

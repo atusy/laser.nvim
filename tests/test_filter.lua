@@ -443,4 +443,16 @@ T["decorations added by converters do not accumulate across renders"] = function
   expect.equality(input, original)
 end
 
+T["a limit keeps the first candidates of the full default order"] = function()
+  local list = {}
+  for i = 1, 200 do
+    -- Many ties in score and sortText, so every tiebreak takes part.
+    list[i] = cand("b" .. (i % 7) .. "x" .. (i % 3), { sortText = tostring(i % 5) })
+  end
+  local full = labels(filter.apply(list, "b", {}))
+  for _, limit in ipairs({ 1, 10, 57, 199 }) do
+    expect.equality(labels(filter.apply(list, "b", {}, limit)), vim.list_slice(full, 1, limit))
+  end
+end
+
 return T
