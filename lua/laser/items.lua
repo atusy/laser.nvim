@@ -70,21 +70,30 @@ function M.with_defaults(item, defaults)
   return result
 end
 
----Use the item's edit start when it is on the completion line and before the
----cursor. Items without an applicable range use the keyword boundary.
+---Byte column of the item's edit start when it is on the completion line and
+---not after the cursor; nil when the item has no applicable range.
+---@param item lsp.CompletionItem
+---@param ctx laser.ConvertContext
+---@return integer?
+local function edit_start(item, ctx)
+  local range = edit_range(item)
+  if not range or (ctx.line_nr and range.start.line ~= ctx.line_nr) then
+    return nil
+  end
+  local char = range.start.character
+  if char < 0 or char > vim.str_utfindex(ctx.line, ctx.encoding, ctx.cursor_col) then
+    return nil
+  end
+  return vim.str_byteindex(ctx.line, ctx.encoding, char, false)
+end
+
+---Use the item's edit start when it is applicable. Items without an
+---applicable range use the keyword boundary.
 ---@param item lsp.CompletionItem
 ---@param ctx laser.ConvertContext
 ---@return integer
 function M.start_col(item, ctx)
-  local range = edit_range(item)
-  if not range or (ctx.line_nr and range.start.line ~= ctx.line_nr) then
-    return ctx.startcol
-  end
-  local char = range.start.character
-  if char < 0 or char > vim.str_utfindex(ctx.line, ctx.encoding, ctx.cursor_col) then
-    return ctx.startcol
-  end
-  return vim.str_byteindex(ctx.line, ctx.encoding, char, false)
+  return edit_start(item, ctx) or ctx.startcol
 end
 
 ---@param item lsp.CompletionItem
@@ -108,16 +117,15 @@ end
 ---@return string
 local function word(item, ctx)
   local text = insert_text(item)
-  local range = edit_range(item)
-  if not range or item.insertTextFormat == SNIPPET then
+  local start = edit_start(item, ctx)
+  if not start or item.insertTextFormat == SNIPPET then
     return text
   end
-  local edit_start = vim.str_byteindex(ctx.line, ctx.encoding, range.start.character, false)
-  if edit_start > ctx.startcol then
-    return ctx.line:sub(ctx.startcol + 1, edit_start) .. text
+  if start > ctx.startcol then
+    return ctx.line:sub(ctx.startcol + 1, start) .. text
   end
-  if edit_start < ctx.startcol then
-    local shared = ctx.line:sub(edit_start + 1, ctx.startcol)
+  if start < ctx.startcol then
+    local shared = ctx.line:sub(start + 1, ctx.startcol)
     if vim.startswith(text, shared) then
       return text:sub(#shared + 1)
     end

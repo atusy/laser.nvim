@@ -140,4 +140,14 @@ T["missing or inapplicable ranges fall back to the keyword boundary"] = function
   end
 end
 
+T["an inapplicable range inserts newText from the keyword boundary"] = function()
+  for _, start in ipairs({ { line = 1, character = 1 }, { line = 0, character = 7 } }) do
+    local got = items.convert({
+      label = "bar",
+      textEdit = { newText = "bar", range = { start = start, ["end"] = start } },
+    }, ctx({ line = "foo.ba x", line_nr = 0 }))
+    expect.equality(got.word, "bar")
+  end
+end
+
 return T
