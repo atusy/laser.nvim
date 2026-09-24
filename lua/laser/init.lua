@@ -179,6 +179,17 @@ function M.complete(opts)
   local doc = document.current(opts.language_id)
   if not doc then
     M.close()
+    -- InsertEnter runs while the mode is still Normal; complete once Insert
+    -- mode has started.
+    local mode = vim.api.nvim_get_mode().mode
+    if mode == "n" then
+      vim.schedule(function()
+        local now = vim.api.nvim_get_mode().mode
+        if now == "i" or now == "c" then
+          M.complete(opts)
+        end
+      end)
+    end
     return
   end
   if not engine then

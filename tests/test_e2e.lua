@@ -359,6 +359,14 @@ T["an expression prompt entered from Insert mode closes its menu"] = function()
   expect.equality(child.fn.getcmdline(), "1+")
 end
 
+T["entering Insert mode completes at the cursor"] = function()
+  child.lua([[FAKE.start({ trigger_chars = { "." }, items = { { label = "bar" } } })]])
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "foo." })
+  type_keys("A")
+  wait_menu_items(1)
+  expect.equality(menu_labels(), { "bar" })
+end
+
 T["moving the selection does not reopen the menu"] = function()
   child.lua([[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" } } })]])
   type_keys("ib")
