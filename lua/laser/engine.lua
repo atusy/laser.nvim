@@ -196,6 +196,7 @@ function Engine:request(clients, ctx)
         encoding = client.offset_encoding,
         client_id = client.id,
         request = requested,
+        bufnr = doc.bufnr,
       }, token.received)
       token.received = true
       if partial then
@@ -248,7 +249,7 @@ function Engine:start(doc, ctx)
   end
   self.doc = doc
   self.session = Session.new({
-    startcol = position.keyword_start(doc.line, doc.col),
+    startcol = position.keyword_start(doc.line, doc.col, doc.bufnr),
     clients = session_clients,
   })
   self:request(clients, ctx)
@@ -288,7 +289,7 @@ function Engine:on_char(doc, char)
     or old.bufnr ~= doc.bufnr
     or old.mode ~= doc.mode
     or old.line_nr ~= doc.line_nr
-    or position.keyword_start(doc.line, doc.col) ~= session.keyword_start
+    or position.keyword_start(doc.line, doc.col, doc.bufnr) ~= session.keyword_start
     or doc.line:sub(1, session.keyword_start) ~= old.line:sub(1, session.keyword_start)
     or doc.line:sub(doc.col + 1) ~= old.line:sub(old.col + 1)
   then
