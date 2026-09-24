@@ -55,6 +55,10 @@ mapping can fall back to the key's default behavior. `laser.confirm()` closes
 the menu even when nothing is selected. `laser.close()` closes the menu and
 stops pending requests without restoring the typed text.
 
+Confirming applies the server's edits for the candidate, including edits
+elsewhere in the buffer such as imports. When a server provides those only
+on request, confirming waits for them for up to a second.
+
 ```lua
 vim.keymap.set("i", "<LeftMouse>", function()
   if not laser.select_mouse() then
