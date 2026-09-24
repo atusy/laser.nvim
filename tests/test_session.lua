@@ -283,6 +283,12 @@ T["candidates hidden by max_items do not widen the menu"] = function()
   expect.equality(got[1].word, "bar")
 end
 
+T["items without a string label are left out"] = function()
+  local s = Session.new({ startcol = 4, clients = { [1] = { name = "lua_ls" } } })
+  s:set_result(1, { { insertText = "bare" }, { label = 1 }, "junk", { label = "bar" } }, ctx(1))
+  expect.equality(labels(s:candidates("")), { "bar" })
+end
+
 T["JSON null fields in a response count as absent"] = function()
   local s = Session.new({ startcol = 4, clients = { [1] = { name = "lua_ls" } } })
   s:set_result(1, {
