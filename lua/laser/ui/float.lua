@@ -2,12 +2,13 @@
 ---viewport are drawn; column widths still visit every candidate.
 local M = {}
 
+local borders = require("laser.ui.border")
+local columns = require("laser.ui.columns")
 local feedkeys = require("laser.ui.feedkeys")
 local relaxed = require("laser.ui.relaxed")
 local highlight = require("laser.highlight")
 
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
-local COLUMNS = { "abbr", "kind", "menu" }
 -- Search matches in candidates or documentation are unrelated to completion.
 local WINHIGHLIGHT = "Normal:Pmenu,FloatBorder:Pmenu,Search:None,CurSearch:None,IncSearch:None"
 local SELECTED =
@@ -42,43 +43,6 @@ end
 ---@field max_height? integer defaults to 20
 ---@field border? string|(string|string[])[] nvim_open_win() border
 
----@class laser.BorderSides
----@field top integer
----@field right integer
----@field bottom integer
----@field left integer
-
----Cells a nvim_open_win() border takes on each side. An edge whose character
----is empty is not drawn, and "shadow" has only right and bottom edges.
----@param border? string|table
----@return laser.BorderSides
-local function border_sides(border)
-  if border == nil or border == "none" or border == "" then
-    return { top = 0, right = 0, bottom = 0, left = 0 }
-  elseif border == "shadow" then
-    return { top = 0, right = 1, bottom = 1, left = 0 }
-  elseif type(border) == "string" then
-    return { top = 1, right = 1, bottom = 1, left = 1 }
-  end
-  -- Clockwise from the top-left corner; shorter lists repeat.
-  local function edge(index)
-    local part = border[(index - 1) % #border + 1]
-    if type(part) == "table" then
-      part = part[1]
-    end
-    return (part and part ~= "") and 1 or 0
-  end
-  return { top = edge(2), right = edge(4), bottom = edge(6), left = edge(8) }
-end
-
----Border of a drawn window. Read from the window, since options passed to
----later calls may differ from those it was drawn with.
----@param win_id integer
----@return laser.BorderSides
-local function drawn_border(win_id)
-  return border_sides(vim.api.nvim_win_get_config(win_id).border)
-end
-
 ---@param opts laser.MenuOpts
 ---@return integer
 local function max_height(opts)
@@ -86,85 +50,6 @@ local function max_height(opts)
     return opts.max_height
   end
   return vim.o.pumheight > 0 and vim.o.pumheight or 10
-end
-
----@param item table
----@param name string
----@return string
-local function field(item, name)
-  local text
-  if name == "abbr" then
-    text = item.abbr or item.word or ""
-  else
-    text = item[name] or ""
-  end
-  -- A newline cannot be drawn in a row and a tab is wider than one cell.
-  -- Replace each control byte with one space so highlight offsets still hold.
-  if text:find("%c") then
-    text = text:gsub("%c", " ")
-  end
-  return text
-end
-
----Cut `text` to at most `width` display cells and pad it to exactly `width`.
----@param text string
----@param width integer
----@return string padded
----@return integer kept byte length of the text before the padding
-local function fit(text, width)
-  local cells = vim.api.nvim_strwidth(text)
-  if cells > width then
-    -- Every character takes at least one cell, so start from `width` of them
-    -- and drop only what wide characters push past the limit. Composing
-    -- characters take no cell and stay with their base character.
-    local chars = width
-    local original = text
-    text = vim.fn.strcharpart(original, 0, chars, 1)
-    cells = vim.api.nvim_strwidth(text)
-    while chars > 0 and cells > width do
-      chars = chars - 1
-      text = vim.fn.strcharpart(original, 0, chars, 1)
-      cells = vim.api.nvim_strwidth(text)
-    end
-  end
-  return text .. string.rep(" ", width - cells), #text
-end
-
----Column widths over every candidate, so the menu does not jitter on scroll.
----@param items table[]
----@param limit integer
----@param cells table<string, integer> display widths already measured
----@return table<string, integer>
-local function measure(items, limit, cells)
-  local widths = {}
-  for _, name in ipairs(COLUMNS) do
-    local width = 0
-    for _, item in ipairs(items) do
-      local text = field(item, name)
-      local cell = cells[text]
-      if not cell then
-        cell = vim.api.nvim_strwidth(text)
-        cells[text] = cell
-      end
-      width = math.max(width, cell)
-    end
-    widths[name] = width
-  end
-  -- Give up the least important columns first when the menu is too wide.
-  for _, name in ipairs({ "menu", "kind", "abbr" }) do
-    local total, shown = 0, 0
-    for _, other in ipairs(COLUMNS) do
-      if widths[other] > 0 then
-        total, shown = total + widths[other], shown + 1
-      end
-    end
-    local excess = total + math.max(shown - 1, 0) - limit
-    if excess <= 0 then
-      break
-    end
-    widths[name] = math.max(widths[name] - excess, 0)
-  end
-  return widths
 end
 
 ---@class laser.FloatUI: laser.UI
@@ -258,7 +143,7 @@ function M.new(opts)
   end
 
   local function border_rows()
-    local sides = border_sides(menu.border)
+    local sides = borders.sides(menu.border)
     return sides.top + sides.bottom
   end
 
@@ -268,7 +153,7 @@ function M.new(opts)
   local function window_origin()
     local win_id = vim.api.nvim_get_current_win()
     local origin = vim.fn.win_screenpos(win_id)
-    local border = drawn_border(win_id)
+    local border = borders.drawn(win_id)
     local winbar = vim.fn.getwininfo(win_id)[1].winbar
     return origin[1] + border.top + winbar, origin[2] + border.left
   end
@@ -349,25 +234,6 @@ function M.new(opts)
     return first, first + size - 1
   end
 
-  ---@param item table
-  ---@return string line
-  ---@return table<string, { [1]: integer, [2]: integer }> spans 0-based byte range of each field's text, without padding
-  local function format(item)
-    local parts, spans, offset = {}, {}, 0
-    for _, name in ipairs(COLUMNS) do
-      if widths[name] > 0 then
-        local text, kept = fit(field(item, name), widths[name])
-        if #parts > 0 then
-          offset = offset + 1
-        end
-        spans[name] = { offset, offset + kept }
-        parts[#parts + 1] = text
-        offset = offset + #text
-      end
-    end
-    return table.concat(parts, " "), spans
-  end
-
   ---Highlights for the characters the matcher matched, computed only for
   ---rows being drawn. Candidates decorated by a converter keep their own.
   ---@param item table
@@ -388,7 +254,7 @@ function M.new(opts)
     end
     -- Positions index the matched text; padding for an earlier edit start is
     -- not part of it, and a label shown differently must be matched again.
-    local shown = field(item, "abbr"):sub(pad + 1)
+    local shown = columns.field(item, "abbr"):sub(pad + 1)
     if shown ~= (data.item.filterText or data.item.label) then
       -- Match what the user typed, not a candidate the menu inserted. A
       -- candidate starts at or after the menu start, so its input is the
@@ -403,7 +269,7 @@ function M.new(opts)
     local lines, decorations = {}, {}
     for row = 1, height() do
       local index = index_at(row)
-      local line, spans = format(items[index])
+      local line, spans = columns.format(items[index], widths)
       if layout.scrollbar then
         line = line .. " "
       end
@@ -459,7 +325,7 @@ function M.new(opts)
     placed_tick = mode == "i" and vim.b.changedtick or nil
     placed_view = mode == "i" and vim.fn.winsaveview() or nil
     local total = 0
-    for _, name in ipairs(COLUMNS) do
+    for _, name in ipairs(columns.NAMES) do
       if widths[name] > 0 then
         total = total + widths[name] + (total > 0 and 1 or 0)
       end
@@ -477,7 +343,7 @@ function M.new(opts)
     }
     -- Position against the editor so the menu stays where it is computed
     -- here; Neovim would otherwise shift a window that does not fit.
-    local sides = border_sides(config.border)
+    local sides = borders.sides(config.border)
     local row = anchor_row()
     local outer_width = config.width + sides.left + sides.right
     config.relative = "editor"
@@ -523,10 +389,10 @@ function M.new(opts)
       return false
     end
     local options = type(menu.preview) == "table" and menu.preview or {}
-    local own = border_sides(options.border)
+    local own = borders.sides(options.border)
     local border = own.left + own.right
     local anchor = vim.api.nvim_win_get_config(win)
-    local sides = drawn_border(win)
+    local sides = borders.drawn(win)
     local right = anchor.col + sides.left + anchor.width + sides.right
     local right_room = vim.o.columns - right - border
     local left_room = anchor.col - border
@@ -799,9 +665,9 @@ function M.new(opts)
     compute_layout()
     -- The fields share the screen width, within max_width, with the border
     -- and the scrollbar.
-    local sides = border_sides(menu.border)
+    local sides = borders.sides(menu.border)
     local limit = math.min(menu.max_width or 80, vim.o.columns - sides.left - sides.right)
-    widths = measure(items, limit - (layout.scrollbar and 1 or 0), cells)
+    widths = columns.measure(items, limit - (layout.scrollbar and 1 or 0), cells)
     top = math.max(1, math.min(top, #items - height() + 1))
     -- A shorter menu keeps the selection in view.
     if cursor > 0 and cursor >= top + height() then
@@ -1079,7 +945,7 @@ function M.new(opts)
     -- getmousepos() reports the window below a non-focusable float.
     local pos = vim.fn.getmousepos()
     local origin = vim.fn.win_screenpos(win)
-    local border = drawn_border(win)
+    local border = borders.drawn(win)
     local row = pos.screenrow - origin[1] + 1 - border.top
     local col = pos.screencol - origin[2] + 1 - border.left
     if row < 1 or row > height() or col < 1 or col > vim.api.nvim_win_get_width(win) then
