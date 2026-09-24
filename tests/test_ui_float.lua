@@ -162,6 +162,21 @@ T["auto_select highlights the first candidate without freezing the menu"] = func
   expect.equality(vim.api.nvim_get_current_line(), "b")
 end
 
+T["the first preselected candidate is highlighted without inserting it"] = function()
+  set_line("b")
+  local ui = new()
+  local items = {}
+  for i = 1, 30 do
+    items[i] = candidate("b" .. i, { preselect = i == 20 or i == 25 })
+  end
+  ui.open(1, items, "i")
+  expect.equality(ui.selected(), 20)
+  expect.equality(ui.frozen_count(), 0)
+  expect.equality(vim.api.nvim_get_current_line(), "b")
+  -- The selection is scrolled into view.
+  expect.equality(vim.tbl_contains(rows(ui), "b20 "), true)
+end
+
 ---Put the cursor on the last screen row of a long buffer.
 local function cursor_at_bottom()
   local lines = {}

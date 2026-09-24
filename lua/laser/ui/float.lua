@@ -55,7 +55,7 @@ end
 ---@field max_height? integer rows shown at once; defaults to 'pumheight' or 10
 ---@field max_width? integer columns shown at once; defaults to 80
 ---@field border? string|(string|string[])[] nvim_open_win() border
----@field auto_select? boolean highlight the first candidate without inserting it
+---@field auto_select? boolean highlight the first candidate without inserting it; a candidate the server preselects is highlighted regardless
 ---@field direction? "auto"|"below"|"above" "auto" opens below unless the rows do not fit there and above has more room; the command-line menu always opens above
 ---@field reversed? boolean list candidates bottom-up when the menu opens above
 ---@field preview? boolean|laser.PreviewOpts show documentation of the selected candidate
@@ -847,9 +847,22 @@ function M.new(opts)
   ---@param col integer 1-based
   ---@param new_items table[]
   ---@param new_mode "i"|"c"
+  ---The first candidate the server preselects, else the first one under
+  ---auto_select, else the typed input.
+  ---@param new_items table[]
+  ---@return integer
+  local function initial_selection(new_items)
+    for i, item in ipairs(new_items) do
+      if item.preselect then
+        return i
+      end
+    end
+    return menu.auto_select and #new_items > 0 and 1 or 0
+  end
+
   function ui.open(col, new_items, new_mode)
     top = 1
-    cursor = menu.auto_select and #new_items > 0 and 1 or 0
+    cursor = initial_selection(new_items)
     browsing, frozen, initial_cursor = false, 0, cursor
     local state = text_state(new_mode)
     typed = state.line:sub(col, state.col)
