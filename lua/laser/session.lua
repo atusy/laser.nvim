@@ -59,14 +59,17 @@ function Session:set_result(client_id, result, ctx, append)
   -- Reused per item: conversion reads the context but does not retain it.
   local item_ctx = vim.tbl_extend("force", {}, ctx)
   for _, item in ipairs(lsp_items) do
-    item = items.with_defaults(item, defaults)
-    local startcol = items.start_col(item, ctx)
-    item_ctx.startcol = startcol
-    local candidate = items.convert(item, item_ctx)
-    candidate.user_data.laser.startcol = startcol
-    self.next_id = self.next_id + 1
-    candidate.user_data.laser.id = self.next_id
-    table.insert(candidates, candidate)
+    -- The label is the one field every item needs; skip malformed ones.
+    if type(item) == "table" and type(item.label) == "string" then
+      item = items.with_defaults(item, defaults)
+      local startcol = items.start_col(item, ctx)
+      item_ctx.startcol = startcol
+      local candidate = items.convert(item, item_ctx)
+      candidate.user_data.laser.startcol = startcol
+      self.next_id = self.next_id + 1
+      candidate.user_data.laser.id = self.next_id
+      table.insert(candidates, candidate)
+    end
   end
   self.results[client_id] =
     { candidates = candidates, incomplete = incomplete, defaults = defaults }
