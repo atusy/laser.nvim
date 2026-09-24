@@ -70,24 +70,19 @@ function Engine:render()
   local frozen = vim.list_slice(self.displayed or {}, 1, count)
   local projection
   if #frozen > 0 then
-    local exclude = {}
+    local exclude, used = {}, {}
     for _, item in ipairs(frozen) do
-      exclude[item.user_data.laser.id] = true
+      local data = item.user_data.laser
+      exclude[data.id] = true
+      used[data.client_id] = (used[data.client_id] or 0) + 1
     end
-    projection = { exclude = exclude, startcol = session.startcol }
+    projection = { exclude = exclude, used = used, startcol = session.startcol }
   end
   local items, startcol = session:candidates(doc, projection)
   if #frozen > 0 then
     vim.list_extend(frozen, items)
     items = frozen
   end
-  local counts = {}
-  items = vim.tbl_filter(function(item)
-    local client_id = item.user_data.laser.client_id
-    local max_items = (session.clients[client_id].opts or {}).max_items
-    counts[client_id] = (counts[client_id] or 0) + 1
-    return not max_items or max_items <= 0 or counts[client_id] <= max_items
-  end, items)
   if #items == 0 then
     self.ui.close()
     return
