@@ -49,6 +49,19 @@ local function line()
   return child.api.nvim_get_current_line()
 end
 
+T["leaving the mode releases callbacks waiting for discarded keys"] = function()
+  child.lua([[
+    vim.keymap.set("i", "<F3>", function()
+      UI.select(1)
+      -- Typeahead can be discarded, e.g. by <C-c>, before the queued keys run.
+      vim.api.nvim_exec_autocmds("InsertLeave", {})
+      PENDING = require("laser.ui.float")._pending_count()
+    end)
+  ]])
+  type_keys("ib<F2><F3>")
+  expect.equality(child.lua_get("PENDING"), 0)
+end
+
 T["select inserts candidates and stepping past the end restores the typed input"] = function()
   type_keys("ib<F2><C-n>")
   expect.equality(line(), "bar")
