@@ -176,7 +176,7 @@ function M.complete(opts)
   initialize()
   local ui = get_menu()
   ui.configure(opts.menu)
-  if ui.skip_text_change() then
+  if ui.take_own_change() then
     return
   end
   local document = require("laser.document")

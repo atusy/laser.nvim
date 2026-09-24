@@ -113,7 +113,7 @@ T["only the menu's own edit is skipped as a text change"] = function()
   child.lua([[
     SKIPPED = {}
     vim.api.nvim_create_autocmd("TextChangedI", {
-      callback = function() table.insert(SKIPPED, UI.skip_text_change()) end,
+      callback = function() table.insert(SKIPPED, UI.take_own_change()) end,
     })
   ]])
   type_keys("ib")
@@ -203,7 +203,7 @@ T["command-line insertion, cancellation and confirmation edit the command line"]
   type_keys(":b<F2><C-n>")
   expect.equality(child.fn.getcmdline(), "bar")
   expect.equality(child.fn.getcmdpos(), 4)
-  expect.equality(child.lua_get("UI.skip_text_change()"), true)
+  expect.equality(child.lua_get("UI.take_own_change()"), true)
   type_keys("<C-e>")
   expect.equality(child.fn.getcmdline(), "b")
   type_keys("<F2><C-n><C-n><C-y>")
@@ -286,10 +286,10 @@ end
 
 T["a confirmation without edits does not skip the next completion"] = function()
   -- Completion consumes the menu's own change on each text change.
-  child.lua([[vim.api.nvim_create_autocmd("TextChangedI", { callback = UI.skip_text_change })]])
+  child.lua([[vim.api.nvim_create_autocmd("TextChangedI", { callback = UI.take_own_change })]])
   type_keys("ib<F2><C-n><C-y><Esc>a")
   expect.equality(line(), "bar")
-  expect.equality(child.lua_get("UI.skip_text_change()"), false)
+  expect.equality(child.lua_get("UI.take_own_change()"), false)
 end
 
 for _, delcombine in ipairs({ false, true }) do
@@ -397,7 +397,7 @@ T["the menu's own change is recognized once, not when later input returns to it"
   child.lua([[
     SKIPPED = {}
     vim.api.nvim_create_autocmd("TextChangedI", {
-      callback = function() table.insert(SKIPPED, UI.skip_text_change()) end,
+      callback = function() table.insert(SKIPPED, UI.take_own_change()) end,
     })
   ]])
   type_keys("ib<F2>")
@@ -432,7 +432,7 @@ T["typing that scrolls the window sideways keeps the menu open"] = function()
     -- Like completion, redraw the menu from the current input on every change.
     vim.api.nvim_create_autocmd("TextChangedI", {
       callback = function()
-        if not UI.skip_text_change() then UI.open(START or 1, ITEMS, "i") end
+        if not UI.take_own_change() then UI.open(START or 1, ITEMS, "i") end
       end,
     })
   ]])
@@ -460,13 +460,13 @@ T["the command-line menu stays above the command line with cmdheight=0"] = funct
 end
 
 T["a confirmation without edits leaves no change to skip within Insert mode"] = function()
-  child.lua([[vim.api.nvim_create_autocmd("TextChangedI", { callback = UI.skip_text_change })]])
+  child.lua([[vim.api.nvim_create_autocmd("TextChangedI", { callback = UI.take_own_change })]])
   type_keys("ib<F2>")
   type_keys("<C-n>")
   type_keys("<C-y>")
   type_keys("<Left><Right>")
   expect.equality(child.api.nvim_get_mode().mode, "i")
-  expect.equality(child.lua_get("UI.skip_text_change()"), false)
+  expect.equality(child.lua_get("UI.take_own_change()"), false)
 end
 
 T["clicking right of the menu selects nothing"] = function()
@@ -526,7 +526,7 @@ T["control characters in candidates are inserted literally"] = function()
     ITEMS = { { word = "bar\tbaz", abbr = "bar", user_data = { laser = { client_id = 1, item = { label = "bar" } } } } }
     SKIPPED = {}
     vim.api.nvim_create_autocmd("TextChangedI", {
-      callback = function() table.insert(SKIPPED, UI.skip_text_change()) end,
+      callback = function() table.insert(SKIPPED, UI.take_own_change()) end,
     })
   ]])
   type_keys("ib")
