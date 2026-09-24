@@ -25,29 +25,34 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
 })
 
 local laser = require("laser")
-vim.keymap.set({ "i", "c" }, "<C-n>", function()
-  laser.select(1)
-end)
-vim.keymap.set({ "i", "c" }, "<C-p>", function()
-  laser.select(-1)
-end)
-vim.keymap.set({ "i", "c" }, "<C-y>", function()
-  laser.confirm()
-end)
-vim.keymap.set({ "i", "c" }, "<C-e>", function()
-  laser.cancel()
-end)
+-- Act on the menu while it is open; otherwise keep the key's own behavior.
+local function map(key, action)
+  vim.keymap.set({ "i", "c" }, key, function()
+    if laser.visible() then
+      action()
+    else
+      vim.api.nvim_feedkeys(vim.keycode(key), "n", false)
+    end
+  end)
+end
+map("<C-n>", function() laser.select(1) end)
+map("<C-p>", function() laser.select(-1) end)
+map("<C-y>", laser.confirm)
+map("<C-e>", laser.cancel)
 ```
 
 `laser.select(delta)` inserts the selected candidate as you move; pass
-`{ insert = false }` to only highlight it. Single steps cycle back to what you
-typed, and larger steps, such as paging with `laser.select(10)`, stop at the
-first or last candidate.
+`{ insert = false }` to only highlight it. A candidate that would split the
+line, with a newline or by automatic wrapping, is only highlighted and is
+inserted when you confirm it. Single steps cycle back to what you typed, and
+larger steps, such as paging with `laser.select(10)`, stop at the first or last
+candidate.
 
 Actions edit text and windows, so call them from regular mappings as above,
 not from `<expr>` mappings. Each returns `false` when it did nothing, so a
 mapping can fall back to the key's default behavior. `laser.confirm()` closes
-the menu even when nothing is selected.
+the menu even when nothing is selected. `laser.close()` closes the menu and
+stops pending requests without restoring the typed text.
 
 ```lua
 vim.keymap.set("i", "<LeftMouse>", function()
@@ -158,20 +163,28 @@ require("laser").complete({ enable_commit_characters = true })
 
 Fuzzy matching and score sorting are enabled by default. Equal scores follow
 the server's `sortText`, then the label, so an empty input shows the server's
-ranking. The menu highlights the matched characters with `PmenuMatch` (`PmenuMatchSel` on the
-selected row). Custom matchers get the same highlighting when they return
-match positions. Link `PmenuMatch` and `PmenuMatchSel` to `Pmenu` and
-`PmenuSel` to turn it off.
+ranking. The menu highlights the matched characters with `PmenuMatch`
+(`PmenuMatchSel` on the selected row). Matchers in `filters` get the same
+highlighting when their match info includes `positions`; the older `matcher`
+option returns only a score. Link `PmenuMatch` and `PmenuMatchSel` to `Pmenu`
+and `PmenuSel` to turn it off.
 
 Converters in your filters may add their own `highlights`, and the menu draws
-them. `require("laser.filter").highlight_converter()` computes the match
-highlights for every displayed candidate in advance; the menu then uses those
-instead of its own.
+them. Each entry is `{ type = "abbr"|"kind"|"menu", col = 1, width = 3,
+hl_group = "Special" }`, where `col` is the 1-based byte column in that field
+and `width` its length in bytes. `require("laser.filter").highlight_converter()`
+computes the match highlights for every displayed candidate in advance; the
+menu then uses those instead of its own.
+
+The menu uses `Pmenu`, `PmenuSel`, `PmenuKind`, `PmenuKindSel`, `PmenuExtra`,
+`PmenuExtraSel`, `PmenuSbar` and `PmenuThumb`, like the built-in popup menu.
 
 For custom matching, sorting, or refresh behavior, see the API details in [filters](lua/laser/filter.lua), [refresh helpers](lua/laser/refresh.lua), and [completion options](lua/laser/init.lua).
 
 By default, edits that no longer retain the previous input as a prefix trigger
-a background refresh, even when cached candidates still match. The menu keeps
+a background refresh, even when cached candidates still match. So does a
+request that was cancelled, timed out or failed, which a refresh callback sees
+as `ctx.interrupted`. The menu keeps
 matching cached candidates until the new response replaces that client's results.
 Custom refresh callbacks can use `require("laser.refresh").extendsPreviousInput(ctx)`
 to make the same comparison; identical input counts as extending the previous input.
