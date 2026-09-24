@@ -144,57 +144,6 @@ M.toggle_preview = action("toggle_preview")
 ---Whether the menu is open.
 M.visible = action("visible")
 
----@param opts laser.CompleteOpts
----@return laser.Doc?
-local function document(opts)
-  local mode = vim.api.nvim_get_mode().mode:sub(1, 1)
-  if mode == "c" then
-    if not opts.language_id then
-      return
-    end
-    local cmdline = require("laser.cmdline")
-    local doc = cmdline.ensure_buffer(opts.language_id)
-    local text = vim.fn.getcmdline()
-    cmdline.set_text(doc.bufnr, text)
-    return {
-      bufnr = doc.bufnr,
-      uri = doc.uri,
-      line_nr = 0,
-      line = text,
-      col = vim.fn.getcmdpos() - 1,
-      mode = "c",
-    }
-  elseif mode == "i" then
-    local buf = vim.api.nvim_get_current_buf()
-    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-    return {
-      bufnr = buf,
-      uri = vim.uri_from_bufnr(buf),
-      line_nr = row - 1,
-      line = vim.api.nvim_get_current_line(),
-      col = col,
-      mode = "i",
-    }
-  end
-end
-
----Return the inserted character only for a single-character insertion at the
----previous cursor. Deletions, replacements and cursor moves are not triggers.
-local function inserted_char(old, doc)
-  if not old or old.bufnr ~= doc.bufnr or old.line_nr ~= doc.line_nr or old.mode ~= doc.mode then
-    return ""
-  end
-  if
-    doc.col <= old.col
-    or doc.line:sub(1, old.col) ~= old.line:sub(1, old.col)
-    or doc.line:sub(doc.col + 1) ~= old.line:sub(old.col + 1)
-  then
-    return ""
-  end
-  local char = doc.line:sub(old.col + 1, doc.col)
-  return vim.fn.strchars(char) == 1 and char or ""
-end
-
 ---Start or update completion at the current cursor. Options belong to this
 ---call; changing client options invalidates that client. No setup is required.
 ---@param opts? laser.CompleteOpts
@@ -206,7 +155,8 @@ function M.complete(opts)
   if ui.skip_text_change() then
     return
   end
-  local doc = document(opts)
+  local document = require("laser.document")
+  local doc = document.current(opts.language_id)
   if not doc then
     M.close()
     return
@@ -217,7 +167,7 @@ function M.complete(opts)
   engine.enable_commit_characters = opts.enable_commit_characters == true
   engine.clients = vim.deepcopy(opts.clients)
   engine.client_options = vim.deepcopy(opts.clientOptions or {})
-  engine:on_char(doc, inserted_char(engine.doc, doc))
+  engine:on_char(doc, document.inserted_char(engine.doc, doc))
 end
 
 ---@return laser.Engine?
