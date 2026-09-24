@@ -6,11 +6,10 @@ local borders = require("laser.ui.border")
 local columns = require("laser.ui.columns")
 local feedkeys = require("laser.ui.feedkeys")
 local relaxed = require("laser.ui.relaxed")
+local style = require("laser.ui.style")
 local highlight = require("laser.highlight")
 
 local ns = vim.api.nvim_create_namespace("laser.ui.float")
--- Search matches in candidates or documentation are unrelated to completion.
-local WINHIGHLIGHT = "Normal:Pmenu,FloatBorder:Pmenu,Search:None,CurSearch:None,IncSearch:None"
 local SELECTED =
   { PmenuMatch = "PmenuMatchSel", PmenuKind = "PmenuKindSel", PmenuExtra = "PmenuExtraSel" }
 
@@ -92,16 +91,29 @@ function M.new(opts)
   local browsing, frozen, initial_cursor = false, 0, 0
   local layout = { height = 0, above = false, reversed = false, scrollbar = false }
   local shown -- text state the menu was drawn for
-  local preview_buf, preview_win, cancel_resolve
-  -- Resolved documentation by candidate id. Ids restart with each completion
-  -- session, so the cache lives only while the menu is open.
-  local resolved = {}
   -- Display widths of field texts. Kinds and details repeat across candidates
   -- and labels across keystrokes; cleared with the menu to stay bounded.
   local cells = {}
-  local preview_hidden = false
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
   local dismiss, redraw, watch, layout_and_draw, reconcile
+  local preview = require("laser.ui.preview_window").new({
+    menu_win = function()
+      return win
+    end,
+    above = function()
+      return layout.above
+    end,
+    options = function()
+      return menu.preview
+    end,
+    visible = function()
+      return ui.visible()
+    end,
+    redraw = function()
+      redraw()
+    end,
+    context = opts.preview_context,
+  })
   local closing = false -- the menu is closing its own window
   -- Typeahead can leave the mode before the menu's own change is observed.
   -- Unlike the window watchers, this outlives each menu window. ModeChanged
@@ -355,7 +367,7 @@ function M.new(opts)
     else
       config.noautocmd = true
       win = vim.api.nvim_open_win(ensure_buf(), false, config)
-      vim.wo[win].winhighlight = WINHIGHLIGHT
+      vim.wo[win].winhighlight = style.WINHIGHLIGHT
       vim.wo[win].wrap = false
       vim.wo[win].winblend = vim.o.pumblend
       -- Watchers read the current state, so one set serves the window's life.
@@ -363,185 +375,17 @@ function M.new(opts)
     end
   end
 
-  local function hide_preview()
-    if preview_win and vim.api.nvim_win_is_valid(preview_win) then
-      vim.api.nvim_win_close(preview_win, true)
-    end
-    preview_win = nil
-  end
-
-  local function close_preview()
-    if cancel_resolve then
-      cancel_resolve()
-      cancel_resolve = nil
-    end
-    hide_preview()
-  end
-
-  ---@type { width: integer, max_height: integer }
-  local preview_size -- natural size of the drawn documentation
-
-  ---Put the preview beside the menu, or on its left when the right is too
-  ---narrow. The menu's configured position is where it is drawn.
-  ---@return boolean placed false when there is no room and it was hidden
-  local function place_preview()
-    if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
-      return false
-    end
-    local options = type(menu.preview) == "table" and menu.preview or {}
-    local own = borders.sides(options.border)
-    local border = own.left + own.right
-    local anchor = vim.api.nvim_win_get_config(win)
-    local sides = borders.drawn(win)
-    local right = anchor.col + sides.left + anchor.width + sides.right
-    local right_room = vim.o.columns - right - border
-    local left_room = anchor.col - border
-    -- Never cover the menu: narrow the preview to the side it goes on.
-    local width, col = preview_size.width, right
-    if width > right_room and left_room > right_room then
-      width = math.min(width, left_room)
-      col = anchor.col - width - border
-    else
-      width = math.min(width, right_room)
-    end
-    if width < 1 then
-      hide_preview()
-      return false
-    end
-    -- The preview wraps; let Neovim count the rows at this width, including
-    -- tabs and wide characters that do not split across rows.
-    vim.api.nvim_win_set_config(preview_win, { width = width })
-    local height = vim.api.nvim_win_text_height(preview_win, {}).all
-    height = math.min(height, preview_size.max_height)
-    -- Stay on the menu's side of the cursor line, and above the command line.
-    local borders = own.top + own.bottom
-    local row
-    if layout.above then
-      -- Grow upward from the menu's bottom edge.
-      local bottom = anchor.row + anchor.height + sides.top + sides.bottom
-      height = math.max(1, math.min(height, bottom - borders))
-      row = math.max(0, bottom - height - borders)
-    else
-      -- Grow downward from the menu's top edge.
-      local limit = vim.o.lines - vim.o.cmdheight
-      height = math.max(1, math.min(height, limit - anchor.row - borders))
-      row = anchor.row
-    end
-    vim.api.nvim_win_set_config(preview_win, {
-      relative = "editor",
-      row = row,
-      col = col,
-      width = width,
-      height = height,
-      border = options.border or "none",
-    })
-    return true
-  end
-
-  ---@param text string
-  ---@param filetype string
-  local function draw_preview(text, filetype)
-    if not ui.visible() then
-      return
-    end
-    if text == "" then
-      hide_preview()
-      return
-    end
-    local options = type(menu.preview) == "table" and menu.preview or {}
-    if not (preview_buf and vim.api.nvim_buf_is_valid(preview_buf)) then
-      preview_buf = vim.api.nvim_create_buf(false, true)
-      vim.bo[preview_buf].bufhidden = "hide"
-    end
-    local lines = vim.split(text, "\n", { plain = true })
-    vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
-    -- Setting 'filetype' reruns FileType handlers even for the same value.
-    if vim.bo[preview_buf].filetype ~= filetype then
-      vim.bo[preview_buf].filetype = filetype
-    end
-    local width = 1
-    for _, line in ipairs(lines) do
-      width = math.max(width, vim.fn.strdisplaywidth(line))
-    end
-    preview_size = {
-      width = math.min(width, options.max_width or 60),
-      max_height = options.max_height or 20,
-    }
-    if not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
-      preview_win = vim.api.nvim_open_win(preview_buf, false, {
-        relative = "editor",
-        row = 0,
-        col = 0,
-        width = preview_size.width,
-        height = 1,
-        style = "minimal",
-        focusable = false,
-        zindex = 201,
-        noautocmd = true,
-      })
-      vim.wo[preview_win].winhighlight = WINHIGHLIGHT
-      vim.wo[preview_win].wrap = true
-      -- Windows inherit folding; documentation should be shown whole.
-      vim.wo[preview_win].foldenable = false
-      vim.wo[preview_win].winblend = vim.o.pumblend
-    end
-    if not place_preview() then
-      return
-    end
-    vim.api.nvim_win_call(preview_win, function()
-      -- Scrolling moved the cursor too; Neovim would keep it in view.
-      vim.fn.winrestview({ topline = 1, lnum = 1 })
-    end)
-  end
-
-  ---Show the selected candidate's documentation, then its resolved version.
-  local function update_preview()
-    if cancel_resolve then
-      cancel_resolve()
-      cancel_resolve = nil
-    end
-    local item = items[cursor]
-    if not menu.preview or preview_hidden or not item or not ui.visible() then
-      close_preview()
-      return
-    end
-    local id = item.user_data.laser.id
-    if id and resolved[id] then
-      draw_preview(unpack(resolved[id]))
-      return
-    end
-    local preview = require("laser.preview")
-    local lsp_item = item.user_data.laser.item
-    draw_preview(preview.info(lsp_item))
-    local context = opts.preview_context and opts.preview_context(item)
-    if context and context.client then
-      cancel_resolve = preview.resolve(lsp_item, context.client, context.bufnr, function(info, ft)
-        if id then
-          resolved[id] = { info, ft }
-        end
-        draw_preview(info, ft)
-        redraw()
-      end)
-    end
-  end
-
   ---@return integer?
   function ui.preview_win()
-    return preview_win
+    return preview.win()
   end
 
   ---@param delta integer lines to scroll; negative scrolls up
   ---@return boolean handled
   function ui.scroll_preview(delta)
-    -- A zero count would make the scroll command move one line.
-    if delta == 0 or not (preview_win and vim.api.nvim_win_is_valid(preview_win)) then
+    if not preview.scroll(delta) then
       return false
     end
-    vim.api.nvim_win_call(preview_win, function()
-      local key = delta > 0 and "\5" or "\25"
-      -- :normal passes through Normal mode; the menu must not see it leave.
-      vim.cmd("noautocmd normal! " .. math.abs(delta) .. key)
-    end)
     redraw()
     return true
   end
@@ -551,8 +395,7 @@ function M.new(opts)
     if not ui.visible() or not menu.preview then
       return false
     end
-    preview_hidden = not preview_hidden
-    update_preview()
+    preview.toggle(items[cursor])
     redraw()
     return true
   end
@@ -592,7 +435,7 @@ function M.new(opts)
     ui.reset()
     shown = state
     render()
-    update_preview()
+    preview.update(items[cursor])
     redraw()
     return true
   end
@@ -675,7 +518,7 @@ function M.new(opts)
     end
     ensure_buf()
     place()
-    place_preview()
+    preview.place()
     render()
   end
 
@@ -708,9 +551,9 @@ function M.new(opts)
     local state = text_state(new_mode)
     typed = state.line:sub(col, state.col)
     inserted = typed
-    preview_hidden = false
+    preview.reveal()
     show(col, new_items, new_mode)
-    update_preview()
+    preview.update(items[cursor])
     redraw()
   end
 
@@ -745,7 +588,7 @@ function M.new(opts)
   function ui.close()
     -- Closing windows is refused under textlock, e.g. from an <expr> mapping.
     -- Do it before any teardown so a refusal leaves the menu fully working.
-    hide_preview()
+    preview.hide()
     if win and vim.api.nvim_win_is_valid(win) then
       closing = true
       local ok, err = pcall(vim.api.nvim_win_close, win, true)
@@ -756,8 +599,8 @@ function M.new(opts)
       redraw()
     end
     win = nil
-    close_preview()
-    resolved, cells = {}, {}
+    preview.close()
+    cells = {}
     vim.api.nvim_clear_autocmds({ group = group })
   end
 
@@ -910,7 +753,7 @@ function M.new(opts)
     browsing = true
     ui.frozen_count()
     render()
-    update_preview()
+    preview.update(items[cursor])
     redraw()
   end
 
