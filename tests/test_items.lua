@@ -70,16 +70,14 @@ T["a textEdit starting before the menu start drops the shared prefix"] = functio
   expect.equality(got.word, "bar")
 end
 
-T["kind, detail and documentation are shown as kind, menu and info"] = function()
+T["kind and label details are shown as kind and menu"] = function()
   local got = items.convert({
     label = "bar",
     kind = 2, -- Method
     labelDetails = { description = "fn(x)" },
-    documentation = { kind = "markdown", value = "Does bar." },
   }, ctx())
   expect.equality(got.kind, "Method")
   expect.equality(got.menu, "fn(x)")
-  expect.equality(got.info, "Does bar.")
 end
 
 T["user_data carries the client id and the original item"] = function()
@@ -87,7 +85,6 @@ T["user_data carries the client id and the original item"] = function()
   local got = items.convert(item, ctx({ client_id = 42 }))
   expect.equality(got.user_data.laser.client_id, 42)
   expect.equality(got.user_data.laser.item, item)
-  expect.equality(got.dup, 1)
 end
 
 T["item defaults supply insert/replace ranges and text without mutating the response"] = function()

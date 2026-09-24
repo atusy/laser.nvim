@@ -178,8 +178,6 @@ function M.convert(item, ctx)
     abbr = item.label,
     kind = item.kind and vim.lsp.protocol.CompletionItemKind[item.kind] or nil,
     menu = item.labelDetails and item.labelDetails.description or nil,
-    info = require("laser.preview").info(item),
-    dup = 1,
     preselect = item.preselect == true or nil,
     user_data = { laser = { client_id = ctx.client_id, item = item, request = ctx.request } },
   }

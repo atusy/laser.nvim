@@ -161,13 +161,12 @@ end
 ---Filter one client's cached items without consulting other clients or the UI.
 ---Only the first max_items survivors are converted and returned.
 ---@param client_id integer
----@param prefix string
----@param doc? laser.Doc
+---@param doc laser.Doc
 ---@param projection? { exclude: table<integer, boolean>, startcol: integer }
 ---@return table[]
-function Session:client_candidates(client_id, prefix, doc, projection)
+function Session:client_candidates(client_id, doc, projection)
   local opts = self.clients[client_id].opts or {}
-  local input = doc and input_at(doc) or prefix
+  local input = input_at(doc)
   local result = self.results[client_id]
   local candidates = result and result.candidates or {}
   if projection then
@@ -179,18 +178,19 @@ function Session:client_candidates(client_id, prefix, doc, projection)
   return filter.apply(candidates, input, opts, opts.max_items)
 end
 
----@param prefix string
----@param doc? laser.Doc
+---Each candidate is matched against the text from its own start to the
+---cursor in `doc`.
+---@param doc laser.Doc
 ---@param projection? { exclude: table<integer, boolean>, startcol: integer }
 ---@return table[]
 ---@return integer? startcol
-function Session:candidates(prefix, doc, projection)
+function Session:candidates(doc, projection)
   local merged = {}
   for _, client_id in ipairs(self:ordered_client_ids()) do
-    local matched = self:client_candidates(client_id, prefix, doc, projection)
+    local matched = self:client_candidates(client_id, doc, projection)
     vim.list_extend(merged, matched)
   end
-  if not doc or (#merged == 0 and not projection) then
+  if #merged == 0 and not projection then
     return merged
   end
   local startcol = projection and projection.startcol or doc.col
