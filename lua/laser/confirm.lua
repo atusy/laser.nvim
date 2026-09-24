@@ -27,7 +27,7 @@ local ns = vim.api.nvim_create_namespace("laser.confirm")
 local function resolve(item, opts)
   if
     item.additionalTextEdits
-    or not opts.client:supports_method("completionItem/resolve", opts.bufnr)
+    or not require("laser.clients").supports_resolve(opts.client, opts.bufnr)
   then
     return item
   end
