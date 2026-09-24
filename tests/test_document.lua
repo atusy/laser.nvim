@@ -77,6 +77,18 @@ T["continues"]["not another line, buffer, suffix, mode, or a cursor before the s
   expect.equality(continues(doc, 4), false)
 end
 
+T["continues"]["not a cursor before the start, even when the text still agrees"] = function()
+  -- "a|a" with the menu starting at 1 became "|a": both comparisons of text
+  -- still hold.
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "a" })
+  child.api.nvim_input("I")
+  local bufnr = child.api.nvim_get_current_buf()
+  expect.equality(
+    continues({ bufnr = bufnr, line_nr = 0, line = "aa", col = 1, mode = "i" }, 1),
+    false
+  )
+end
+
 T["continues"]["the command line compares its text and position"] = function()
   child.api.nvim_input(":echo x")
   local doc = { bufnr = 0, line_nr = 0, line = "echo x", col = 6, mode = "c" }

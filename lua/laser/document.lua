@@ -56,9 +56,8 @@ function M.continues(doc, startcol)
     end
     line = vim.api.nvim_get_current_line()
   end
-  -- A cursor before startcol cannot keep both the text before startcol and
-  -- the text after the cursor.
-  return line:sub(1, startcol) == doc.line:sub(1, startcol)
+  return col >= startcol
+    and line:sub(1, startcol) == doc.line:sub(1, startcol)
     and line:sub(col + 1) == doc.line:sub(doc.col + 1)
 end
 
