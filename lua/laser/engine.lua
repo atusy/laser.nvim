@@ -142,6 +142,7 @@ function Engine:request(clients, ctx)
     local token = {}
     self.pending[client.id] = token
     session.clients[client.id].timed_out = false
+    session.clients[client.id].interrupted = false
     local timer
     local function stop_timer()
       if timer then
@@ -153,10 +154,11 @@ function Engine:request(clients, ctx)
       end
     end
     local cancel_request
+    -- Whatever this request was for is still missing; ask again on input.
     local function mark_interrupted()
-      local result = session.results[client.id]
-      if token.received and result then
-        result.incomplete = true
+      local client_state = session.clients[client.id]
+      if client_state then
+        client_state.interrupted = true
       end
     end
     token.cancel = function()
@@ -356,10 +358,6 @@ function Engine:cancel_pending()
   for client_id, token in pairs(self.pending) do
     if token.cancel then
       token.cancel()
-    end
-    local result = self.session and self.session.results[client_id]
-    if result then
-      result.incomplete = true
     end
   end
   self.pending = {}

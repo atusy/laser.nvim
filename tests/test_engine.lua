@@ -356,6 +356,24 @@ T["closing cancels every request still in flight"] = function()
   expect.equality({ a.cancelled_count, b.cancelled_count }, { 1, 1 })
 end
 
+T["a refresh cancelled with the menu retries without claiming an incomplete list"] = function()
+  local buf = scratch("ba")
+  fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local ui = stub_ui.new()
+  local engine = Engine.new({ ui = ui, clientOptions = {} })
+  engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
+  server.respond({ isIncomplete = false, items = { { label = "bar" } } })
+  wait_opened(ui, 1)
+  -- Deleting input sends a refresh; closing the menu cancels it.
+  engine:on_char(doc(buf, "b", 1), "")
+  local count = #server.requests
+  engine:cancel_pending()
+  engine:on_char(doc(buf, "ba", 2), "a")
+  expect.equality(#server.requests, count + 1)
+  expect.equality(server.requests[#server.requests].params.context, { triggerKind = 1 })
+end
+
 T["a newer request supersedes an older request for the same client"] = function()
   local buf = scratch("ba")
   local opts = {

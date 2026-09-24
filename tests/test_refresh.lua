@@ -52,6 +52,7 @@ T["contexts preserve nil and false and do not expose mutable session tables"] = 
     pending = true,
     has_candidate = false,
     timed_out = false,
+    interrupted = false,
   })
   s:set_result(7, {}, {})
   local second = s:refresh_context(7, doc, "", false, { line = "ech.suffix", col = 3 })

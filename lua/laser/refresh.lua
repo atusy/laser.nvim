@@ -13,6 +13,7 @@ local M = {}
 ---@field has_candidate boolean whether this client has candidates after filtering for the current input
 ---@field pending boolean whether this client has a request in flight
 ---@field timed_out boolean whether this client's last request timed out; cleared on request start
+---@field interrupted boolean whether this client's last request was cancelled, timed out or failed before its final answer; cleared on request start
 
 ---@alias laser.Refresh fun(ctx: laser.RefreshContext): boolean?
 
@@ -52,6 +53,7 @@ end
 ---@type laser.Refresh
 function M.default(ctx)
   return ctx.timed_out == true
+    or ctx.interrupted == true
     or ctx.is_incomplete == true
     or M.hasTriggerCharacter(ctx)
     or (ctx.previous_before_cursor ~= nil and not M.extendsPreviousInput(ctx))
