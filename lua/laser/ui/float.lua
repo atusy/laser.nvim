@@ -95,7 +95,7 @@ function M.new(opts)
   -- and labels across keystrokes; cleared with the menu to stay bounded.
   local cells = {}
   local group = vim.api.nvim_create_augroup("laser.ui.float." .. tostring(ui), { clear = true })
-  local dismiss, redraw, watch, layout_and_draw, reconcile
+  local dismiss, redraw, watch, layout_and_draw, reconcile, note_seen
   local preview = require("laser.ui.preview_window").new({
     menu_win = function()
       return win
@@ -503,6 +503,14 @@ function M.new(opts)
     })
   end
 
+  ---Once the user moves the selection, the rows in view count as seen.
+  function note_seen()
+    browsing = browsing or (cursor > 0 and cursor ~= initial_cursor)
+    if browsing then
+      frozen = math.min(#items, math.max(frozen, top + height() - 1))
+    end
+  end
+
   ---Fit the menu to the room around the cursor and draw it there.
   function layout_and_draw()
     compute_layout()
@@ -520,6 +528,7 @@ function M.new(opts)
     place()
     preview.place()
     render()
+    note_seen()
   end
 
   local function show(col, new_items, new_mode)
@@ -562,18 +571,13 @@ function M.new(opts)
     browsing, frozen, initial_cursor = false, 0, cursor
   end
 
-  ---Once the user moves the selection, rows up to the bottom of the viewport
-  ---they have seen stay in place while further candidates arrive.
+  ---Rows up to the bottom of the viewport the user has seen while browsing
+  ---stay in place while further candidates arrive.
   ---@return integer
   function ui.frozen_count()
-    if not ui.visible() then
+    if not ui.visible() or not browsing then
       return 0
     end
-    browsing = browsing or (cursor > 0 and cursor ~= initial_cursor)
-    if not browsing then
-      return 0
-    end
-    frozen = math.min(#items, math.max(frozen, top + height() - 1))
     return frozen
   end
 
@@ -751,7 +755,7 @@ function M.new(opts)
       top = cursor - rows + 1
     end
     browsing = true
-    ui.frozen_count()
+    note_seen()
     render()
     preview.update(items[cursor])
     redraw()
