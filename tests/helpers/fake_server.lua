@@ -91,7 +91,15 @@ local function cmd_fn(opts)
     end
 
     function srv.terminate()
+      if closing then
+        return
+      end
       closing = true
+      -- A real transport reports the exit asynchronously; the client is only
+      -- removed once it does.
+      vim.schedule(function()
+        dispatchers.on_exit(0, 15)
+      end)
     end
 
     M.last = srv
@@ -130,9 +138,12 @@ function M.stop_all()
   for _, client in ipairs(vim.lsp.get_clients()) do
     client:stop(true)
   end
-  vim.wait(200, function()
-    return #vim.lsp.get_clients() == 0
-  end)
+  assert(
+    vim.wait(1000, function()
+      return #vim.lsp.get_clients() == 0
+    end),
+    "fake servers did not stop"
+  )
 end
 
 return M
