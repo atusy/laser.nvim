@@ -66,7 +66,6 @@ function Engine:render()
   if not self.continues(doc, session.startcol) then
     return self:close()
   end
-  local prefix = doc.line:sub(session.startcol + 1, doc.col)
   local count = self.ui.frozen_count()
   local frozen = vim.list_slice(self.displayed or {}, 1, count)
   local projection
@@ -77,7 +76,7 @@ function Engine:render()
     end
     projection = { exclude = exclude, startcol = session.startcol }
   end
-  local items, startcol = session:candidates(prefix, doc, projection)
+  local items, startcol = session:candidates(doc, projection)
   if #frozen > 0 then
     vim.list_extend(frozen, items)
     items = frozen

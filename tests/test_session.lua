@@ -9,6 +9,11 @@ local function ctx(client_id)
   return { line = "foo.ba", startcol = 4, cursor_col = 6, encoding = "utf-8", client_id = client_id }
 end
 
+---Document where `input` was typed after "foo.", the menu start in ctx().
+local function typed(input)
+  return { bufnr = 1, mode = "i", line = "foo." .. input, col = 4 + #input }
+end
+
 local function labels(list)
   return vim.tbl_map(function(c)
     return c.abbr
@@ -22,7 +27,7 @@ T["candidates merge results of every client that answered"] = function()
   })
   s:set_result(1, { { label = "bar" } }, ctx(1))
   s:set_result(2, { items = { { label = "baz" } }, isIncomplete = false }, ctx(2))
-  expect.equality(labels(s:candidates("")), { "bar", "baz" })
+  expect.equality(labels(s:candidates(typed(""))), { "bar", "baz" })
 end
 
 T["candidates follow the selected client order"] = function()
@@ -32,7 +37,7 @@ T["candidates follow the selected client order"] = function()
   })
   s:set_result(1, { { label = "bar" } }, ctx(1))
   s:set_result(2, { { label = "baz" } }, ctx(2))
-  expect.equality(labels(s:candidates("")), { "baz", "bar" })
+  expect.equality(labels(s:candidates(typed(""))), { "baz", "bar" })
 end
 
 T["typing into a complete list re-requests nothing"] = function()
@@ -113,14 +118,14 @@ T["different item starts are matched independently and padded to a shared menu"]
   s:set_result(2, { { label = "bar" } }, convert)
   expect.equality(s:refresh_context(1, doc, "a", false).has_candidate, true)
   expect.equality(s:refresh_context(2, doc, "a", false).has_candidate, true)
-  local got, startcol = s:candidates("ba", doc)
+  local got, startcol = s:candidates(doc)
   expect.equality(startcol, 0)
   expect.equality(labels(got), { "é.bar", "é.bar" })
   expect.equality({ got[1].word, got[2].word }, { "é.bar", "é.bar" })
   expect.equality(got[2].user_data.laser.startcol, 3)
   expect.equality(s.results[2].candidates[1].word, "bar")
   s.results[1] = nil
-  got, startcol = s:candidates("ba", doc)
+  got, startcol = s:candidates(doc)
   expect.equality(startcol, 3)
   expect.equality(got[1].word, "bar")
 end
@@ -168,12 +173,12 @@ T["per-client filters see each item input and preserve identity on rerender"] = 
     },
   }, ctx(1))
   s:set_result(2, { { label = "other" } }, ctx(2))
-  local first = s:candidates("bar", doc)
+  local first = s:candidates(doc)
   expect.equality(seen, { "bar", "foo.bar" })
   expect.equality(labels(first), { "foo.bar!", "foo.bar!", "foo.other" })
   expect.equality(first[1].user_data.laser.match_info, { score = 3 })
   expect.equality(first[3].user_data.laser.match_info, nil)
-  local second = s:candidates("bar", doc)
+  local second = s:candidates(doc)
   expect.equality(first, second)
   expect.equality(first[1].user_data.laser.id, s.results[1].candidates[1].user_data.laser.id)
   expect.equality(labels(s.results[1].candidates), { "bar", "foo.bar" })
@@ -196,13 +201,13 @@ T["shared labels shift abbreviation highlights by UTF-8 bytes without accumulati
     { type = "menu", col = 1, width = 3, hl_group = "Comment" },
   }
   local projection = { startcol = 0, exclude = {} }
-  local got = s:candidates("pr", doc, projection)
+  local got = s:candidates(doc, projection)
   expect.equality(got[1].highlights, {
     { type = "abbr", col = 5, width = 2, hl_group = "PmenuMatch" },
     { type = "menu", col = 1, width = 3, hl_group = "Comment" },
     { name = "laser_prefix", type = "abbr", col = 1, width = 4, hl_group = "Comment" },
   })
-  expect.equality(s:candidates("pr", doc, projection), got)
+  expect.equality(s:candidates(doc, projection), got)
   expect.equality(s.results[1].candidates[1].highlights[1].col, 1)
 end
 
@@ -250,7 +255,7 @@ T["candidates convert only the items each client can display"] = function()
     },
   })
   s:set_result(1, { { label = "bar" }, { label = "barn" } }, ctx(1))
-  expect.equality(labels(s:candidates("", doc)), { "bar" })
+  expect.equality(labels(s:candidates(doc)), { "bar" })
   expect.equality(converted, 1)
 end
 
@@ -277,7 +282,7 @@ T["candidates hidden by max_items do not widen the menu"] = function()
     encoding = "utf-16",
     client_id = 1,
   })
-  local got, startcol = s:candidates("ba", doc)
+  local got, startcol = s:candidates(doc)
   expect.equality(startcol, 3)
   expect.equality(labels(got), { "bar" })
   expect.equality(got[1].word, "bar")
@@ -286,7 +291,7 @@ end
 T["items without a string label are left out"] = function()
   local s = Session.new({ startcol = 4, clients = { [1] = { name = "lua_ls" } } })
   s:set_result(1, { { insertText = "bare" }, { label = 1 }, "junk", { label = "bar" } }, ctx(1))
-  expect.equality(labels(s:candidates("")), { "bar" })
+  expect.equality(labels(s:candidates(typed(""))), { "bar" })
 end
 
 T["JSON null fields in a response count as absent"] = function()
@@ -304,7 +309,7 @@ T["JSON null fields in a response count as absent"] = function()
     },
     itemDefaults = vim.NIL,
   }, ctx(1))
-  local got = s:candidates("ba")
+  local got = s:candidates(typed("ba"))
   expect.equality(labels(got), { "bar" })
   expect.equality(got[1].word, "bar")
   expect.equality(got[1].user_data.laser.item.detail, nil)
