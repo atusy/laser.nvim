@@ -158,11 +158,17 @@ function Session:has_candidate(client_id, doc)
   )
 end
 
+---Rows the menu keeps in place while more candidates arrive.
+---@class laser.Projection
+---@field exclude table<integer, boolean> ids of the kept rows
+---@field used? table<integer, integer> kept rows per client, counted against max_items
+---@field startcol integer menu start of the kept rows
+
 ---Filter one client's cached items without consulting other clients or the UI.
 ---Only the first max_items survivors are converted and returned.
 ---@param client_id integer
 ---@param doc laser.Doc
----@param projection? { exclude: table<integer, boolean>, startcol: integer }
+---@param projection? laser.Projection
 ---@return table[]
 function Session:client_candidates(client_id, doc, projection)
   local opts = self.clients[client_id].opts or {}
@@ -175,13 +181,20 @@ function Session:client_candidates(client_id, doc, projection)
       return not projection.exclude[data.id] and data.startcol >= projection.startcol
     end, candidates)
   end
-  return filter.apply(candidates, input, opts, opts.max_items)
+  local limit = opts.max_items
+  if limit and limit > 0 and projection then
+    limit = limit - (projection.used and projection.used[client_id] or 0)
+    if limit <= 0 then
+      return {}
+    end
+  end
+  return filter.apply(candidates, input, opts, limit)
 end
 
 ---Each candidate is matched against the text from its own start to the
 ---cursor in `doc`.
 ---@param doc laser.Doc
----@param projection? { exclude: table<integer, boolean>, startcol: integer }
+---@param projection? laser.Projection
 ---@return table[]
 ---@return integer? startcol
 function Session:candidates(doc, projection)
