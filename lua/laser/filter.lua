@@ -119,8 +119,20 @@ function M.score_sorter(opts)
   end
 end
 
----Compatibility name for the default score sorter.
-M.by_score = M.score_sorter()
+---Order by the server's sortText, falling back to the label, as the LSP
+---specifies for comparing items. Equal keys keep their order.
+---@type laser.Sorter
+function M.by_sort_text(a, b)
+  local ai, bi = a.user_data.laser.item, b.user_data.laser.item
+  local akey, bkey = ai.sortText or ai.label, bi.sortText or bi.label
+  if akey ~= bkey then
+    return akey < bkey
+  end
+  return ai.label < bi.label
+end
+
+---The default sorter: best match first, then the server's order.
+M.by_score = M.score_sorter({ tiebreak = M.by_sort_text })
 
 ---@param opts laser.FilterOpts
 ---@return laser.Filter[]

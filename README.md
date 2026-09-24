@@ -153,8 +153,9 @@ require("laser").complete({ enable_commit_characters = true })
 
 ### Match highlighting
 
-Fuzzy matching and score sorting are enabled by default, and the menu
-highlights the matched characters with `PmenuMatch` (`PmenuMatchSel` on the
+Fuzzy matching and score sorting are enabled by default. Equal scores follow
+the server's `sortText`, then the label, so an empty input shows the server's
+ranking. The menu highlights the matched characters with `PmenuMatch` (`PmenuMatchSel` on the
 selected row). Custom matchers get the same highlighting when they return
 match positions. Link `PmenuMatch` and `PmenuMatchSel` to `Pmenu` and
 `PmenuSel` to turn it off.

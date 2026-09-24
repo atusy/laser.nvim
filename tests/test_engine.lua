@@ -771,12 +771,12 @@ T["streamed candidates survive null completion and retain list defaults"] = func
   expect.equality(engine.pending[client.id] ~= nil, true)
   server.progress(token, { { label = "bar" } })
   wait_opened(ui, 2)
-  expect.equality(ui.last().labels, { "baz", "bar" })
+  expect.equality(ui.last().labels, { "bar", "baz" })
   server.respond(nil)
   assert(vim.wait(100, function()
     return engine.pending[client.id] == nil
   end))
-  expect.equality(ui.last().labels, { "baz", "bar" })
+  expect.equality(ui.last().labels, { "bar", "baz" })
   local result = engine.session.results[client.id]
   expect.equality(result.incomplete, true)
   expect.equality(result.candidates[2].user_data.laser.item.data, "shared")
@@ -812,7 +812,7 @@ T["selection freezes the seen prefix across clients and typing releases it"] = f
   wait_opened(ui, 3)
   expect.equality(ui.last().labels, { "bb", "bc", "ba", "b0", "bz" })
   engine:on_char(doc(buf, "", 0), "")
-  expect.equality(ui.last().labels, { "ba", "b0", "bb", "bc", "bz" })
+  expect.equality(ui.last().labels, { "b0", "ba", "bb", "bc", "bz" })
 end
 
 T["partial bursts from multiple clients share one render"] = function()
@@ -829,7 +829,7 @@ T["partial bursts from multiple clients share one render"] = function()
   one.progress(one.requests[#one.requests].params.partialResultToken, { { label = "ba" } })
   vim.wait(50)
   expect.equality(#ui.opened, 1)
-  expect.equality(ui.last().labels, { "bb", "ba", "bc" })
+  expect.equality(ui.last().labels, { "ba", "bb", "bc" })
 end
 
 T["a timed out partial list is retried on further input"] = function()

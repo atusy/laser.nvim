@@ -15,13 +15,13 @@ local function labels(list)
   end, list)
 end
 
-T["an empty prefix preserves input order regardless of sortText"] = function()
+T["an empty prefix orders by sortText, falling back to the label"] = function()
   local got = filter.apply(
     { cand("zeta"), cand("alpha", { sortText = "zzz" }), cand("mid") },
     "",
     {}
   )
-  expect.equality(labels(got), { "zeta", "alpha", "mid" })
+  expect.equality(labels(got), { "mid", "zeta", "alpha" })
 end
 
 T["the default matcher drops candidates that do not fuzzy-match the prefix"] = function()
@@ -36,7 +36,7 @@ T["fuzzy_matcher exposes character positions in filterText"] = function()
   expect.equality(info.positions, { 0, 2 })
 end
 
-T["the default sorter ranks by score and preserves input order on ties"] = function()
+T["the default sorter ranks by score, then sortText, then label"] = function()
   local scores = { b = 1, a = 1, c = 1, d = 2 }
   local matcher = function(_, candidate)
     return scores[candidate.abbr]
@@ -47,7 +47,7 @@ T["the default sorter ranks by score and preserves input order on ties"] = funct
     cand("c", { sortText = "0" }),
     cand("d"),
   }, "x", { matcher = matcher })
-  expect.equality(labels(got), { "d", "b", "a", "c" })
+  expect.equality(labels(got), { "d", "c", "a", "b" })
 end
 
 T["filters run in order and expose match info to later stages"] = function()
@@ -197,7 +197,7 @@ T["the built-in sorter works before any matcher"] = function()
       { kind = "matcher", callback = filter.fuzzy_matcher() },
     },
   })
-  expect.equality(labels(got), { "z", "a" })
+  expect.equality(labels(got), { "a", "z" })
   expect.equality(got[1].user_data.laser.match_info, { score = 0 })
 end
 
