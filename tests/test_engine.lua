@@ -6,6 +6,7 @@ local stub_ui = require("tests.helpers.stub_ui")
 local T = MiniTest.new_set({ hooks = { post_case = fake.stop_all } })
 
 local Engine = require("laser.engine")
+local settle = require("tests.helpers.settle")
 
 ---A document snapshot the engine works on: insert-mode buffer with `line`
 ---and the cursor at byte column `col`.
@@ -199,7 +200,7 @@ T["typing narrows a complete list locally without a new request"] = function()
   local requests_before = #fake.last.requests
 
   engine:on_char(doc(buf, "foo.bar", 7), "r")
-  vim.wait(50)
+  settle()
 
   expect.equality(ui.last().labels, { "bar" })
   expect.equality(#fake.last.requests, requests_before)
@@ -423,6 +424,7 @@ T["closing cancels every request still in flight"] = function()
   engine:start(doc(buf, "foo.ba", 6), { triggerKind = 1 })
 
   engine:close()
+  -- Past the servers' delay: cancelled answers must not arrive.
   vim.wait(120)
 
   expect.equality(#ui.opened, 0)
@@ -475,7 +477,11 @@ T["a newer request supersedes an older request for the same client"] = function(
   engine:on_char(doc(buf, "bar", 3), "r")
   opts.delay_ms = 10
   engine:on_char(doc(buf, "barr", 4), "r")
-  vim.wait(200)
+  -- Both replies have arrived once nothing is pending.
+  assert(vim.wait(1000, function()
+    return next(engine.pending) == nil
+  end))
+  settle()
 
   expect.equality(ui.last().labels, { "candidate4" })
   expect.equality(fake.last.cancelled_count, 1)
@@ -507,7 +513,7 @@ T["refresh can suppress incomplete results for one client"] = function()
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   wait_opened(ui, 1)
   engine:on_char(doc(buf, "bar", 3), "r")
-  vim.wait(50)
+  settle()
   expect.equality(calls, 1)
   expect.equality(seen.is_incomplete, true)
   expect.equality(seen.pending, false)
@@ -538,7 +544,7 @@ T["a new keyword starts fresh even when refresh rejects a trigger"] = function()
     return engine.session.results[next(engine.session.clients)] ~= nil
   end))
   engine:on_char(doc(buf, "foo.", 4), ".")
-  vim.wait(50)
+  settle()
   expect.equality(calls, 2)
   expect.equality(engine.session.startcol, 4)
 end
@@ -599,7 +605,7 @@ T["a trigger inside the same keyword refreshes only its client"] = function()
   engine:start(doc(buf, "ba", 2), { triggerKind = 1 })
   wait_opened(ui, 2)
   engine:on_char(doc(buf, "bar", 3), "r")
-  vim.wait(50)
+  settle()
   expect.equality(calls, { 2, 1 })
 end
 
@@ -628,7 +634,7 @@ T["a server cancellation clears pending while preserving accepted results"] = fu
     return original(method, params, callback)
   end
   engine:on_char(doc(buf, "bar", 3), "r")
-  vim.wait(50)
+  settle()
   expect.equality(engine.pending[client.id], nil)
   expect.equality(ui.last().labels, { "bar" })
 end
@@ -650,7 +656,7 @@ T["changed client options apply to cached results without a new request"] = func
   expect.equality(ui.last().labels, { "bar", "baz" })
   engine.client_options = { one = { max_items = 1 } }
   engine:on_char(doc(buf, "ba", 2), "")
-  vim.wait(50)
+  settle()
   expect.equality(ui.last().labels, { "bar" })
   expect.equality(calls, 1)
 end
@@ -677,7 +683,7 @@ T["options rebuilt with new functions on every call keep cached results"] = func
   engine:on_char(doc(buf, "ba", 2), "a")
   engine.client_options = options()
   engine:on_char(doc(buf, "bar", 3), "r")
-  vim.wait(50)
+  settle()
   expect.equality(calls, 1)
   expect.equality(ui.last().labels, { "bar" })
 end
@@ -841,7 +847,7 @@ T["textEdit chooses the menu boundary and survives further typing"] = function()
   wait_opened(ui, 1)
   expect.equality(ui.last().startcol, 1)
   engine:on_char(doc(buf, "foo.bar", 7), "r")
-  vim.wait(50)
+  settle()
   expect.equality(calls, 1)
   expect.equality(ui.last().labels, { "foo.bar" })
 end
@@ -918,7 +924,7 @@ T["partial bursts from multiple clients share one render"] = function()
   one.progress(one.requests[#one.requests].params.partialResultToken, { { label = "bb" } })
   two.progress(two.requests[#two.requests].params.partialResultToken, { { label = "bc" } })
   one.progress(one.requests[#one.requests].params.partialResultToken, { { label = "ba" } })
-  vim.wait(50)
+  settle()
   expect.equality(#ui.opened, 1)
   expect.equality(ui.last().labels, { "ba", "bb", "bc" })
 end
@@ -941,7 +947,7 @@ T["a timed out partial list is retried on further input"] = function()
   engine:on_char(doc(buf, "ba", 2), "a")
   expect.equality(#server.requests, before + 1)
   server.progress(token, { { label = "bad" } })
-  vim.wait(20)
+  settle()
   expect.equality(ui.last().labels, { "bar" })
 end
 

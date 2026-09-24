@@ -42,7 +42,7 @@ local T = MiniTest.new_set({
 
 local function type_keys(keys)
   child.api.nvim_input(keys)
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
 end
 
 local function line()
@@ -148,7 +148,7 @@ end
 T["resizing the editor closes the menu"] = function()
   type_keys("ib<F2>")
   child.o.columns = child.o.columns - 1
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.lua_get("UI.visible()"), false)
 end
 
@@ -159,7 +159,7 @@ T["clicking a candidate selects it"] = function()
   child.cmd("redraw")
   local pos = child.lua_get([[vim.fn.win_screenpos(UI.win())]])
   child.api.nvim_input_mouse("left", "press", "", 0, pos[1], pos[2] - 1)
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.lua_get("UI.selected()"), 2)
   expect.equality(line(), "b")
 end
@@ -167,7 +167,7 @@ end
 T["a commit character confirms the selection, then is typed"] = function()
   child.lua([[COMMIT = { bar = { "." } }]])
   type_keys("ib<F2><C-j>.")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "bar.")
   expect.equality(child.lua_get("CONFIRMED"), { { word = "bar", line = "bar" } })
 end
@@ -176,7 +176,7 @@ T["input typed while a commit is pending follows the commit character"] = functi
   child.lua([[COMMIT = { bar = { "." } }]])
   type_keys("ib<F2><C-j>")
   child.api.nvim_input(".xy")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "bar.xy")
 end
 
@@ -240,7 +240,7 @@ T["keys typed while a commit is pending are replayed unchanged"] = function()
   child.lua([[COMMIT = { bar = { "." } }]])
   type_keys("ib<F2><C-j>")
   child.api.nvim_input(".<BS>x、")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "barx、")
 end
 
@@ -267,7 +267,7 @@ T["options changed for insertion are restored when the fed keys are discarded"] 
     end)
   ]])
   type_keys("ib<F2><F3>")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.o.backspace, "indent,eol,start")
   expect.equality(child.bo.indentkeys, "0{,0}")
 end
@@ -276,10 +276,10 @@ T["a failing confirmation still types the commit character and keeps input flowi
   child.lua([[COMMIT = { bar = { "." } }; THROW = true]])
   type_keys("ib<F2><C-j>")
   child.api.nvim_input(".")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   child.lua([[THROW = false]])
   type_keys("xyz<Esc>")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "bar.xyz")
   expect.equality(child.api.nvim_get_mode().mode, "n")
 end
@@ -380,7 +380,7 @@ T["clicking a bordered menu selects by its drawn border"] = function()
   child.cmd("redraw")
   local pos = child.lua_get([[vim.fn.win_screenpos(UI.win())]])
   child.api.nvim_input_mouse("left", "press", "", 0, pos[1], pos[2])
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.lua_get("UI.selected()"), 1)
 end
 
@@ -478,7 +478,7 @@ T["clicking right of the menu selects nothing"] = function()
   local width = child.lua_get([[vim.api.nvim_win_get_width(UI.win())]])
   -- One cell past the last column, on the first row.
   child.api.nvim_input_mouse("left", "press", "", 0, pos[1] - 1, pos[2] - 1 + width)
-  child.lua([[vim.wait(20)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(child.lua_get("RESULT"), false)
   expect.equality(child.lua_get("UI.selected()"), 0)
 end
@@ -617,7 +617,7 @@ end
 T["confirming right after selecting waits for the insertion"] = function()
   child.lua([[vim.keymap.set("i", "<F6>", function() UI.select(1); UI.confirm() end)]])
   type_keys("ib<F2><F6>")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "bar")
   expect.equality(child.lua_get("CONFIRMED"), { { word = "bar", line = "bar" } })
 end
@@ -628,12 +628,12 @@ T["several actions in one mapping apply in order"] = function()
     vim.keymap.set("i", "<F8>", function() UI.select(1); UI.cancel() end)
   ]])
   type_keys("ib<F2><F7>")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "baz")
   expect.equality(child.lua_get("CONFIRMED"), { { word = "baz", line = "baz" } })
   type_keys("<Esc>o")
   type_keys("b<F2><F8>")
-  child.lua([[vim.wait(50)]])
+  child.lua([[require("tests.helpers.settle")()]])
   expect.equality(line(), "b")
 end
 

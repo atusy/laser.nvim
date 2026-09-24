@@ -1,4 +1,5 @@
 local MiniTest = require("mini.test")
+local settle = require("tests.helpers.settle")
 local expect = MiniTest.expect
 local fake = require("tests.helpers.fake_server")
 
@@ -34,6 +35,7 @@ T["cancelling suppresses answers that were still in flight"] = function()
     arrived = arrived + 1
   end)
   cancel()
+  -- Past the server's delay: the cancelled answer must not arrive.
   vim.wait(150)
   expect.equality(arrived, 0)
   expect.equality(fake.last_cancelled, 1)
@@ -80,13 +82,13 @@ T["concurrent requests route progress independently and preserve unrelated handl
   server.progress(token1, { { label = "late" } })
   server.progress(token2, { { label = "live" } })
   server.progress("other", { kind = "report", message = "indexing" })
-  vim.wait(50)
+  settle()
   expect.equality(first, {})
   expect.equality(second, { { { label = "live" } } })
   expect.equality(unrelated, { { kind = "report", message = "indexing" } })
   server.respond({ { label = "final" } })
   server.progress(token2, { { label = "too late" } })
-  vim.wait(50)
+  settle()
   expect.equality(#second, 2)
 end
 
