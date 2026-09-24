@@ -271,6 +271,57 @@ T["the command line completes through the scratch document"] = function()
   expect.equality(child.api.nvim_get_mode().mode, "c")
 end
 
+T["the command-line menu sits above a wrapped command line at the completed word"] = function()
+  child.lua([[
+    vim.o.columns, vim.o.lines = 40, 24
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        FAKE.start({ name = "cmd", items = { { label = "echo" }, { label = "edit" } } }, ev.buf)
+      end,
+    })
+  ]])
+  -- ":" and 50 "x" fill the first row and wrap " e" onto the second.
+  type_keys(":" .. string.rep("x", 50) .. " e")
+  wait_menu_items(2)
+  local config =
+    child.api.nvim_win_get_config(child.lua_get([[require("laser")._engine().ui.win()]]))
+  -- The command line takes rows 22 and 23 (0-based); "e" is in column 12.
+  expect.equality({ config.row, config.col, config.height }, { 20, 12, 2 })
+end
+
+T["the command-line preview stays above a wrapped command line"] = function()
+  child.lua([[
+    vim.o.columns, vim.o.lines = 60, 24
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function()
+        require("laser").complete({ language_id = "laser-cmd", menu = { preview = true } })
+      end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        -- Resolving replaces documentation but keeps detail.
+        local detail = table.concat(vim.split(string.rep("x", 30, " "), " "), "\n")
+        FAKE.start({ items = { { label = "echo", detail = detail } } }, ev.buf)
+      end,
+    })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1, { insert = false }) end)
+  ]])
+  type_keys(":" .. string.rep("x", 70) .. " e")
+  wait_menu_items(1)
+  type_keys("<C-n>")
+  local config =
+    child.api.nvim_win_get_config(child.lua_get([[require("laser")._engine().ui.preview_win()]]))
+  -- The command line takes rows 22 and 23 (0-based).
+  expect.equality(config.row + config.height <= 22, true)
+end
+
 T["an expression prompt entered from the command line closes its menu"] = function()
   child.lua([[
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
