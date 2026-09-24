@@ -288,6 +288,26 @@ T["candidates hidden by max_items do not widen the menu"] = function()
   expect.equality(got[1].word, "bar")
 end
 
+T["items repeating the symbols before the word stay matchable"] = function()
+  local s = Session.new({ startcol = 1, clients = { [1] = { name = "x" } } })
+  local convert =
+    { line = "@pr", line_nr = 0, startcol = 1, cursor_col = 3, encoding = "utf-8", client_id = 1 }
+  s:set_result(1, {
+    { label = "@property", filterText = "property" },
+    { label = "property", insertText = "@property" },
+    { label = "@prop" },
+  }, convert)
+  local got = s:candidates({ bufnr = 0, mode = "i", line = "@pr", col = 3 })
+  local words = vim.tbl_map(function(c)
+    return { c.user_data.laser.item.label, c.word }
+  end, got)
+  -- The menu starts at "@"; later starts are padded with it.
+  expect.equality(
+    words,
+    { { "@prop", "@prop" }, { "@property", "@property" }, { "property", "@property" } }
+  )
+end
+
 T["items without a string label are left out"] = function()
   local s = Session.new({ startcol = 4, clients = { [1] = { name = "lua_ls" } } })
   s:set_result(1, { { insertText = "bare" }, { label = 1 }, "junk", { label = "bar" } }, ctx(1))

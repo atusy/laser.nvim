@@ -16,7 +16,7 @@ end
 ---@field encoding string
 ---@field client_id integer
 ---@field request? laser.Request the completion line when the response was requested
----@field symbols? string non-keyword text before startcol, computed on demand
+---@field symbols? table<integer, string> non-keyword text before each start column, computed on demand
 ---@field bufnr? integer document whose 'iskeyword' applies
 
 ---The item's edit range; the insert range of an InsertReplaceEdit.
@@ -97,25 +97,49 @@ local function edit_start(item, ctx)
   return vim.str_byteindex(ctx.line, ctx.encoding, char, false)
 end
 
----Text before the keyword boundary that is not keyword text, like "@" or
----"--". Cached on ctx, which a response's items share.
+---Text before `ctx.startcol` that is neither keyword text nor blank, like
+---"@" or "--". Cached on ctx per start column; a response's items share ctx.
 ---@param ctx laser.ConvertContext
 ---@return string
 local function symbols_before(ctx)
-  if not ctx.symbols then
+  ctx.symbols = ctx.symbols or {}
+  local symbols = ctx.symbols[ctx.startcol]
+  if not symbols then
     local before = ctx.line:sub(1, ctx.startcol)
-    -- The trailing run of characters that are neither keyword nor blank.
     local from = require("laser.position").in_buffer(ctx.bufnr, function()
       return vim.fn.match(before, [[\%(\%(\k\|\s\)\@!.\)*$]])
     end)
-    ctx.symbols = before:sub(from + 1)
+    symbols = before:sub(from + 1)
+    ctx.symbols[ctx.startcol] = symbols
   end
-  return ctx.symbols
+  return symbols
+end
+
+---Bytes at the start of `text` that repeat the symbols before ctx.startcol.
+---@param text string
+---@param ctx laser.ConvertContext
+---@return integer
+local function symbol_overlap(text, ctx)
+  local symbols = symbols_before(ctx)
+  for k = math.min(#symbols, #text), 1, -1 do
+    if text:sub(1, k) == symbols:sub(-k) then
+      return k
+    end
+  end
+  return 0
+end
+
+---Text an item without a range inserts.
+---@param item lsp.CompletionItem
+---@return string
+local function plain_text(item)
+  return item.insertTextFormat ~= SNIPPET and item.insertText or item.label
 end
 
 ---Use the item's edit start when it is applicable. Items without a range use
----the keyword boundary, moved back over symbols the item's text starts with,
----so "@pr" completes to "@property" rather than "@@property".
+---the keyword boundary, moved back over symbols the item's text and filter
+---text both start with, so "@pr" matches and completes "@property" rather
+---than "@@property". When only the text repeats them, see word().
 ---@param item lsp.CompletionItem
 ---@param ctx laser.ConvertContext
 ---@return integer
@@ -126,15 +150,11 @@ function M.start_col(item, ctx)
   elseif item.textEdit then
     return ctx.startcol
   end
-  local symbols = symbols_before(ctx)
-  if symbols == "" then
-    return ctx.startcol
-  end
-  local text = item.insertTextFormat ~= SNIPPET and item.insertText or item.label
-  for k = math.min(#symbols, #text), 1, -1 do
-    if text:sub(1, k) == symbols:sub(-k) then
-      return ctx.startcol - k
-    end
+  local text = plain_text(item)
+  local k = symbol_overlap(text, ctx)
+  local filter = item.filterText or item.label
+  if k > 0 and filter:sub(1, k) == text:sub(1, k) then
+    return ctx.startcol - k
   end
   return ctx.startcol
 end
@@ -161,8 +181,11 @@ end
 local function word(item, ctx)
   local text = insert_text(item)
   local start = edit_start(item, ctx)
-  if not start or item.insertTextFormat == SNIPPET then
+  if item.insertTextFormat == SNIPPET then
     return text
+  elseif not start then
+    -- Symbols already typed before the item's start are not typed again.
+    return item.textEdit and text or text:sub(symbol_overlap(text, ctx) + 1)
   end
   if start > ctx.startcol then
     return ctx.line:sub(ctx.startcol + 1, start) .. text
@@ -180,13 +203,16 @@ end
 ---@param ctx laser.ConvertContext
 ---@return table complete-item
 function M.convert(item, ctx)
+  local own_word = word(item, ctx)
   return {
-    word = word(item, ctx),
+    word = own_word,
     abbr = item.label,
     kind = item.kind and vim.lsp.protocol.CompletionItemKind[item.kind] or nil,
     menu = item.labelDetails and item.labelDetails.description or nil,
     preselect = item.preselect == true or nil,
-    user_data = { laser = { client_id = ctx.client_id, item = item, request = ctx.request } },
+    user_data = {
+      laser = { client_id = ctx.client_id, item = item, request = ctx.request, word = own_word },
+    },
   }
 end
 

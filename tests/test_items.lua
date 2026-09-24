@@ -172,4 +172,17 @@ T["an item repeating the non-keyword text before the word starts there"] = funct
   )
 end
 
+T["symbols are matched only when the filter text repeats them too"] = function()
+  local c = ctx({ line = "x @pr", startcol = 3, cursor_col = 5, line_nr = 0 })
+  -- The filter text lacks "@": keep matching "pr", and insert without the "@".
+  local item = { label = "property", insertText = "@property" }
+  expect.equality(items.start_col(item, c), 3)
+  expect.equality(items.convert(item, c).word, "property")
+  expect.equality(items.convert(item, c).user_data.laser.word, "property")
+  -- Only the filter text has it: nothing to move or strip.
+  item = { label = "@property", filterText = "property", insertText = "property" }
+  expect.equality(items.start_col(item, c), 3)
+  expect.equality(items.convert(item, c).word, "property")
+end
+
 return T

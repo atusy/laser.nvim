@@ -109,6 +109,19 @@ T["the text the menu shows for another candidate is replaced as well"] = functio
   expect.equality(lines(buf), { "foo.bar" })
 end
 
+T["symbols typed before an item's start are not inserted again"] = function()
+  -- "@pr" was typed; the item starts after "@" and its text repeats it.
+  local buf = buffer({ "@pr" }, 1, 3)
+  local c = candidate(
+    { label = "property", insertText = "@property" },
+    { line = "@pr", col = 3 },
+    1
+  )
+  c.user_data.laser.word = "property"
+  confirm.apply(c, { bufnr = buf, client = client() })
+  expect.equality(lines(buf), { "@property" })
+end
+
 T["multi-line text is inserted as is, without automatic indentation"] = function()
   local buf = buffer({ "  b" }, 1, 3)
   vim.bo[buf].autoindent = true
