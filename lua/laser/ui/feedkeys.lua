@@ -47,4 +47,19 @@ function M.feed(owner, parts, callback)
   end
 end
 
+---Keys that replace `current`, the text just before the cursor, with
+---`text` as if typed.
+---@param current string
+---@param text string without NUL bytes, which keys cannot carry
+---@return { [1]: string, [2]: boolean }[] parts for feed()
+function M.replacement(current, text)
+  -- One <BS> removes a character with its composing characters unless
+  -- 'delcombine' makes it remove them one at a time.
+  local chars = vim.fn.strchars(current, vim.o.delcombine and 0 or 1)
+  -- Typed control characters act as keys, such as <Tab> under 'expandtab';
+  -- <C-v> inserts them as they are. Newlines are meant to split the line.
+  local typed = text:gsub("[\1-\9\11-\31\127]", "\22%0")
+  return { { vim.keycode("<BS>"):rep(chars), false }, { typed, true } }
+end
+
 return M

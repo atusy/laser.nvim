@@ -54,7 +54,7 @@ end
 
 ---@class laser.FloatUI: laser.UI
 ---@field configure fun(options?: laser.MenuOpts)
----@field skip_text_change fun(): boolean
+---@field take_own_change fun(): boolean
 ---@field items fun(): table[]
 ---@field selected fun(): integer
 ---@field win fun(): integer?
@@ -94,8 +94,7 @@ function M.new(opts)
   local typed = "" -- input between startcol and the cursor when the menu opened
   local inserted = "" -- text the menu currently holds between startcol and the cursor
   local expected -- text state right after the menu's own edit
-  local pending_insertions = 0 -- insertions whose fed keys have not run yet
-  local after_insertions = {} ---@type fun()[] run once no insertion is pending
+  local pending = require("laser.ui.pending").new() -- insertions whose keys are queued
   local browsing, frozen, initial_cursor = false, 0, 0
   local layout = { height = 0, above = false, reversed = false, scrollbar = false }
   local shown -- text state the menu was drawn for
@@ -138,7 +137,7 @@ function M.new(opts)
       expected = nil
       -- Fed keys may have been discarded; nothing may wait for them forever,
       -- and options relaxed for them must come back.
-      pending_insertions, after_insertions = 0, {}
+      pending.reset()
       feedkeys.forget(ui)
       relaxed.restore()
     end,
@@ -442,7 +441,7 @@ function M.new(opts)
   ---menu first. The menu's own insertion updates `shown`, so it never counts.
   ---@return boolean open
   function reconcile()
-    if pending_insertions > 0 then
+    if pending.busy() then
       -- The menu's own keys are still queued; the text is not final yet.
       return true
     end
@@ -653,9 +652,10 @@ function M.new(opts)
     return cursor
   end
 
-  ---True once when the text change being handled is the menu's own edit.
+  ---Whether the text change being handled is the menu's own edit. The
+  ---record is taken, so a later change of the same text counts as the user's.
   ---@return boolean
-  function ui.skip_text_change()
+  function ui.take_own_change()
     local want = expected
     expected = nil
     return want ~= nil and vim.deep_equal(text_state(want.mode), want.state)
@@ -666,28 +666,11 @@ function M.new(opts)
   ---@type fun(word: string, callback?: fun())
   local insert
 
-  ---Run `step` once no insertion's keys are pending, in call order.
-  ---@param step fun()
-  local function after_pending(step)
-    if pending_insertions > 0 then
-      table.insert(after_insertions, step)
-    else
-      step()
-    end
-  end
-
-  ---Run steps that waited for insertions, stopping when one feeds keys again.
-  local function run_waiting()
-    while pending_insertions == 0 and #after_insertions > 0 do
-      table.remove(after_insertions, 1)()
-    end
-  end
-
   function insert(word, callback)
     inserted = word
-    if mode == "i" and pending_insertions > 0 then
+    if mode == "i" and pending.busy() then
       -- Earlier keys are still queued, so the text is not final yet.
-      table.insert(after_insertions, function()
+      pending.after(function()
         insert(word, callback)
       end)
       return
@@ -711,25 +694,18 @@ function M.new(opts)
     end
     -- Typed keys keep undo and dot-repeat intact, unlike direct buffer edits.
     relaxed.relax()
-    local bs = vim.keycode("<BS>")
-    -- One <BS> removes a character with its composing characters unless
-    -- 'delcombine' makes it remove them one at a time.
-    local chars = vim.fn.strchars(current, vim.o.delcombine and 0 or 1)
-    -- Typed control characters act as keys, such as <Tab> under 'expandtab';
-    -- <C-v> inserts them as they are. Newlines are meant to split the line.
-    local typed_word = text:gsub("[\1-\9\11-\31\127]", "\22%0")
-    pending_insertions = pending_insertions + 1
-    feedkeys.feed(ui, { { bs:rep(chars), false }, { typed_word, true } }, function()
-      pending_insertions = pending_insertions - 1
-      relaxed.restore()
-      -- The keys are in; record what they produced, which a prediction can
-      -- miss when a confirmed candidate spans lines.
-      expected = { mode = mode, state = text_state(mode) }
-      shown = expected.state
-      if callback then
-        callback()
-      end
-      run_waiting()
+    pending.start()
+    feedkeys.feed(ui, feedkeys.replacement(current, text), function()
+      pending.finish(function()
+        relaxed.restore()
+        -- The keys are in; record what they produced, which a prediction can
+        -- miss when a confirmed candidate spans lines.
+        expected = { mode = mode, state = text_state(mode) }
+        shown = expected.state
+        if callback then
+          callback()
+        end
+      end)
     end)
   end
 
@@ -873,7 +849,7 @@ function M.new(opts)
       insert(word, done)
     else
       -- The candidate's keys may still be queued; confirmation edits need them.
-      after_pending(done)
+      pending.after(done)
     end
     return true
   end
