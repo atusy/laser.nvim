@@ -150,16 +150,22 @@ end
 M.select = action("select")
 ---Accept the selected candidate; returns false when nothing was selected.
 ---Closes the menu either way.
+---@type fun(): boolean
 M.confirm = action("confirm")
 ---Restore the typed input and close the menu.
+---@type fun(): boolean
 M.cancel = action("cancel")
 ---Select the candidate under the mouse; returns false outside the menu.
+---@type fun(): boolean
 M.select_mouse = action("select_mouse")
----Scroll the documentation preview by `delta` lines.
+---Scroll the documentation preview by `delta` lines; negative scrolls up.
+---@type fun(delta: integer): boolean
 M.scroll_preview = action("scroll_preview")
 ---Hide or show the documentation preview.
+---@type fun(): boolean
 M.toggle_preview = action("toggle_preview")
 ---Whether the menu is open.
+---@type fun(): boolean
 M.visible = action("visible")
 
 ---Start or update completion at the current cursor. Options belong to this
