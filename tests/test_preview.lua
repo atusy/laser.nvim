@@ -28,4 +28,23 @@ T["resolve supplies detail and documentation"] = function()
   eq(shown, "foo(): string\n\nDocs")
 end
 
+T["resolve treats JSON null fields as absent"] = function()
+  local callback
+  local client = {
+    supports_method = function()
+      return true
+    end,
+    request = function(_, _, _, cb)
+      callback = cb
+      return true, 1
+    end,
+  }
+  local shown
+  require("laser.preview").resolve({ label = "foo", detail = "kept" }, client, 12, function(info)
+    shown = info
+  end)
+  callback(nil, { label = "foo", detail = vim.NIL, documentation = vim.NIL })
+  eq(shown, "kept")
+end
+
 return T

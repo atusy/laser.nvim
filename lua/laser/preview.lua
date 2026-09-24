@@ -27,6 +27,7 @@ function M.resolve(item, client, bufnr, show)
         return
       end
       done = true
+      result = require("laser.items").drop_null(result)
       if not err and type(result) == "table" then
         show(M.info(vim.tbl_extend("force", {}, item, result)))
       end

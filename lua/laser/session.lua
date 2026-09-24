@@ -47,6 +47,7 @@ end
 ---@param ctx laser.ConvertContext
 ---@param append? boolean append to this request's accepted batches
 function Session:set_result(client_id, result, ctx, append)
+  result = items.drop_null(result)
   local lsp_items, incomplete = unpack_result(result)
   local previous = append and self.results[client_id]
   local candidates = previous and previous.candidates or {}
