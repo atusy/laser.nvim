@@ -717,7 +717,8 @@ T["automatic highlighting does not freeze an untouched menu"] = function()
   wait_menu_items(1)
   child.lua([[SERVER.progress(TOKEN, { {label='ba'} })]])
   wait_menu_items(2)
-  expect.equality(menu_labels(), { "bb", "ba" })
+  -- Untouched, the menu re-sorts to place the new candidate first.
+  expect.equality(menu_labels(), { "ba", "bb" })
   expect.equality(child.api.nvim_get_current_line(), "b")
 end
 
