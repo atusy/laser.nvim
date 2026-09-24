@@ -36,6 +36,31 @@ function M.current(language_id)
   end
 end
 
+---Whether the editor still shows `doc` around the completed text: the same
+---line with the same text before `startcol` and after the cursor. Text
+---between them may differ, as the menu inserts candidates there.
+---@param doc laser.Doc
+---@param startcol integer 0-based byte column where the menu replaces text
+---@return boolean
+function M.continues(doc, startcol)
+  local line, col
+  if vim.api.nvim_get_mode().mode:sub(1, 1) ~= doc.mode then
+    return false
+  elseif doc.mode == "c" then
+    line, col = vim.fn.getcmdline(), vim.fn.getcmdpos() - 1
+  else
+    local row
+    row, col = unpack(vim.api.nvim_win_get_cursor(0))
+    if vim.api.nvim_get_current_buf() ~= doc.bufnr or row - 1 ~= doc.line_nr then
+      return false
+    end
+    line = vim.api.nvim_get_current_line()
+  end
+  return col >= startcol
+    and line:sub(1, startcol) == doc.line:sub(1, startcol)
+    and line:sub(col + 1) == doc.line:sub(doc.col + 1)
+end
+
 ---Return the inserted character only for a single-character insertion at the
 ---previous cursor. Deletions, replacements and cursor moves are not triggers.
 ---@param old? laser.Doc
