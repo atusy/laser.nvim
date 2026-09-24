@@ -26,12 +26,13 @@ vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
 
 local laser = require("laser")
 -- Act on the menu while it is open; otherwise keep the key's own behavior.
+-- "i" puts the key where the mapped key was, ahead of keys typed after it.
 local function map(key, action)
   vim.keymap.set({ "i", "c" }, key, function()
     if laser.visible() then
       action()
     else
-      vim.api.nvim_feedkeys(vim.keycode(key), "n", false)
+      vim.api.nvim_feedkeys(vim.keycode(key), "in", false)
     end
   end)
 end
@@ -57,7 +58,7 @@ stops pending requests without restoring the typed text.
 ```lua
 vim.keymap.set("i", "<LeftMouse>", function()
   if not laser.select_mouse() then
-    vim.api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "n", false)
+    vim.api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "in", false)
   end
 end)
 ```
