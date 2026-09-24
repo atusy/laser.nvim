@@ -215,6 +215,43 @@ T["the command line completes through the scratch document"] = function()
   expect.equality(child.api.nvim_get_mode().mode, "c")
 end
 
+T["an expression prompt entered from the command line closes its menu"] = function()
+  child.lua([[
+    vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+      pattern = ":",
+      callback = function() require("laser").complete({ language_id = "laser-cmd" }) end,
+    })
+    vim.api.nvim_create_autocmd("FileType", {
+      pattern = "laser-cmd",
+      callback = function(ev)
+        FAKE.start({ name = "cmd", items = { { label = "echo" }, { label = "edit" } } }, ev.buf)
+      end,
+    })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1) end)
+  ]])
+  type_keys(":e")
+  wait_menu_items(2)
+  type_keys("<C-r>=")
+  type_keys("xy")
+  expect.equality(child.lua_get([[LASER.visible()]]), false)
+  type_keys("<C-n>")
+  expect.equality(child.fn.getcmdline(), "xy")
+end
+
+T["an expression prompt entered from Insert mode closes its menu"] = function()
+  child.lua([[
+    FAKE.start({ items = { { label = "bar" }, { label = "baz" } } })
+    vim.keymap.set("c", "<C-n>", function() LASER.select(1) end)
+  ]])
+  type_keys("ib")
+  wait_menu_items(2)
+  type_keys("<C-r>=")
+  type_keys("1+")
+  expect.equality(child.lua_get([[LASER.visible()]]), false)
+  type_keys("<C-n>")
+  expect.equality(child.fn.getcmdline(), "1+")
+end
+
 T["moving the selection does not reopen the menu"] = function()
   child.lua([[FAKE.start({ name = "one", items = { { label = "bar" }, { label = "baz" } } })]])
   type_keys("ib")
