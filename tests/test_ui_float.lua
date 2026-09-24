@@ -680,6 +680,43 @@ T["updates keep a scrolled viewport in place"] = function()
   expect.equality(ui.selected(), 4)
 end
 
+---Screen rows (0-based, end exclusive) a window covers, border included.
+local function covered_rows(win)
+  local config = vim.api.nvim_win_get_config(win)
+  local border = config.border and config.border ~= "none" and 2 or 0
+  return config.row, config.row + config.height + border
+end
+
+T["a tall preview beside a menu above the cursor stays above the cursor line"] = function()
+  vim.o.lines = 30
+  cursor_at_bottom()
+  local row = cursor_row() - 1
+  local ui = new()
+  ui.configure({ direction = "above", max_height = 2, preview = true })
+  local docs = table.concat(vim.split(string.rep("x", 15, " "), " "), "\n")
+  ui.open(1, { documented("b1", docs), documented("b2", docs) }, "i")
+  ui.select(1, { insert = false })
+  local _, finish = covered_rows(ui.preview_win())
+  expect.equality(finish <= row, true)
+end
+
+T["a tall preview beside a menu below the cursor stays below the cursor line"] = function()
+  vim.o.lines = 30
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(string.rep("x", 40, " "), " "))
+  vim.api.nvim_win_set_cursor(0, { 25, 0 })
+  vim.cmd("normal! zb")
+  vim.api.nvim_buf_set_lines(0, 24, 25, false, { "b" })
+  vim.api.nvim_win_set_cursor(0, { 25, 1 })
+  local row = cursor_row() - 1
+  local ui = new()
+  ui.configure({ direction = "below", max_height = 2, preview = true })
+  local docs = table.concat(vim.split(string.rep("x", 15, " "), " "), "\n")
+  ui.open(1, { documented("b1", docs), documented("b2", docs) }, "i")
+  ui.select(1, { insert = false })
+  local start = covered_rows(ui.preview_win())
+  expect.equality(start > row, true)
+end
+
 T["the preview opens on the left without room and starts at the top"] = function()
   vim.o.columns = 25
   set_line(string.rep("x", 20) .. "b")

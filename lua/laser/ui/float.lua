@@ -582,11 +582,20 @@ function M.new(opts)
     vim.api.nvim_win_set_config(preview_win, { width = width })
     local height = vim.api.nvim_win_text_height(preview_win, {}).all
     height = math.min(height, preview_size.max_height)
-    -- Stay above the command line: move up first, then shorten.
-    local limit = mode == "c" and anchor_row() - 1 or vim.o.lines - vim.o.cmdheight
-    local bottom = limit - own.top - own.bottom
-    height = math.max(1, math.min(height, bottom))
-    local row = math.max(0, math.min(anchor.row, bottom - height))
+    -- Stay on the menu's side of the cursor line, and above the command line.
+    local borders = own.top + own.bottom
+    local row
+    if layout.above then
+      -- Grow upward from the menu's bottom edge.
+      local bottom = anchor.row + anchor.height + sides.top + sides.bottom
+      height = math.max(1, math.min(height, bottom - borders))
+      row = math.max(0, bottom - height - borders)
+    else
+      -- Grow downward from the menu's top edge.
+      local limit = vim.o.lines - vim.o.cmdheight
+      height = math.max(1, math.min(height, limit - anchor.row - borders))
+      row = anchor.row
+    end
     vim.api.nvim_win_set_config(preview_win, {
       relative = "editor",
       row = row,
