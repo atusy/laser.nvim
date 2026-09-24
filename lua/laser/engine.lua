@@ -30,14 +30,18 @@ local Session = require("laser.session")
 ---@field pending table<integer, { cancel?: fun() }> requests still in flight, keyed by client id
 ---@field displayed? table[] last snapshot sent to the UI
 ---@field render_ticket? table identity of a queued render
+---@field continues fun(doc: laser.Doc, startcol: integer): boolean whether the editor still shows doc
 local Engine = {}
 Engine.__index = Engine
 
----@param opts { ui: laser.UI, clients?: string[], clientOptions?: table<string, laser.ClientOpts> }
+---@param opts { ui: laser.UI, clients?: string[], clientOptions?: table<string, laser.ClientOpts>, continues?: fun(doc: laser.Doc, startcol: integer): boolean }
 ---@return laser.Engine
 function Engine.new(opts)
   return setmetatable({
     ui = opts.ui,
+    continues = opts.continues or function()
+      return true
+    end,
     clients = opts.clients,
     client_options = opts.clientOptions or {},
     pending = {},
@@ -57,6 +61,10 @@ function Engine:render()
   local session, doc = self.session, self.doc
   if not session or not doc then
     return
+  end
+  -- A late response must not open the menu where the cursor has moved to.
+  if not self.continues(doc, session.startcol) then
+    return self:close()
   end
   local prefix = doc.line:sub(session.startcol + 1, doc.col)
   local count = self.ui.frozen_count()

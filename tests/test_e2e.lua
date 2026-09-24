@@ -281,6 +281,18 @@ T["leaving Insert mode cancels delayed completion"] = function()
   expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
 end
 
+T["a response arriving after the cursor moved away does not open the menu"] = function()
+  child.lua([[FAKE.start({ delay_ms = 200, items = { { label = "barbaz" } } })]])
+  child.api.nvim_buf_set_lines(0, 0, -1, false, { "xx", "hello world" })
+  child.api.nvim_win_set_cursor(0, { 1, 1 })
+  type_keys("A b")
+  type_keys("<Down>")
+  child.lua([[vim.wait(300)]])
+  expect.equality(child.lua_get([[require("laser")._engine().ui.visible()]]), false)
+  type_keys("<C-n>")
+  expect.equality(child.api.nvim_buf_get_lines(0, 0, -1, false), { "xx b", "hello world" })
+end
+
 T["leaving the command line closes its session"] = function()
   child.lua([[
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {

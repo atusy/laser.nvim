@@ -162,7 +162,7 @@ function M.complete(opts)
     return
   end
   if not engine then
-    engine = require("laser.engine").new({ ui = ui })
+    engine = require("laser.engine").new({ ui = ui, continues = document.continues })
   end
   engine.enable_commit_characters = opts.enable_commit_characters == true
   engine.clients = vim.deepcopy(opts.clients)
