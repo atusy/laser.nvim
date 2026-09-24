@@ -75,6 +75,49 @@ function Session:set_result(client_id, result, ctx, append)
     { candidates = candidates, incomplete = incomplete, defaults = defaults }
 end
 
+---Add a client, or replace what is known about it while keeping its results
+---and request state.
+---@param client_id integer
+---@param state laser.SessionClient
+function Session:update_client(client_id, state)
+  local current = self.clients[client_id]
+  if current then
+    state.timed_out, state.interrupted = current.timed_out, current.interrupted
+  end
+  self.clients[client_id] = state
+end
+
+---Forget a client and its results.
+---@param client_id integer
+function Session:remove_client(client_id)
+  self.clients[client_id] = nil
+  self.results[client_id] = nil
+end
+
+---A new request clears what was recorded about the previous one.
+---@param client_id integer
+function Session:begin_request(client_id)
+  local client = self.clients[client_id]
+  client.timed_out, client.interrupted = false, false
+end
+
+---The client's last request ended before its final answer.
+---@param client_id integer
+function Session:mark_interrupted(client_id)
+  local client = self.clients[client_id]
+  if client then
+    client.interrupted = true
+  end
+end
+
+---@param client_id integer
+function Session:mark_timed_out(client_id)
+  local client = self.clients[client_id]
+  if client then
+    client.timed_out = true
+  end
+end
+
 ---Follow the selected client order, using client id as a stable fallback.
 ---@return integer[]
 function Session:ordered_client_ids()

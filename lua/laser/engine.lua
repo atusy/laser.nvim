@@ -48,6 +48,14 @@ function Engine.new(opts)
   }, Engine)
 end
 
+---Take the options of a complete() call; they apply from this call on.
+---@param opts laser.CompleteOpts
+function Engine:configure(opts)
+  self.enable_commit_characters = opts.enable_commit_characters == true
+  self.clients = vim.deepcopy(opts.clients)
+  self.client_options = vim.deepcopy(opts.clientOptions or {})
+end
+
 ---@param doc laser.Doc
 ---@return vim.lsp.Client[]
 function Engine:clients_for(doc)
@@ -135,8 +143,7 @@ function Engine:request(clients, ctx)
     -- Install the token before sending: in-process clients may reply synchronously.
     local token = {}
     self.pending[client.id] = token
-    session.clients[client.id].timed_out = false
-    session.clients[client.id].interrupted = false
+    session:begin_request(client.id)
     local timer
     local function stop_timer()
       if timer then
@@ -148,16 +155,9 @@ function Engine:request(clients, ctx)
       end
     end
     local cancel_request
-    -- Whatever this request was for is still missing; ask again on input.
-    local function mark_interrupted()
-      local client_state = session.clients[client.id]
-      if client_state then
-        client_state.interrupted = true
-      end
-    end
     token.cancel = function()
       stop_timer()
-      mark_interrupted()
+      session:mark_interrupted(client.id)
       if cancel_request then
         cancel_request()
       end
@@ -178,7 +178,7 @@ function Engine:request(clients, ctx)
         stop_timer()
       end
       if err then
-        mark_interrupted()
+        session:mark_interrupted(client.id)
         return
       end
       local current = assert(self.doc)
@@ -215,12 +215,26 @@ function Engine:request(clients, ctx)
         timer = nil
         if self.pending[client.id] == token then
           self.pending[client.id] = nil
-          session.clients[client.id].timed_out = true
+          session:mark_timed_out(client.id)
           token.cancel()
         end
       end, timeout)
     end
   end
+end
+
+---@param client vim.lsp.Client
+---@param doc laser.Doc
+---@param opts laser.ClientOpts
+---@param order integer
+---@return laser.SessionClient
+local function client_state(client, doc, opts, order)
+  return {
+    order = order,
+    name = client.name,
+    opts = opts,
+    trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
+  }
 end
 
 ---Begin a new completion session at the keyword start before the cursor.
@@ -234,12 +248,8 @@ function Engine:start(doc, ctx)
   end
   local session_clients = {}
   for order, client in ipairs(clients) do
-    session_clients[client.id] = {
-      order = order,
-      name = client.name,
-      opts = clients_mod.resolve(client.name, self.client_options),
-      trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
-    }
+    local opts = clients_mod.resolve(client.name, self.client_options)
+    session_clients[client.id] = client_state(client, doc, opts, order)
   end
   self.doc = doc
   self.session = Session.new({
@@ -260,8 +270,7 @@ function Engine:drop_client(client_id)
     token.cancel()
   end
   if self.session then
-    self.session.results[client_id] = nil
-    self.session.clients[client_id] = nil
+    self.session:remove_client(client_id)
   end
 end
 
@@ -290,17 +299,10 @@ function Engine:on_char(doc, char)
     -- Refresh predicates only govern reusable results. A new completion range
     -- needs fresh results regardless of the predicate's return value.
     return self:start(doc, function(client)
-      local kind = vim.lsp.protocol.CompletionTriggerKind
-      if
-        char ~= ""
-        and vim.list_contains(
-          clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
-          char
-        )
-      then
-        return { triggerKind = kind.TriggerCharacter, triggerCharacter = char }
-      end
-      return { triggerKind = kind.Invoked }
+      return refresh.lsp_context({
+        inserted_char = char,
+        trigger_characters = assert(self.session).clients[client.id].trigger_chars,
+      })
     end)
   end
   local clients = self:clients_for(doc)
@@ -311,21 +313,13 @@ function Engine:on_char(doc, char)
   for order, client in ipairs(clients) do
     local opts = clients_mod.resolve(client.name, self.client_options)
     active[client.id] = true
-    local cached = session.clients[client.id]
-    if cached then
+    local state = client_state(client, doc, opts, order)
+    if session.clients[client.id] then
       -- Options shape how cached results are shown and when to request
       -- again, not the results themselves; they apply from this call on.
-      cached.opts = opts
-      cached.order = order
-      cached.trigger_chars =
-        clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters")
+      session:update_client(client.id, state)
     else
-      added[client.id] = {
-        order = order,
-        name = client.name,
-        opts = opts,
-        trigger_chars = clients_mod.completion_characters(client, doc.bufnr, "triggerCharacters"),
-      }
+      added[client.id] = state
     end
   end
   for client_id in pairs(session.clients) do
@@ -334,8 +328,8 @@ function Engine:on_char(doc, char)
     end
   end
   local needed = session:on_char(char, doc, self.pending, old)
-  for client_id, client in pairs(added) do
-    session.clients[client_id] = client
+  for client_id, state in pairs(added) do
+    session:update_client(client_id, state)
     needed[client_id] = refresh.lsp_context(session:refresh_context(client_id, doc, char, false))
   end
 
