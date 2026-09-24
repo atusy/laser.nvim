@@ -66,6 +66,20 @@ T["a snippet item replaces the inserted word with the expanded snippet"] = funct
   expect.equality(vim.api.nvim_win_get_cursor(0), { 1, 8 })
 end
 
+T["a snippet whose range starts on another line replaces only the inserted word"] = function()
+  local buf = buffer_after_insert("foo.bar", 7)
+  local item = {
+    label = "bar",
+    insertTextFormat = 2,
+    textEdit = {
+      newText = "bar($1)",
+      range = { start = { line = 1, character = 0 }, ["end"] = { line = 1, character = 0 } },
+    },
+  }
+  confirm.apply(candidate(item), { bufnr = buf, startcol = 4, client = client() })
+  expect.equality(vim.api.nvim_buf_get_lines(buf, 0, -1, false), { "foo.bar()" })
+end
+
 T["the item's command is executed through the client"] = function()
   local buf = buffer_after_insert("foo.bar", 7)
   local executed = {}
