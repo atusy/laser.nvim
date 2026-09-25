@@ -7,8 +7,8 @@ local M = {}
 ---@field refresh? laser.Refresh predicate for refreshing reusable results
 
 ---@class laser.CompleteOpts
----@field clients? string[] names in display order; "*" expands remaining clients; nil selects all
----@field clientOptions? table<string, laser.ClientOpts> per-client options; "*" holds defaults
+---@field clients? string[] names in display order; "*" expands to the clients not listed; nil selects all
+---@field clientOptions? table<string, laser.ClientOpts> per-client options; "_" holds defaults for every client, "*" options of clients without an entry of their own
 ---@field enable_commit_characters? boolean accept selected candidates on LSP commit characters; default false
 ---@field menu? laser.MenuOpts appearance and behavior of the built-in menu
 ---@field language_id? string filetype of the scratch document in command-line mode

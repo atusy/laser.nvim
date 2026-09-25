@@ -24,7 +24,7 @@ T["select drops a client whose config sets enabled = false"] = function()
   local got = clients.select(all, nil, { copilot = { enabled = false } })
   expect.equality(got, { client(1, "lua_ls") })
 end
-T['select keeps a named client when "*" disables the rest'] = function()
+T['disabling "*" keeps the clients that have options of their own'] = function()
   local clients = require("laser.clients")
   local all = { client(1, "lua_ls"), client(2, "copilot") }
   local got = clients.select(all, nil, { ["*"] = { enabled = false }, lua_ls = {} })
@@ -71,14 +71,39 @@ T["a disabled explicit client does not reappear in the wildcard"] = function()
   )
 end
 
-T["named options override shared defaults"] = function()
-  expect.equality(
-    require("laser.clients").resolve("lua_ls", {
-      ["*"] = { timeout_ms = 1000, filters = {} },
-      lua_ls = { timeout_ms = 2000 },
-    }),
-    { enabled = true, timeout_ms = 2000, filters = {} }
-  )
+T["_ holds defaults every client inherits key by key"] = function()
+  local config = { _ = { timeout_ms = 1000, filters = {} }, lua_ls = { timeout_ms = 2000 } }
+  local clients = require("laser.clients")
+  expect.equality(clients.resolve("lua_ls", config), { timeout_ms = 2000, filters = {} })
+  expect.equality(clients.resolve("copilot", config), { timeout_ms = 1000, filters = {} })
+end
+
+T["* applies only to clients without options of their own, over _"] = function()
+  local config = {
+    _ = { timeout_ms = 1000, max_items = 5 },
+    ["*"] = { max_items = 10 },
+    lua_ls = {},
+  }
+  local clients = require("laser.clients")
+  expect.equality(clients.resolve("lua_ls", config), { timeout_ms = 1000, max_items = 5 })
+  expect.equality(clients.resolve("copilot", config), { timeout_ms = 1000, max_items = 10 })
+end
+
+T["disabling _ disables clients that do not enable themselves"] = function()
+  local all = { client(1, "lua_ls"), client(2, "copilot"), client(3, "other") }
+  local got = require("laser.clients").select(all, nil, {
+    _ = { enabled = false },
+    lua_ls = { enabled = true },
+    copilot = {},
+  })
+  expect.equality(got, { all[1] })
+end
+
+T["_ in the client list selects nothing, even a client named _"] = function()
+  local all = { client(1, "lua_ls"), client(2, "_") }
+  local clients = require("laser.clients")
+  expect.equality(clients.select(all, { "_" }), {})
+  expect.equality(clients.select(all, { "_", "*" }), all)
 end
 
 ---Client whose completion is registered dynamically with `options`.

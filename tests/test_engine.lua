@@ -144,7 +144,7 @@ T["max_items defaults and overrides limit each client independently"] = function
     ui = ui,
     clients = { "one", "two", "three" },
     clientOptions = {
-      ["*"] = { max_items = 1 },
+      _ = { max_items = 1 },
       two = { max_items = 2 },
       three = { max_items = 0 },
     },
@@ -464,7 +464,7 @@ T["a newer request supersedes an older request for the same client"] = function(
   local ui = stub_ui.new()
   local engine = Engine.new({
     ui = ui,
-    clientOptions = { ["*"] = {
+    clientOptions = { _ = {
       matcher = function()
         return 1
       end,
