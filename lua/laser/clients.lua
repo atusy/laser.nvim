@@ -1,31 +1,32 @@
 local M = {}
 
----Per-client options are keyed by client name. "*" holds the defaults.
----A client that is named explicitly is enabled unless it says otherwise,
----so `{ ["*"] = { enabled = false }, lua_ls = {} }` acts as an allow-list.
+-- Keys of clientOptions that name no client: `_` holds defaults every
+-- client inherits, `*` those of clients without options of their own.
+local DEFAULTS, IMPLICIT = "_", "*"
+
+---Options of the client `name`, inherited key by key: its own entry over
+---`_`, or, for a client without an entry of its own, `*` over `_`. So
+---`{ ["*"] = { enabled = false }, lua_ls = {} }` enables only lua_ls.
 ---@param name string
 ---@param config table<string, table>
 ---@return table
 function M.resolve(name, config)
-  local own = config[name]
-  local resolved = vim.tbl_extend("force", config["*"] or {}, own or {})
-  if own and own.enabled == nil then
-    resolved.enabled = true
-  end
-  return resolved
+  local own = name ~= DEFAULTS and name ~= IMPLICIT and config[name] or config[IMPLICIT]
+  return vim.tbl_extend("force", config[DEFAULTS] or {}, own or {})
 end
 
----Select clients in display order. Explicit names are excluded from "*".
+---Select clients in display order. `*` stands for the clients the list does
+---not name, and `_` for none.
 ---@param clients vim.lsp.Client[]
 ---@param names? string[] nil selects all; an empty list selects none
 ---@param config? table<string, table>
 ---@return vim.lsp.Client[]
 function M.select(clients, names, config)
   config = config or {}
-  names = names or { "*" }
+  names = names or { IMPLICIT }
   local explicit, seen, selected = {}, {}, {}
   for _, name in ipairs(names) do
-    if name ~= "*" then
+    if name ~= IMPLICIT and name ~= DEFAULTS then
       explicit[name] = true
     end
   end
@@ -34,14 +35,16 @@ function M.select(clients, names, config)
     return a.id < b.id
   end)
   for _, name in ipairs(names) do
-    for _, client in ipairs(sorted) do
-      if
-        (client.name == name or (name == "*" and not explicit[client.name]))
-        and not seen[client.id]
-        and M.resolve(client.name, config).enabled ~= false
-      then
-        seen[client.id] = true
-        selected[#selected + 1] = client
+    if name ~= DEFAULTS then
+      for _, client in ipairs(sorted) do
+        if
+          (client.name == name or (name == IMPLICIT and not explicit[client.name]))
+          and not seen[client.id]
+          and M.resolve(client.name, config).enabled ~= false
+        then
+          seen[client.id] = true
+          selected[#selected + 1] = client
+        end
       end
     end
   end

@@ -604,7 +604,7 @@ T["the public pattern helper controls refresh from an autocmd"] = function()
   child.lua([[
     CALLS = 0
     SEEN = {}
-    OPTIONS = { clientOptions = { ["*"] = { refresh = function(ctx)
+    OPTIONS = { clientOptions = { _ = { refresh = function(ctx)
       table.insert(SEEN, ctx)
       return require("laser.refresh").hasPattern(ctx, "ba$")
     end } } }
@@ -649,7 +649,7 @@ T["command-line refresh receives the scratch document and current input"] = func
     vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
       pattern = ":",
       callback = function()
-        laser.complete({ language_id = "laser-cmd", clientOptions = { ["*"] = { refresh = refresh } } })
+        laser.complete({ language_id = "laser-cmd", clientOptions = { _ = { refresh = refresh } } })
       end,
     })
     vim.api.nvim_create_autocmd("FileType", {

@@ -93,15 +93,23 @@ In your completion callback, choose servers and their display order:
 require("laser").complete({
   clients = { "lua_ls", "*" }, -- Show lua_ls first, then other attached clients.
   clientOptions = {
-    ["*"] = { timeout_ms = 1000 }, -- Optional request timeout in milliseconds.
+    _ = { timeout_ms = 1000 }, -- Every client: optional request timeout in milliseconds.
     copilot = { enabled = false },
   },
 })
 ```
 
-Omit `clients` to use all attached completion clients, or list names without `"*"` to use only those clients. `clientOptions["*"]` provides shared defaults; `clientOptions[name]` overrides them for a particular client. Requests have no timeout by default.
+Omit `clients` to use all attached completion clients, or list names without `"*"` to use only those clients. In `clients`, `"*"` stands for every attached client the list does not name. Requests have no timeout by default.
 
-Set `clientOptions[name].max_items = 30` to display at most 30 candidates from that client after filtering and sorting. Use `clientOptions["*"].max_items = 30` to apply the limit to each client by default; individual clients can override it. Cached results remain available for further narrowing, and converters after the last matcher or sorter run only on the displayed candidates. Omit it or use `0` for no limit.
+`clientOptions` is resolved per client, key by key:
+
+- `clientOptions._` holds defaults every client inherits.
+- `clientOptions[name]` overrides them for that client.
+- `clientOptions["*"]` applies, over `_`, only to clients without an entry of their own.
+
+So `{ ["*"] = { enabled = false }, lua_ls = {} }` requests completion from lua_ls alone, while `{ _ = { enabled = false } }` disables every client that does not set `enabled = true` itself.
+
+Set `clientOptions[name].max_items = 30` to display at most 30 candidates from that client after filtering and sorting. Use `clientOptions._.max_items = 30` to apply the limit to each client by default; individual clients can override it. Cached results remain available for further narrowing, and converters after the last matcher or sorter run only on the displayed candidates. Omit it or use `0` for no limit.
 
 ### Command-line completion
 
