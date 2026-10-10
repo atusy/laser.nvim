@@ -336,6 +336,10 @@ function Engine:on_char(doc, char)
   self.doc = doc
   self:render()
   for _, client in ipairs(clients) do
+    -- Rendering (including a synchronous reply) can close the session.
+    if self.session ~= session then
+      return
+    end
     if needed[client.id] then
       self:request({ client }, needed[client.id])
     end

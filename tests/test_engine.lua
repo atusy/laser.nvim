@@ -52,6 +52,32 @@ T["starting a session shows the server's candidates from the keyword start"] = f
   expect.equality(ui.last(), { startcol = 5, mode = "i", labels = { "bar", "baz" } })
 end
 
+T["input does not refresh a session closed while rendering"] = function()
+  local buf = scratch("b")
+  fake.start({ name = "one", manual = true }, buf)
+  local server = fake.last
+  local valid = true
+  local ui = stub_ui.new()
+  local engine = Engine.new({
+    ui = ui,
+    continues = function()
+      return valid
+    end,
+  })
+  engine:start(doc(buf, "b", 1), { triggerKind = 1 })
+  server.respond({ isIncomplete = true, items = { { label = "bar" } } })
+  wait_opened(ui, 1)
+  local requests = #server.requests
+
+  valid = false
+  engine:on_char(doc(buf, "ba", 2), "a")
+
+  expect.equality(engine.session, nil)
+  expect.equality(engine.pending, {})
+  expect.equality(ui.visible(), false)
+  expect.equality(#server.requests, requests)
+end
+
 T["max_items limits display without discarding cached candidates"] = function()
   local buf = scratch("b")
   fake.start(
