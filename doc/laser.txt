@@ -138,7 +138,21 @@ laser.visible()                                              *laser.visible()*
 
 laser.complete({opts})                                      *laser.complete()*
     Start or update completion at the current cursor. Options belong to this
-    call, so pass them from your completion callback.
+    call, so pass them from your completion callback. They also apply to
+    results already received. {opts} is a table with these optional keys:
+
+    clients ~
+        (string[]) Client names in display order. See |laser-clients|.
+        Default: every attached client that supports completion.
+    clientOptions ~
+        (table) Options per client. See |laser-clientOptions|.
+    enable_commit_characters ~
+        (boolean) Default: `false`. See |laser-enable_commit_characters|.
+    menu ~
+        (table) The built-in menu. See |laser-menu|.
+    language_id ~
+        (string) Filetype of the scratch document in command-line mode. See
+        |laser-cmdline|.
 
                                                                *laser-clients*
 In your completion callback, choose servers and their display order:
@@ -168,6 +182,23 @@ client the list does not name. Requests have no timeout by default.
 So `{ ["*"] = { enabled = false }, lua_ls = {} }` requests completion from
 lua_ls alone, while `{ _ = { enabled = false } }` disables every client that
 does not set `enabled = true` itself.
+
+Each client accepts:
+
+    enabled ~
+        (boolean) `false` skips the client.
+    timeout_ms ~
+        (integer) Request timeout in milliseconds. `nil` or `0` disables it.
+    max_items ~
+        (integer) See |laser-max_items|.
+    filters ~
+        (table[]) Matchers, sorters and converters. See |laser-filters|.
+    matcher ~
+        (function) Older alternative to `filters`. See |laser-filters|.
+    sorter ~
+        (function) Older alternative to `filters`. See |laser-filters|.
+    refresh ~
+        (function) When to request again. See |laser-refresh|.
 
                                                              *laser-max_items*
 Set `clientOptions[name].max_items = 30` to display at most 30 candidates from
@@ -213,6 +244,10 @@ Pass `menu` to adjust the built-in menu:
     },
   })
 <
+`border` takes any value of the `border` option of |nvim_open_win()|. With
+`direction = "auto"`, the menu opens below unless the rows do not fit there
+and above has more room. The command-line menu always opens above.
+
 When the server preselects candidates, the first one is highlighted without
 being inserted, whether or not `auto_select` is set.
 
@@ -260,11 +295,78 @@ in bytes. `require("laser.filter").highlight_converter()` computes the match
 highlights for every displayed candidate in advance; the menu then uses those
 instead of its own.
 
-For custom matching, sorting, or refresh behavior, see the API details in
-`lua/laser/filter.lua`, `lua/laser/refresh.lua`, and `lua/laser/init.lua`.
+                                                               *laser-filters*
+Customize matching and sorting per client with `filters`, a list run in
+order. Each entry is a table with `kind` and `callback`:
+>lua
+  local filter = require("laser.filter")
+  require("laser").complete({
+    clientOptions = {
+      _ = {
+        filters = {
+          { kind = "matcher", callback = filter.fuzzy_matcher() },
+          { kind = "sorter", callback = filter.by_score },
+          { kind = "converter", callback = filter.highlight_converter() },
+        },
+      },
+    },
+  })
+<
+An empty list keeps the server's order and every candidate. When `filters`
+is set, the older `matcher` and `sorter` options are ignored.
+
+A candidate is a |complete-items| table: `word`, `abbr`, `kind` and `menu`,
+plus `user_data.laser` with `item` (the LSP CompletionItem), `client_id` and,
+after a matcher, `match_info`.
+
+    matcher ~
+        `fun(input, candidate): boolean, info?`
+        Return `false` to drop the candidate, or `true` and a match info
+        `{ score = number, positions? = integer[] }`. `positions` are 0-based
+        character indices into `item.filterText` or `item.label`, and enable
+        match highlighting. Matchers must not modify the candidate.
+    sorter ~
+        `fun(a, b): boolean`
+        A comparator for |table.sort()|. Candidates it considers equal keep
+        their order.
+    converter ~
+        `fun(candidate, input): candidate`
+        Return the candidate to display. A converter owns the candidate, its
+        `user_data.laser`, and the top-level fields of `item`. Replace nested
+        tables of `item` instead of mutating them; they are shared with the
+        cache.
+
+The older `matcher` option is `fun(input, candidate): number?`, returning a
+score or `nil` to drop the candidate. `sorter` is a comparator as above.
+
+                                                *laser.filter.fuzzy_matcher()*
+filter.fuzzy_matcher()
+    The default matcher: fuzzy matching against `item.filterText`, or
+    `item.label`, with |matchfuzzypos()|.
+
+filter.by_score                                        *laser.filter.by_score*
+    The default sorter: higher score first, then |laser.filter.by_sort_text|.
+
+                                                 *laser.filter.score_sorter()*
+filter.score_sorter({opts})
+    Create a sorter by descending score. Equal scores keep their order, or
+    are ordered by `opts.tiebreak`, a sorter, when given.
+
+filter.by_sort_text                                *laser.filter.by_sort_text*
+    A sorter by the server's `sortText`, falling back to the label, as the
+    LSP specifies.
+
+                                          *laser.filter.highlight_converter()*
+filter.highlight_converter()
+    Create a converter that stores match highlights on every candidate it
+    converts. See above.
 
 ==============================================================================
 9. REFRESH                                                     *laser-refresh*
+
+Laser filters cached results as you type and asks a client again only when
+its `refresh` callback returns `true`. A new completion range, such as a new
+word, always requests fresh results.
 
 By default, edits that no longer retain the previous input as a prefix
 trigger a background refresh, even when cached candidates still match. So
@@ -274,5 +376,69 @@ until the new response replaces that client's results. Custom refresh
 callbacks can use `require("laser.refresh").extendsPreviousInput(ctx)` to
 make the same comparison; identical input counts as extending the previous
 input.
+
+For example, to also refresh after a dot:
+>lua
+  local refresh = require("laser.refresh")
+  require("laser").complete({
+    clientOptions = {
+      _ = {
+        refresh = function(ctx)
+          return refresh.default(ctx) or refresh.hasPattern(ctx, "%.$")
+        end,
+      },
+    },
+  })
+<
+                                                       *laser-refresh-context*
+The callback receives a context with these fields:
+
+    client_id, client_name ~
+        The client to request from.
+    bufnr ~
+        The completion document; a scratch buffer in command-line mode.
+    mode ~
+        `"i"` or `"c"`.
+    before_cursor ~
+        The current line up to the cursor.
+    previous_before_cursor ~
+        The previous line up to the cursor, when available.
+    inserted_char ~
+        The single inserted character, or `""` for other changes.
+    trigger_characters ~
+        This client's trigger characters.
+    is_incomplete ~
+        Whether the last response was incomplete; `nil` until one arrives.
+    has_candidate ~
+        Whether this client has candidates for the current input.
+    pending ~
+        Whether this client has a request in flight.
+    timed_out ~
+        Whether the last request timed out.
+    interrupted ~
+        Whether the last request was cancelled, timed out or failed before
+        its final answer.
+
+refresh.default({ctx})                               *laser.refresh.default()*
+    The default callback. Returns `true` when the last request timed out or
+    was interrupted, the last response was incomplete, a trigger character
+    was typed, the input no longer extends the previous input, or nothing is
+    pending and no candidate matches.
+
+refresh.hasTriggerCharacter({ctx})       *laser.refresh.hasTriggerCharacter()*
+    Whether the inserted character is one of the client's trigger
+    characters.
+
+refresh.hasPattern({ctx}, {pattern})              *laser.refresh.hasPattern()*
+    Whether the line before the cursor matches the Lua {pattern}. Use `$` to
+    anchor it at the cursor. Deletions and other changes can match too.
+
+refresh.has_candidate({ctx})                   *laser.refresh.has_candidate()*
+    Whether this client has candidates for the current input.
+
+refresh.extendsPreviousInput({ctx})     *laser.refresh.extendsPreviousInput()*
+    Whether the current input keeps the previous input as a prefix.
+    Identical inputs count; a missing previous input does not. This compares
+    text, not edits or candidates.
 
  vim:tw=78:ts=8:noet:ft=help:norl:
