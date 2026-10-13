@@ -106,7 +106,9 @@ laser.confirm()                                              *laser.confirm()*
 
     Confirming applies the server's edits for the candidate, including edits
     elsewhere in the buffer such as imports. When a server provides those
-    only on request, confirming waits for them for up to a second.
+    only on request, confirming waits for them for up to a second. In Insert
+    mode, snippets expand with |vim.snippet.expand()|; on the command line,
+    their text is inserted without tabstops.
 
 laser.cancel()                                                *laser.cancel()*
     Restore the typed input and close the menu.
