@@ -1,0 +1,278 @@
+*laser.txt*  LAnguage SERvice-oriented completion for Neovim
+
+                                                          *laser* *laser.nvim*
+
+Experimental: options and behavior may change.
+
+==============================================================================
+CONTENTS                                                      *laser-contents*
+
+  1. Introduction ....................................... |laser-introduction|
+  2. Setup ..................................................... |laser-setup|
+  3. Actions ................................................. |laser-actions|
+  4. Options ................................................. |laser-options|
+  5. Command-line completion ................................. |laser-cmdline|
+  6. Menu ....................................................... |laser-menu|
+  7. Documentation preview ................................... |laser-preview|
+  8. Matching and highlighting .............................. |laser-matching|
+  9. Refresh ................................................. |laser-refresh|
+
+==============================================================================
+1. INTRODUCTION                                           *laser-introduction*
+
+laser.nvim completes from the language servers attached to the buffer. There
+are no separate completion sources to configure, and server priority is
+customizable.
+
+Suggestions stream into the menu as they arrive, so you can browse them
+without waiting for every server or the full stream to finish. Once you start
+navigating, visible candidates and your selection stay stable as more
+suggestions arrive.
+
+The same completion works on the command line, using LSP-powered suggestions
+for `:` commands.
+
+Requirements: Neovim 0.11 or newer and a configured LSP server that supports
+completion.
+
+==============================================================================
+2. SETUP                                                         *laser-setup*
+
+No setup function is required. Call |laser.complete()| when completion should
+start or update, for example on every change in Insert mode:
+>lua
+  local group = vim.api.nvim_create_augroup("my-completion", { clear = true })
+
+  vim.api.nvim_create_autocmd({ "InsertEnter", "TextChangedI" }, {
+    group = group,
+    callback = function()
+      require("laser").complete()
+    end,
+  })
+<
+Then map keys to the |laser-actions|. Act on the menu while it is open;
+otherwise keep the key's own behavior. The "i" flag of |nvim_feedkeys()| puts
+the key where the mapped key was, ahead of keys typed after it.
+>lua
+  local laser = require("laser")
+  local function map(key, action)
+    vim.keymap.set({ "i", "c" }, key, function()
+      if laser.visible() then
+        action()
+      else
+        vim.api.nvim_feedkeys(vim.keycode(key), "in", false)
+      end
+    end)
+  end
+  map("<C-n>", function() laser.select(1) end)
+  map("<C-p>", function() laser.select(-1) end)
+  map("<C-y>", laser.confirm)
+  map("<C-e>", laser.cancel)
+<
+                                                                *laser-manual*
+For manual completion, replace the autocmd with a mapping:
+>lua
+  vim.keymap.set("i", "<C-Space>", function()
+    require("laser").complete()
+  end)
+<
+==============================================================================
+3. ACTIONS                                                     *laser-actions*
+
+Actions edit text and windows, so call them from regular mappings as in
+|laser-setup|, not from |:map-<expr>| mappings. Each returns `false` when it
+did nothing, so a mapping can fall back to the key's default behavior.
+
+                                                              *laser-expr-map*
+In an `<expr>` mapping, check |laser.visible()| and return a `<Cmd>` mapping:
+>lua
+  vim.keymap.set("i", "<Tab>", function()
+    return laser.visible() and "<Cmd>lua require('laser').select(1)<CR>"
+      or "<Tab>"
+  end, { expr = true })
+<
+laser.select({delta}, {opts})                                 *laser.select()*
+    Move the selection by {delta} and insert the selected candidate as you
+    move. Pass `{ insert = false }` as {opts} to only highlight it.
+
+    A candidate that would split the line, with a newline or by automatic
+    wrapping, is only highlighted and is inserted when you confirm it.
+    Single steps cycle back to what you typed, and larger steps, such as
+    paging with `laser.select(10)`, stop at the first or last candidate.
+
+laser.confirm()                                              *laser.confirm()*
+    Accept the selected candidate. Returns `false` when nothing was selected,
+    and closes the menu either way.
+
+    Confirming applies the server's edits for the candidate, including edits
+    elsewhere in the buffer such as imports. When a server provides those
+    only on request, confirming waits for them for up to a second.
+
+laser.cancel()                                                *laser.cancel()*
+    Restore the typed input and close the menu.
+
+laser.close()                                                  *laser.close()*
+    Close the menu and stop pending requests without restoring the typed
+    text.
+
+laser.select_mouse()                                    *laser.select_mouse()*
+    Select the candidate under the mouse. Returns `false` outside the menu.
+>lua
+    vim.keymap.set("i", "<LeftMouse>", function()
+      if not laser.select_mouse() then
+        vim.api.nvim_feedkeys(vim.keycode("<LeftMouse>"), "in", false)
+      end
+    end)
+<
+laser.scroll_preview({delta})                         *laser.scroll_preview()*
+    Scroll the |laser-preview| by {delta} lines; negative scrolls up.
+
+laser.toggle_preview()                                *laser.toggle_preview()*
+    Hide or show the |laser-preview|.
+
+laser.visible()                                              *laser.visible()*
+    Whether the menu is open.
+
+==============================================================================
+4. OPTIONS                                                     *laser-options*
+
+laser.complete({opts})                                      *laser.complete()*
+    Start or update completion at the current cursor. Options belong to this
+    call, so pass them from your completion callback.
+
+                                                               *laser-clients*
+In your completion callback, choose servers and their display order:
+>lua
+  require("laser").complete({
+    -- Show lua_ls first, then other attached clients.
+    clients = { "lua_ls", "*" },
+    clientOptions = {
+      -- Every client: optional request timeout in milliseconds.
+      _ = { timeout_ms = 1000 },
+      copilot = { enabled = false },
+    },
+  })
+<
+Omit `clients` to use all attached completion clients, or list names without
+`"*"` to use only those clients. In `clients`, `"*"` stands for every attached
+client the list does not name. Requests have no timeout by default.
+
+                                                         *laser-clientOptions*
+`clientOptions` is resolved per client, key by key:
+
+- `clientOptions._` holds defaults every client inherits.
+- `clientOptions[name]` overrides them for that client.
+- `clientOptions["*"]` applies, over `_`, only to clients without an entry of
+  their own.
+
+So `{ ["*"] = { enabled = false }, lua_ls = {} }` requests completion from
+lua_ls alone, while `{ _ = { enabled = false } }` disables every client that
+does not set `enabled = true` itself.
+
+                                                             *laser-max_items*
+Set `clientOptions[name].max_items = 30` to display at most 30 candidates from
+that client after filtering and sorting. Use `clientOptions._.max_items = 30`
+to apply the limit to each client by default; individual clients can override
+it. Cached results remain available for further narrowing, and converters
+after the last matcher or sorter run only on the displayed candidates. Omit it
+or use `0` for no limit.
+
+                                              *laser-enable_commit_characters*
+To accept the selected suggestion when you type a server-defined commit
+character, then insert that character (disabled by default):
+>lua
+  require("laser").complete({ enable_commit_characters = true })
+<
+==============================================================================
+5. COMMAND-LINE COMPLETION                                     *laser-cmdline*
+
+Enable an LSP server for the `vim` filetype with |vim.lsp.enable()|, then add:
+>lua
+  vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+    pattern = ":",
+    callback = function()
+      require("laser").complete({ language_id = "vim" })
+    end,
+  })
+<
+The mappings in |laser-setup| work in both Insert and command-line mode.
+
+==============================================================================
+6. MENU                                                           *laser-menu*
+
+Pass `menu` to adjust the built-in menu:
+>lua
+  require("laser").complete({
+    menu = {
+      max_height = 10, -- Rows shown at once; defaults to 'pumheight' or 10.
+      max_width = 80,
+      border = "none",
+      auto_select = false, -- Highlight the first candidate without inserting.
+      direction = "auto", -- "auto", "below", or "above".
+      reversed = false, -- List bottom-up when the menu opens above.
+    },
+  })
+<
+When the server preselects candidates, the first one is highlighted without
+being inserted, whether or not `auto_select` is set.
+
+The menu draws only the rows in view. Filtering and column widths still visit
+every candidate, so |laser-max_items| remains useful for servers that return
+very long lists.
+
+                                                             *laser-highlight*
+The menu uses |hl-Pmenu|, |hl-PmenuSel|, |hl-PmenuKind|, |hl-PmenuKindSel|,
+|hl-PmenuExtra|, |hl-PmenuExtraSel|, |hl-PmenuSbar| and |hl-PmenuThumb|, like
+the built-in popup menu.
+
+==============================================================================
+7. DOCUMENTATION PREVIEW                                       *laser-preview*
+
+Show documentation for the selected candidate beside the menu:
+>lua
+  require("laser").complete({
+    menu = {
+      preview = { border = "single", max_width = 60, max_height = 20 },
+    },
+  })
+<
+Use `preview = true` for the defaults. Map |laser.scroll_preview()| and
+|laser.toggle_preview()| to scroll or toggle the preview.
+
+==============================================================================
+8. MATCHING AND HIGHLIGHTING                                  *laser-matching*
+
+Fuzzy matching and score sorting are enabled by default. Equal scores follow
+the server's `sortText`, then the label, so an empty input shows the server's
+ranking. The menu highlights the matched characters with |hl-PmenuMatch|
+(|hl-PmenuMatchSel| on the selected row). Matchers in `filters` get the same
+highlighting when their match info includes `positions`; the older `matcher`
+option returns only a score. Link `PmenuMatch` and `PmenuMatchSel` to `Pmenu`
+and `PmenuSel` to turn it off.
+
+Converters in your filters may add their own `highlights`, and the menu draws
+them. Each entry is
+>lua
+  { type = "abbr"|"kind"|"menu", col = 1, width = 3, hl_group = "Special" }
+<
+where `col` is the 1-based byte column in that field and `width` its length
+in bytes. `require("laser.filter").highlight_converter()` computes the match
+highlights for every displayed candidate in advance; the menu then uses those
+instead of its own.
+
+For custom matching, sorting, or refresh behavior, see the API details in
+`lua/laser/filter.lua`, `lua/laser/refresh.lua`, and `lua/laser/init.lua`.
+
+==============================================================================
+9. REFRESH                                                     *laser-refresh*
+
+By default, edits that no longer retain the previous input as a prefix
+trigger a background refresh, even when cached candidates still match. So
+does a request that was cancelled, timed out or failed, which a refresh
+callback sees as `ctx.interrupted`. The menu keeps matching cached candidates
+until the new response replaces that client's results. Custom refresh
+callbacks can use `require("laser.refresh").extendsPreviousInput(ctx)` to
+make the same comparison; identical input counts as extending the previous
+input.
+
+ vim:tw=78:ts=8:noet:ft=help:norl:
