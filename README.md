@@ -64,7 +64,7 @@ map("<C-e>", laser.cancel)
 
 That's it. Start typing in a buffer with a language server attached.
 
-Want it on the command line as well? Enable a server for the `vim` filetype and call `laser.complete({ language_id = "vim" })` on `CmdlineEnter` and `CmdlineChanged` for `:` (see `:help laser-cmdline`).
+Want it on the command line as well? Call `laser.complete({ language_id = "vim" })` on `CmdlineEnter` and `CmdlineChanged` for `:` with a server enabled for the `vim` filetype. Other command lines, such as `/`, work with any `language_id` you have a server for (see `:help laser-cmdline`).
 
 ## 📖 Learn more
 

@@ -219,7 +219,12 @@ character, then insert that character (disabled by default):
 ==============================================================================
 5. COMMAND-LINE COMPLETION                                     *laser-cmdline*
 
-Enable an LSP server for the `vim` filetype with |vim.lsp.enable()|, then add:
+In command-line mode, laser mirrors the command line into a scratch buffer
+whose filetype is `language_id`, and completes from the servers attached to
+it. Without `language_id`, |laser.complete()| does nothing there.
+
+For `:` commands, enable an LSP server for the `vim` filetype with
+|vim.lsp.enable()|, then add:
 >lua
   vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
     pattern = ":",
@@ -228,6 +233,23 @@ Enable an LSP server for the `vim` filetype with |vim.lsp.enable()|, then add:
     end,
   })
 <
+Laser does not check |getcmdtype()|, so other kinds of command line, such as
+`/` or |input()|, work the same way with a `language_id` whose server
+understands them. Choose it per kind in the callback:
+>lua
+  vim.api.nvim_create_autocmd({ "CmdlineEnter", "CmdlineChanged" }, {
+    callback = function()
+      local filetypes = { [":"] = "vim", ["/"] = "regex", ["?"] = "regex" }
+      local language_id = filetypes[vim.fn.getcmdtype()]
+      if language_id then
+        require("laser").complete({ language_id = language_id })
+      end
+    end,
+  })
+<
+Here "regex" stands for a filetype you have a server for. Only `:` is
+covered by laser's tests.
+
 The mappings in |laser-setup| work in both Insert and command-line mode.
 
 ==============================================================================
